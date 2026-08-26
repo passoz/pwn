@@ -1,0 +1,13 @@
+{
+  "name": "ai-engineering-skills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check scripts/validate_system_spec.js && node --check scripts/validate_prompt.js && node --check scripts/validate_tasks.js && node --check scripts/work_artifacts.js && node --check scripts/validate_work_graph.js && node --check scripts/task_evidence.js && node --check scripts/project_status.js && node --check scripts/unattended_exec.js && node --check skills/webapp-testing/scripts/with_server.js && node --test"
+  }
+}

@@ -13,18 +13,18 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 0,
+    "completed": 1,
     "in_progress": 1,
-    "pending": 7,
+    "pending": 6,
     "blocked": 0,
-    "test_coverage_percent": 0
+    "test_coverage_percent": 12
   },
   "tasks": [
     {
       "id": "T-001",
       "title": "Marco 1 — Port fiel do ai-engineering-skills (Fase 1)",
       "description": "Portar o repositório ai-engineering-skills para packs/software-engineering/ com proveniência e integridade sem alterar a origem",
-      "status": "in_progress",
+      "status": "done",
       "priority": "critical",
       "agent": "executor",
       "attempts": 0,
@@ -63,7 +63,7 @@
       "id": "T-002",
       "title": "Marco 2 — CLI pwn sobre o pack v3 (Fase 2)",
       "description": "Criar o CLI pwn em TypeScript/Bun expondo os subcomandos pwn work specify/contract/plan/run/audit/status e pwn task run/capsule",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "high",
       "agent": "executor",
       "depends_on": ["T-001"],

@@ -1,0 +1,1 @@
+../../../scripts/validate_system_spec.js
