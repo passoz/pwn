@@ -1,0 +1,15 @@
+{
+  "work_id": "0001",
+  "matrix": [
+    {
+      "origin": "DISC-001",
+      "requirement_id": "FR-001",
+      "decision_id": "TD-001",
+      "spec_section": "SPEC-001",
+      "task_id": "T-001",
+      "contract_id": "CTR-001",
+      "evidence_id": "EVD-001",
+      "status": "planned"
+    }
+  ]
+}

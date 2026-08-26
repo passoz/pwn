@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 2,
+    "completed": 3,
     "in_progress": 1,
-    "pending": 5,
+    "pending": 4,
     "blocked": 0,
-    "test_coverage_percent": 25
+    "test_coverage_percent": 37
   },
   "tasks": [
     {
@@ -87,7 +87,7 @@
       "id": "T-003",
       "title": "Marco 3 — Baseline de artefatos e revisões de Work (Fase 3)",
       "description": "Estabelecer artefatos sob .piwerness/work/<work-id>/, matriz de rastreabilidade e gates determinísticos GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "agent": "strong",
       "depends_on": ["T-002"],
@@ -105,7 +105,7 @@
       "id": "T-004",
       "title": "Marco 4 — Contract Engine v4 (Fase 4)",
       "description": "Implementar Contract Engine com 7 dimensões, níveis L0-L4, estratégias de validação (tdd-strict, contract-first, etc.) e enforcement de write allowlist",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "high",
       "agent": "strong",
       "depends_on": ["T-003"],

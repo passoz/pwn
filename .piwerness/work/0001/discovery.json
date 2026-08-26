@@ -1,0 +1,13 @@
+{
+  "work_id": "0001",
+  "problem": "Descrição do problema",
+  "actors": [
+    "ACT-001"
+  ],
+  "objectives": [
+    "Objetivo principal"
+  ],
+  "constraints": [
+    "Restrição de tecnologia/tempo"
+  ]
+}

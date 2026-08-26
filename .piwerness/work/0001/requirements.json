@@ -1,0 +1,13 @@
+{
+  "work_id": "0001",
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Primeiro Requisito Funcional",
+      "user_story": "Como operador, quero funcionalidade X para beneficio Y",
+      "acceptance_criteria": [
+        "Critério 1 observável"
+      ]
+    }
+  ]
+}
