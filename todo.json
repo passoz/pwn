@@ -1,0 +1,195 @@
+{
+  "$schema": "schemas/tasks.schema.json",
+  "work_id": "0001",
+  "meta": {
+    "version": "1.0",
+    "created_at": "2026-08-26T12:00:00Z",
+    "updated_at": "2026-08-26T12:00:00Z",
+    "spec_reference": "spec.json"
+  },
+  "status": "in_progress",
+  "scope": {
+    "type": "full"
+  },
+  "coverage": {
+    "total_tasks": 8,
+    "completed": 0,
+    "in_progress": 1,
+    "pending": 7,
+    "blocked": 0,
+    "test_coverage_percent": 0
+  },
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Marco 1 — Port fiel do ai-engineering-skills (Fase 1)",
+      "description": "Portar o repositório ai-engineering-skills para packs/software-engineering/ com proveniência e integridade sem alterar a origem",
+      "status": "in_progress",
+      "priority": "critical",
+      "agent": "executor",
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-001",
+          "type": "test",
+          "statement": "Registrar commit e inventário em packs/software-engineering/PORTED_FROM.md",
+          "file_reference": "packs/software-engineering/PORTED_FROM.md"
+        },
+        {
+          "id": "AC-002",
+          "type": "command",
+          "statement": "Copiar skills, workflows, scripts, testes, docs e adapters sem alterar /home/passoz/dev/ai-engineering-skills",
+          "command": "test -d packs/software-engineering/skills && test -d packs/software-engineering/workflows"
+        },
+        {
+          "id": "AC-003",
+          "type": "command",
+          "statement": "Executar testes existentes do pack software-engineering com PASS",
+          "command": "cd packs/software-engineering && npm test"
+        }
+      ],
+      "contract": {
+        "scope": {
+          "write_allow": [
+            "packs/software-engineering/**"
+          ],
+          "write_deny": [
+            "/home/passoz/dev/ai-engineering-skills/**"
+          ]
+        }
+      }
+    },
+    {
+      "id": "T-002",
+      "title": "Marco 2 — CLI pwn sobre o pack v3 (Fase 2)",
+      "description": "Criar o CLI pwn em TypeScript/Bun expondo os subcomandos pwn work specify/contract/plan/run/audit/status e pwn task run/capsule",
+      "status": "pending",
+      "priority": "high",
+      "agent": "executor",
+      "depends_on": ["T-001"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-004",
+          "type": "command",
+          "statement": "CLI pwn responde aos comandos pwn --help e pwn work --help",
+          "command": "bun run src/cli.ts --help"
+        },
+        {
+          "id": "AC-005",
+          "type": "test",
+          "statement": "Adapters /pwn-* funcionam sem interferir com /make-* da origem",
+          "file_reference": "tests/cli.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "T-003",
+      "title": "Marco 3 — Baseline de artefatos e revisões de Work (Fase 3)",
+      "description": "Estabelecer artefatos sob .piwerness/work/<work-id>/, matriz de rastreabilidade e gates determinísticos GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC",
+      "status": "pending",
+      "priority": "high",
+      "agent": "strong",
+      "depends_on": ["T-002"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-006",
+          "type": "test",
+          "statement": "Gates determinísticos geram JSON estruturado de resultado e findings com PASS/BLOCKED",
+          "file_reference": "tests/gates.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "T-004",
+      "title": "Marco 4 — Contract Engine v4 (Fase 4)",
+      "description": "Implementar Contract Engine com 7 dimensões, níveis L0-L4, estratégias de validação (tdd-strict, contract-first, etc.) e enforcement de write allowlist",
+      "status": "pending",
+      "priority": "high",
+      "agent": "strong",
+      "depends_on": ["T-003"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-007",
+          "type": "test",
+          "statement": "Tool-call guard e diff guard bloqueiam mecanicamente escrita fora da allowlist",
+          "file_reference": "tests/contract-engine.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "T-005",
+      "title": "Marco 5 — Executor econômico e escalação (Fase 5)",
+      "description": "Implementar roteamento declarativo por papel (cheap/strong/review/plan), git worktrees por run, budget de tokens/custo e fila assíncrona queue/review/",
+      "status": "pending",
+      "priority": "high",
+      "agent": "executor",
+      "depends_on": ["T-004"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-008",
+          "type": "test",
+          "statement": "Execuções usam modelos baratos por padrão e escalam para modelos fortes em violação de contrato",
+          "file_reference": "tests/executor.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "T-006",
+      "title": "Marco 6 — OpenCode, omp e sub-agents (Fase 6)",
+      "description": "Criar adapters headless para OpenCode e omp com capability matrix, preservando contratos sem perda silenciosa",
+      "status": "pending",
+      "priority": "medium",
+      "agent": "executor",
+      "depends_on": ["T-005"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-009",
+          "type": "test",
+          "statement": "Testes de contrato compartilhados passam nos 3 runtimes (Pi, OpenCode, omp)",
+          "file_reference": "tests/targets.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "T-007",
+      "title": "Marco 7 — Editor visual de pipelines (Fase 7)",
+      "description": "Construir pwn-gui como utilitário HTML/CSS/JS standalone em file:// para edição visual e validação de pipelines YAML/JSON",
+      "status": "pending",
+      "priority": "medium",
+      "agent": "executor",
+      "depends_on": ["T-006"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-010",
+          "type": "command",
+          "statement": "Editor estático tools/pipeline-editor/index.html é auto-contido e valida pipeline.schema.json",
+          "command": "test -f tools/pipeline-editor/index.html"
+        }
+      ]
+    },
+    {
+      "id": "T-008",
+      "title": "Marco 8 — Métricas, otimização e teach skills (Fase 8)",
+      "description": "Implementar sistema de métricas JSONL, pwn metrics optimize para sugestão de routing e teach skills com estado gitignored e learnings.yaml versionado",
+      "status": "pending",
+      "priority": "low",
+      "agent": "executor",
+      "depends_on": ["T-007"],
+      "attempts": 0,
+      "ac": [
+        {
+          "id": "AC-011",
+          "type": "test",
+          "statement": "Métricas registram tokens, custo e duração; recomendações são geradas sem alteração automática",
+          "file_reference": "tests/metrics.test.ts"
+        }
+      ]
+    }
+  ]
+}

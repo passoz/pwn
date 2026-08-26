@@ -60,6 +60,7 @@ validateJsonFile('schemas/evidence.schema.json', ['$schema', 'title', 'propertie
 console.log('\n--- Documentos Normativos ---');
 validateJsonFile('.specs/system.json', ['$schema', 'meta', 'status', 'actors', 'capabilities', 'rules', 'contracts', 'entities', 'coverage', 'traceability']);
 validateJsonFile('spec.json', ['$schema', 'meta', 'status', 'actors', 'capabilities', 'rules', 'contracts', 'entities', 'coverage', 'traceability']);
+validateJsonFile('todo.json', ['$schema', 'work_id', 'meta', 'status', 'tasks']);
 validateJsonFile('packs/core/pipeline-core.json', ['$schema', 'meta', 'parameters', 'contract', 'stages']);
 
 console.log(`\n=== RESUMO: ${validFiles}/${totalFiles} arquivos válidos, ${errors} erros ===`);
