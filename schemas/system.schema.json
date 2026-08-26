@@ -1,0 +1,283 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piwerness.dev/schemas/system.schema.json",
+  "title": "Piwerness System Spec Schema",
+  "description": "Schema para baseline comportamental do sistema — documentos normativos validáveis",
+  "type": "object",
+  "required": ["meta", "status", "actors", "capabilities", "rules", "contracts", "entities", "coverage", "traceability"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "meta": {
+      "type": "object",
+      "required": ["title", "version", "last_reconciled", "scope"],
+      "properties": {
+        "title": { "type": "string", "minLength": 5 },
+        "version": { "type": "integer", "minimum": 1 },
+        "last_reconciled": { "type": "string", "format": "date" },
+        "scope": { "type": "string", "minLength": 10 }
+      }
+    },
+
+    "status": {
+      "type": "string",
+      "enum": ["Baseline parcial", "Baseline validada"],
+      "description": "Parcial = cobertura honesta com GAPs; Validada = sem divergências, todas capacidades confirmadas"
+    },
+
+    "purpose": {
+      "type": "object",
+      "properties": {
+        "problem": { "type": "string" },
+        "result": { "type": "string" }
+      }
+    },
+
+    "boundary": {
+      "type": "object",
+      "properties": {
+        "inside": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "outside": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^ACT-\\d{3}$" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "value", "actors", "behavior", "failures", "rules", "contracts", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^CAP-\\d{3}$" },
+          "title": { "type": "string" },
+          "value": { "type": "string" },
+          "actors": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^ACT-\\d{3}$" }
+          },
+          "behavior": { "type": "string" },
+          "failures": { "type": "string" },
+          "rules": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^BR-\\d{3}$" }
+          },
+          "contracts": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^CON-\\d{3}$" }
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "coverage", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^BR-\\d{3}$" },
+          "statement": { "type": "string" },
+          "coverage": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^CAP-\\d{3}$" }
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "consumers", "inputs", "outputs", "errors", "compatibility", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^CON-\\d{3}$" },
+          "title": { "type": "string" },
+          "consumers": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^ACT-\\d{3}$" }
+          },
+          "inputs": { "type": "string" },
+          "outputs": { "type": "string" },
+          "errors": { "type": "string" },
+          "compatibility": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^ENT-\\d{3}$" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "qualities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "coverage", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^SQR-\\d{3}$" },
+          "statement": { "type": "string" },
+          "coverage": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^(CAP|CON)-\\d{3}$" }
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "integrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "coverage", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^INT-\\d{3}$" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "coverage": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^CAP-\\d{3}$" }
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "restrictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decision_id", "statement", "reference"],
+        "properties": {
+          "decision_id": { "type": "string", "pattern": "^DEC-\\d{3}$" },
+          "statement": { "type": "string" },
+          "reference": { "type": "string" }
+        }
+      }
+    },
+
+    "coverage": {
+      "type": "object",
+      "required": ["capabilities", "gaps"],
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "evidence", "observation"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^CAP-\\d{3}$" },
+              "status": { "type": "string", "enum": ["Confirmado", "Parcial"] },
+              "evidence": { "type": "string" },
+              "observation": { "type": "string" }
+            }
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "evidence", "observation"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^GAP-\\d{3}$" },
+              "type": { "type": "string", "enum": ["Lacuna", "Conflito", "Drift"] },
+              "evidence": { "type": "string" },
+              "observation": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "traceability": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["capability", "actors", "rules", "contracts"],
+        "properties": {
+          "capability": { "type": "string", "pattern": "^CAP-\\d{3}$" },
+          "actors": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^ACT-\\d{3}$" }
+          },
+          "rules": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^BR-\\d{3}$" }
+          },
+          "contracts": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^CON-\\d{3}$" }
+          },
+          "entities": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^ENT-\\d{3}$" }
+          },
+          "qualities": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^SQR-\\d{3}$" }
+          },
+          "integrations": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^INT-\\d{3}$" }
+          }
+        }
+      }
+    },
+
+    "evolution_policy": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+
+    "description_file": {
+      "type": "string",
+      "description": "Caminho para arquivo Markdown com descrição livre (opcional)"
+    }
+  }
+}

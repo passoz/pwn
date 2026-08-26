@@ -1,0 +1,515 @@
+{
+  "$schema": "../schemas/system.schema.json",
+
+  "meta": {
+    "title": "Piwerness — Contract-Governed Agent Harness",
+    "version": 1,
+    "last_reconciled": "2026-08-26",
+    "scope": "o harness proprietário de camada 4 descrito em SPEC.md v1.2 — profiles, skills, rules, contratos, risco, pipelines, sub-agents, hooks, evidência, métricas, fila AFK, materialização de targets e o pack software-engineering. Runtimes (Pi, OpenCode, omp) e providers de modelo são externos."
+  },
+
+  "status": "Baseline parcial",
+
+  "purpose": {
+    "problem": "governança de agentes espalhada entre runtimes, diretórios globais e repositórios; executores têm espaço de decisão amplo demais, e a origem dos contratos (descoberta, requisitos, spec, plano) não é tão governada quanto a execução.",
+    "result": "o operador humano obtém um harness CLI-first (pwn) que limita mecanicamente escopo, orçamento e superfície de escrita, seleciona validação proporcional ao risco e governa a cadeia Discovery → PRD → Spec → Plano com gates rastreáveis."
+  },
+
+  "boundary": {
+    "inside": [
+      "CLI pwn e todos os comandos de profile, skill, rule, agent, pipeline, queue, metrics, work e target",
+      "Motor de contratos, risco e validação (Contract Engine v4)",
+      "Pack oficial software-engineering (port v3 + cadeia de planejamento v4)",
+      "Evidência, métricas, teach skills, memory e editor visual de pipelines"
+    ],
+    "outside": [
+      "Runtimes Pi, OpenCode e omp (camada 2) — consumidos via adapters, não implementados aqui",
+      "Providers de modelo LLM (Anthropic, OpenAI, modelos locais)",
+      "O repositório original ai-engineering-skills — permanece independente e não é controlado"
+    ]
+  },
+
+  "actors": [
+    {
+      "id": "ACT-001",
+      "name": "Operador humano",
+      "description": "define profiles, contratos e políticas; aprova gates e revisões; audita aceitação",
+      "evidence": "decisão explícita do usuário (SPEC.md §2.1, §4.11)"
+    },
+    {
+      "id": "ACT-002",
+      "name": "Runtime Pi",
+      "description": "runtime de camada 2 que consome artefatos materializados (SYSTEM.md, prompts, extensions, skills)",
+      "evidence": "decisão explícita do usuário (SPEC.md §2.2, §6.1)"
+    },
+    {
+      "id": "ACT-003",
+      "name": "Runtime OpenCode",
+      "description": "runtime de camada 2 que consome AGENTS.md, opencode.jsonc, agents e skills",
+      "evidence": "decisão explícita do usuário (SPEC.md §2.2, §6.2)"
+    },
+    {
+      "id": "ACT-004",
+      "name": "Runtime omp",
+      "description": "runtime de camada 2 que consome config.yml, system prompt e agents/*.md",
+      "evidence": "decisão explícita do usuário (SPEC.md §2.2, §6.3)"
+    },
+    {
+      "id": "ACT-005",
+      "name": "Repositório ai-engineering-skills",
+      "description": "origem independente do port, nunca alterado pelo Piwerness",
+      "evidence": "decisão explícita do usuário (SPEC.md §10.1, §2.10)"
+    }
+  ],
+
+  "capabilities": [
+    {
+      "id": "CAP-001",
+      "title": "Governança por contratos executáveis",
+      "value": "restringir decisões do executor antes da execução e impor limites mecanicamente",
+      "actors": ["ACT-001"],
+      "behavior": "todo executor recebe uma ordem de serviço congelada com sete dimensões (behavioral, change, architecture, acceptance, scope, budget, escalation); a allowlist de escrita é verificada pelo diff e pelas tool calls; expansão de escrita exige revisão e revalidação",
+      "failures": "escrita fora da allowlist é bloqueada; budget estourado, tentativas excedidas ou conflito de contrato disparam escalação, nunca execução silenciosa",
+      "rules": ["BR-001", "BR-002", "BR-003", "BR-008"],
+      "contracts": ["CON-001", "CON-006"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.1, §4.2)"
+    },
+    {
+      "id": "CAP-002",
+      "title": "Composição declarativa de perfis e primitivas",
+      "value": "montar um harness por composição de profiles, skills, rules, sub-agents e hooks, sem mega-config",
+      "actors": ["ACT-001"],
+      "behavior": "um profile declara identidade, modelo, skills/rules/hooks e sub-agents; rules são concatenadas em ordem; skills são ativadas por trigger; sub-agents são selecionados pelo step do pipeline",
+      "failures": "conflito de nome entre origens bloqueia a materialização até qualificação explícita; o framework nunca remove rules silenciosamente",
+      "rules": ["BR-009"],
+      "contracts": ["CON-004", "CON-007"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.4, §4.5, §4.6, §4.7)"
+    },
+    {
+      "id": "CAP-003",
+      "title": "Pipelines declarativos e determinísticos",
+      "value": "definir a topologia do processo antes da execução; steps usam sub-agents, gates e checkpoints humanos",
+      "actors": ["ACT-001"],
+      "behavior": "o pipeline JSON declara steps, condições, limites de iteração e checkpoints; dry-run resolve sem invocar runtime; run invoca o runtime headless por step e alimenta o step seguinte",
+      "failures": "nenhum LLM decide a topologia no MVP; steps type:gate bloqueiam o avanço em finding material",
+      "rules": ["BR-010"],
+      "contracts": ["CON-002"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.6, §4.8)"
+    },
+    {
+      "id": "CAP-004",
+      "title": "Materialização para targets com capability matrix",
+      "value": "gerar artefatos nativos de cada runtime sem perda silenciosa de campos",
+      "actors": ["ACT-001", "ACT-002", "ACT-003", "ACT-004"],
+      "behavior": "o materializer lê profile + skills + rules + sub-agents e gera artefatos por target (Pi, OpenCode, omp, raw); cada capacidade é verificada, emulada ou declarada não suportada",
+      "failures": "campo não representável causa falha ou degradação explícita; dry-run expõe capacidades desconhecidas",
+      "rules": ["BR-007"],
+      "contracts": ["CON-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §6, §6.5)"
+    },
+    {
+      "id": "CAP-005",
+      "title": "Execução AFK com fila e revisão humana",
+      "value": "executar works away-from-keyboard em sandbox isolado, com checkpoint humano",
+      "actors": ["ACT-001"],
+      "behavior": "runs são serializadas em queue/review/, pausam sem bloquear stdin e retomam do checkpoint após pwn queue review; sandbox default é worktree por run",
+      "failures": "sem autoaprovação por timeout; conclusão exige evidência real",
+      "rules": ["BR-001"],
+      "contracts": ["CON-005"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.11, §5.1)"
+    },
+    {
+      "id": "CAP-006",
+      "title": "Métricas e otimização",
+      "value": "medir custo, duração, tentativas, escalações e qualidade do processo para calibrar o harness",
+      "actors": ["ACT-001"],
+      "behavior": "toda execução produz um registro de métricas; pwn metrics optimize produz recomendações revisáveis, sem aplicação automática",
+      "failures": "métrica indisponível vira N/A, nunca valor inventado; recomendações não alteram policy automaticamente",
+      "rules": ["BR-008"],
+      "contracts": ["CON-003"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.12, §8)"
+    },
+    {
+      "id": "CAP-007",
+      "title": "Teach skills com estado",
+      "value": "skills que entrevistam o operador e melhoram progressivamente",
+      "actors": ["ACT-001"],
+      "behavior": "teach skills persistem estado bruto gitignored e promovem aprendizados destilados para learnings.yaml versionado",
+      "failures": "estado bruto não é versionado; promoção é manual e sanitizada; dados sensíveis nunca são promovidos automaticamente",
+      "rules": ["BR-009"],
+      "contracts": ["CON-007"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.5, §7, DEC-006)"
+    },
+    {
+      "id": "CAP-008",
+      "title": "Editor visual de pipelines",
+      "value": "inspecionar, desenhar e editar pipelines/sub-agents/contratos sem editar JSON manualmente",
+      "actors": ["ACT-001"],
+      "behavior": "artefato file:// auto-contido abre, valida e exporta pipelines; valida contra pipeline.schema.json; salva por File System Access API com fallback de download",
+      "failures": "não executa agents, commands, hooks ou pipelines; não recebe secrets; round-trip não preserva comentários/âncoras",
+      "rules": ["BR-010"],
+      "contracts": ["CON-009"],
+      "evidence": "decisão explícita do usuário (SPEC.md §9, DEC-020, DEC-021)"
+    },
+    {
+      "id": "CAP-009",
+      "title": "Pack oficial software-engineering (port)",
+      "value": "distribuir o workflow v3 portado com proveniência, evoluindo para v4 sem migrar Works antigos",
+      "actors": ["ACT-001", "ACT-005"],
+      "behavior": "o port copia skills/workflows/scripts/testes/docs/adapters para packs/software-engineering; PORTED_FROM.md registra origem, commit e inventário; adapters /pwn-* coexistem com /make-*",
+      "failures": "a origem nunca é removida/alterada; atualização futura exige pwn pack diff + port explícito; sem sincronização bidirecional",
+      "rules": ["BR-004", "BR-005"],
+      "contracts": ["CON-008"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.1, §10.2, §10.6)"
+    },
+    {
+      "id": "CAP-010",
+      "title": "Cadeia de planejamento governada",
+      "value": "governar a origem dos contratos com artefatos rastreáveis e gates de cobertura/consistência",
+      "actors": ["ACT-001"],
+      "behavior": "intake → discovery → requirements → PRD → decisões → spec → validação → enriquecimento → work-governance → plan → validação → task-contract, com matriz de rastreabilidade e IDs estáveis",
+      "failures": "gate bloqueia em finding material; revisor não reescreve escopo; enriquecimento não introduz features silenciosamente",
+      "rules": ["BR-005", "BR-006", "BR-008"],
+      "contracts": ["CON-001", "CON-002", "CON-006"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.8, §10.9, §10.10)"
+    }
+  ],
+
+  "rules": [
+    {
+      "id": "BR-001",
+      "statement": "escrita fora da allowlist do contrato é bloqueada mecanicamente (tool-call guard + diff), nunca recomendação textual",
+      "coverage": ["CAP-001", "CAP-005"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.1, §2.8)"
+    },
+    {
+      "id": "BR-002",
+      "statement": "a estratégia de validação é proporcional ao risco e não pode ser rebaixada pelo executor",
+      "coverage": ["CAP-001"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.9, §4.2)"
+    },
+    {
+      "id": "BR-003",
+      "statement": "risco não é rebaixado sem revisão do contrato; promoção automática é permitida",
+      "coverage": ["CAP-001"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.2)"
+    },
+    {
+      "id": "BR-004",
+      "statement": "o repositório original ai-engineering-skills permanece independente; não há symlink, submodule nem sincronização bidirecional",
+      "coverage": ["CAP-009"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.10, DEC-007, DEC-015)"
+    },
+    {
+      "id": "BR-005",
+      "statement": "o workflow v3 permanece executável; v4 é aditivo e não migra Works antigos automaticamente",
+      "coverage": ["CAP-009", "CAP-010"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.3, DEC-016)"
+    },
+    {
+      "id": "BR-006",
+      "statement": "revisor/gate não altera requisito, escopo, risco ou decisão técnica automaticamente; mudança exige decisão explícita do operador",
+      "coverage": ["CAP-010"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.10)"
+    },
+    {
+      "id": "BR-007",
+      "statement": "materialização não descarta silenciosamente campos de segurança, escopo, budget ou aceitação",
+      "coverage": ["CAP-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §6.5)"
+    },
+    {
+      "id": "BR-008",
+      "statement": "revisão por LLM não é prova isolada; gate só passa após checks determinísticos aplicáveis",
+      "coverage": ["CAP-001", "CAP-006", "CAP-010"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.9)"
+    },
+    {
+      "id": "BR-009",
+      "statement": "primitivas são unidades independentes compostas; não há mega-config",
+      "coverage": ["CAP-002", "CAP-007"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.4)"
+    },
+    {
+      "id": "BR-010",
+      "statement": "pipeline é declarativo e determinístico; nenhum LLM decide a topologia no MVP",
+      "coverage": ["CAP-003", "CAP-008"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.6, DEC-008)"
+    }
+  ],
+
+  "contracts": [
+    {
+      "id": "CON-001",
+      "title": "Contract v4 (ordem de serviço por task)",
+      "consumers": ["ACT-001"],
+      "inputs": "work_id, task_id, risco, routing, budget e as sete dimensões (behavioral, change, architecture, acceptance, scope, budget, escalation)",
+      "outputs": "ordem de serviço congelada entregue ao executor; verificação de diff e tool calls contra a allowlist",
+      "errors": "escrita fora da allowlist é bloqueada; budget/attempts excedidos disparam escalação",
+      "compatibility": "v3 permanece legível; v4 é aditivo, sem migração automática",
+      "evidence": "decisão explícita do usuário (SPEC.md §4.1, §10.3)"
+    },
+    {
+      "id": "CON-002",
+      "title": "Gate de planejamento",
+      "consumers": ["ACT-001"],
+      "inputs": "artefato anterior e artefato produzido (Discovery/Requirements/PRD/Spec/Plan/Task-Contract)",
+      "outputs": "saída estruturada com result (pass/pass_with_notes/blocked) e findings com severidade e referências",
+      "errors": "finding material bloqueia o avanço do pipeline",
+      "compatibility": "formato de saída versionado para automação",
+      "evidence": "decisão explícita do usuário (SPEC.md §10.9)"
+    },
+    {
+      "id": "CON-003",
+      "title": "Métricas de execução",
+      "consumers": ["ACT-001"],
+      "inputs": "eventos de turno e sessão dos runtimes, normalizados pelos adapters",
+      "outputs": "registro JSONL estável de tokens, custo, duração, tentativas, escalações e qualidade do processo",
+      "errors": "métrica indisponível produz N/A, nunca valor inventado",
+      "compatibility": "contrato JSONL estável entre Pi, OpenCode e omp",
+      "evidence": "decisão explícita do usuário (SPEC.md §4.12, §8, DEC-003)"
+    },
+    {
+      "id": "CON-004",
+      "title": "Target materializado por runtime",
+      "consumers": ["ACT-002", "ACT-003", "ACT-004"],
+      "inputs": "profile ativo + skills + rules + sub-agents",
+      "outputs": "artefatos nativos (SYSTEM.md/prompts/extensions/settings; AGENTS.md/opencode.jsonc/agents/skills; config.yml/agents/*.md; raw)",
+      "errors": "campo não representável causa falha ou degradação explícita",
+      "compatibility": "versionada por runtime/versão observada via capability matrix",
+      "evidence": "decisão explícita do usuário (SPEC.md §6, §6.5)"
+    },
+    {
+      "id": "CON-005",
+      "title": "Queue review",
+      "consumers": ["ACT-001"],
+      "inputs": "run serializada com outputs e paused_at_step",
+      "outputs": "tarefa movida para queue/review/ e retomada do checkpoint após aprovação/rejeição/correção",
+      "errors": "não há autoaprovação por timeout",
+      "compatibility": "retomada da mesma run do checkpoint",
+      "evidence": "decisão explícita do usuário (SPEC.md §4.11, DEC-012)"
+    },
+    {
+      "id": "CON-006",
+      "title": "UX handoff manifest",
+      "consumers": ["ACT-001"],
+      "inputs": "referência visual versionada, autoridade, superfícies, estados e invariantes",
+      "outputs": "contrato de fidelidade visual e evidência de screenshots obrigatórios",
+      "errors": "divergência bloqueante exige decisão explícita; acessibilidade normativa não é rebaixada silenciosamente",
+      "compatibility": "autoridade declarada por Work (approved_reference vs directional_reference)",
+      "evidence": "decisão explícita do usuário (SPEC.md §10.13, DEC-025)"
+    },
+    {
+      "id": "CON-007",
+      "title": "Skill manifest",
+      "consumers": ["ACT-001"],
+      "inputs": "skill.yaml (tipo, triggers, prompt, state schema) e learnings",
+      "outputs": "skill ativável; estado bruto gitignored e aprendizados versionados",
+      "errors": "conflito de nome exige seleção explícita de origem",
+      "compatibility": "compatível com o formato SKILL.md existente",
+      "evidence": "decisão explícita do usuário (SPEC.md §4.5, §10.7)"
+    },
+    {
+      "id": "CON-008",
+      "title": "Proveniência do port",
+      "consumers": ["ACT-001", "ACT-005"],
+      "inputs": "origem, commit, data e inventário do port",
+      "outputs": "PORTED_FROM.md com linhagem e diferenças intencionais",
+      "errors": "divergência da origem exige pwn pack diff e port explícito",
+      "compatibility": "sem sincronização bidirecional automática",
+      "evidence": "decisão explícita do usuário (SPEC.md §10.1)"
+    },
+    {
+      "id": "CON-009",
+      "title": "Schema de pipeline/editor",
+      "consumers": ["ACT-001"],
+      "inputs": "pipeline JSON; pipeline.schema.json versionado",
+      "outputs": "validação do pipeline; import/export; round-trip com aviso de serialização canônica",
+      "errors": "schema incompatível abre read-only ou exige migração explícita",
+      "compatibility": "chaves desconhecidas preservadas semanticamente; comentários/âncoras sem preservação garantida",
+      "evidence": "decisão explícita do usuário (SPEC.md §9.3)"
+    }
+  ],
+
+  "entities": [
+    {
+      "id": "ENT-001",
+      "name": "Contract",
+      "description": "ordem de serviço executável que congela comportamento, limites, aceitação, budget e escalação",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-002",
+      "name": "Profile",
+      "description": "unidade de identidade e configuração de um harness (modelo, skills, rules, agents)",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-003",
+      "name": "Skill",
+      "description": "unidade de conhecimento ativável (reference, workflow, tool, teach)",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-004",
+      "name": "Rule",
+      "description": "restrição ou padrão injetado passivamente no system prompt",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-005",
+      "name": "Sub-agent",
+      "description": "agente especializado com modelo, prompt e tools próprios, selecionado por um step",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-006",
+      "name": "Pipeline",
+      "description": "processo multi-step onde cada step pode usar um sub-agent ou gate",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    },
+    {
+      "id": "ENT-007",
+      "name": "Work",
+      "description": "unidade de trabalho rastreada por artefatos (intake → discovery → requirements → PRD → spec → plano → contratos)",
+      "evidence": "decisão explícita do usuário (SPEC.md §10.8)"
+    },
+    {
+      "id": "ENT-008",
+      "name": "Evidence",
+      "description": "prova observável (check, snapshot, screenshot, diff) que sustenta aceitação",
+      "evidence": "decisão explícita do usuário (SPEC.md §14)"
+    }
+  ],
+
+  "qualities": [
+    {
+      "id": "SQR-001",
+      "statement": "CLI-first — nenhum servidor web, banco ou GUI obrigatório; tudo é arquivo, CLI e pipe",
+      "coverage": ["CAP-002", "CAP-003"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.1)"
+    },
+    {
+      "id": "SQR-002",
+      "statement": "runtime-agnostic — não é fork nem plugin de runtime; materializa artefatos para Pi, OpenCode e omp",
+      "coverage": ["CAP-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.2)"
+    },
+    {
+      "id": "SQR-003",
+      "statement": "determinismo do processo — topologia declarada antes da execução; sem roteador LLM no MVP",
+      "coverage": ["CAP-003"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.6, DEC-008)"
+    },
+    {
+      "id": "SQR-004",
+      "statement": "versionável e diffável — configuração e aprendizados cabem em Git; estado bruto é gitignored",
+      "coverage": ["CAP-006", "CAP-007"],
+      "evidence": "decisão explícita do usuário (SPEC.md §2.5)"
+    }
+  ],
+
+  "integrations": [
+    {
+      "id": "INT-001",
+      "name": "Pi",
+      "description": "runtime de camada 2 invocado headless (pi --print) e alimentado por artefatos materializados",
+      "coverage": ["CAP-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.8, DEC-010)"
+    },
+    {
+      "id": "INT-002",
+      "name": "OpenCode",
+      "description": "runtime de camada 2 invocado via opencode run",
+      "coverage": ["CAP-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.8)"
+    },
+    {
+      "id": "INT-003",
+      "name": "omp",
+      "description": "runtime de camada 2 invocado via omp --print",
+      "coverage": ["CAP-004"],
+      "evidence": "decisão explícita do usuário (SPEC.md §4.8)"
+    },
+    {
+      "id": "INT-004",
+      "name": "ai-engineering-skills",
+      "description": "repositório de origem do port, independente",
+      "coverage": ["CAP-009"],
+      "evidence": "decisão explícita do usuário (SPEC.md §10.1)"
+    }
+  ],
+
+  "restrictions": [
+    {
+      "decision_id": "DEC-001",
+      "statement": "JSON para documentos normativos; Markdown para documentação humana",
+      "reference": "SPEC.md §2.3 (superseded por DEC-029)"
+    },
+    {
+      "decision_id": "DEC-005",
+      "statement": "implementação em TypeScript sobre Bun; distribuição standalone opcional",
+      "reference": "SPEC.md §11.1"
+    },
+    {
+      "decision_id": "DEC-008",
+      "statement": "pipeline JSON é o orquestrador; sem roteador LLM no MVP",
+      "reference": "SPEC.md §2.6 (atualizado por DEC-029)"
+    },
+    {
+      "decision_id": "DEC-014",
+      "statement": "o executável chama-se pwn",
+      "reference": "SPEC.md §5"
+    },
+    {
+      "decision_id": "DEC-017",
+      "statement": "modelos fortes definem contratos e tratam escalações; modelos baratos executam sob limites",
+      "reference": "SPEC.md §4.2"
+    },
+    {
+      "decision_id": "DEC-028",
+      "statement": "contratos em dois níveis — work-governance antes do plano; contratos por task após a atomização",
+      "reference": "SPEC.md §10.8"
+    }
+  ],
+
+  "coverage": {
+    "capabilities": [
+      { "id": "CAP-001", "status": "Parcial", "evidence": "SPEC.md §4.1", "observation": "Especificado; implementação ausente (Fase 4)" },
+      { "id": "CAP-002", "status": "Parcial", "evidence": "SPEC.md §4.4", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-003", "status": "Parcial", "evidence": "SPEC.md §4.8", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-004", "status": "Parcial", "evidence": "SPEC.md §6", "observation": "Especificado; capabilities de runtime ainda não verificadas" },
+      { "id": "CAP-005", "status": "Parcial", "evidence": "SPEC.md §4.11", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-006", "status": "Parcial", "evidence": "SPEC.md §4.12", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-007", "status": "Parcial", "evidence": "SPEC.md §7", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-008", "status": "Parcial", "evidence": "SPEC.md §9", "observation": "Especificado; implementação ausente" },
+      { "id": "CAP-009", "status": "Parcial", "evidence": "SPEC.md §10", "observation": "Origem presente em ~/dev/ai-engineering-skills; port ainda não realizado" },
+      { "id": "CAP-010", "status": "Parcial", "evidence": "SPEC.md §10.8", "observation": "Especificado; implementação ausente" }
+    ],
+    "gaps": [
+      { "id": "GAP-001", "type": "Lacuna", "evidence": "SPEC.md §6.5", "observation": "Capabilities de Pi/OpenCode/omp ainda não verificadas por teste de contrato" },
+      { "id": "GAP-002", "type": "Lacuna", "evidence": "SPEC.md §11.2", "observation": "Nenhuma implementação existe no repositório; todas as capacidades estão apenas especificadas" },
+      { "id": "GAP-003", "type": "Lacuna", "evidence": "SPEC.md §10.6", "observation": "Adapters /pwn-* ainda não materializados; coexistência com /make-* não comprovada" }
+    ]
+  },
+
+  "traceability": [
+    { "capability": "CAP-001", "actors": ["ACT-001"], "rules": ["BR-001", "BR-002", "BR-003", "BR-008"], "contracts": ["CON-001", "CON-006"], "entities": ["ENT-001"], "qualities": ["SQR-003"] },
+    { "capability": "CAP-002", "actors": ["ACT-001"], "rules": ["BR-009"], "contracts": ["CON-004", "CON-007"], "entities": ["ENT-002", "ENT-003", "ENT-004", "ENT-005"], "qualities": ["SQR-001"] },
+    { "capability": "CAP-003", "actors": ["ACT-001"], "rules": ["BR-010"], "contracts": ["CON-002"], "entities": ["ENT-006"], "qualities": ["SQR-001", "SQR-003"] },
+    { "capability": "CAP-004", "actors": ["ACT-001", "ACT-002", "ACT-003", "ACT-004"], "rules": ["BR-007"], "contracts": ["CON-004"], "entities": ["ENT-002"], "qualities": ["SQR-002"], "integrations": ["INT-001", "INT-002", "INT-003"] },
+    { "capability": "CAP-005", "actors": ["ACT-001"], "rules": ["BR-001"], "contracts": ["CON-005"], "entities": ["ENT-007", "ENT-008"] },
+    { "capability": "CAP-006", "actors": ["ACT-001"], "rules": ["BR-008"], "contracts": ["CON-003"], "entities": ["ENT-008"], "qualities": ["SQR-004"] },
+    { "capability": "CAP-007", "actors": ["ACT-001"], "rules": ["BR-009"], "contracts": ["CON-007"], "entities": ["ENT-003"], "qualities": ["SQR-004"] },
+    { "capability": "CAP-008", "actors": ["ACT-001"], "rules": ["BR-010"], "contracts": ["CON-009"], "entities": ["ENT-006"] },
+    { "capability": "CAP-009", "actors": ["ACT-001", "ACT-005"], "rules": ["BR-004", "BR-005"], "contracts": ["CON-008"], "integrations": ["INT-004"] },
+    { "capability": "CAP-010", "actors": ["ACT-001"], "rules": ["BR-005", "BR-006", "BR-008"], "contracts": ["CON-001", "CON-002", "CON-006"], "entities": ["ENT-007"] }
+  ],
+
+  "evolution_policy": [
+    "Mudanças de comportamento devem começar em /make-prompt referenciando esta baseline",
+    "O prompt deve declarar capacidades, regras e contratos preservados ou alterados",
+    "Após implementação validada, reconcilie esta spec quando o comportamento sistêmico tiver mudado",
+    "Divergência entre spec e sistema deve ser registrada como drift; não escolha silenciosamente uma fonte"
+  ]
+}

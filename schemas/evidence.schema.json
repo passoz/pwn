@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piwerness.dev/schemas/evidence.schema.json",
+  "title": "Piwerness Evidence Schema",
+  "description": "Schema para registros de evidência — provas observáveis de conclusão de tarefas",
+  "type": "object",
+  "required": ["meta", "task_id", "status", "red", "green"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "meta": {
+      "type": "object",
+      "required": ["created_at"],
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "agent": { "type": "string" },
+        "model": { "type": "string" },
+        "duration_seconds": { "type": "integer" }
+      }
+    },
+
+    "task_id": {
+      "type": "string",
+      "pattern": "^T-\\d{3}$"
+    },
+
+    "status": {
+      "type": "string",
+      "enum": ["red", "green", "failed", "escalated"]
+    },
+
+    "red": {
+      "type": "object",
+      "required": ["test_file", "exit_code", "timestamp"],
+      "properties": {
+        "test_file": { "type": "string" },
+        "exit_code": { "type": "integer" },
+        "output": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "attempts": { "type": "integer", "default": 1 }
+      }
+    },
+
+    "green": {
+      "type": "object",
+      "required": ["impl_file", "exit_code", "timestamp"],
+      "properties": {
+        "impl_file": { "type": "string" },
+        "exit_code": { "type": "integer" },
+        "output": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "attempts": { "type": "integer", "default": 1 }
+      }
+    },
+
+    "checks": {
+      "type": "array",
+      "description": "Checks determinísticos executados",
+      "items": {
+        "type": "object",
+        "required": ["name", "passed", "timestamp"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["test", "lint", "typecheck", "build", "custom"] },
+          "command": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "exit_code": { "type": "integer" },
+          "output": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "tokens_used": { "type": "integer" },
+        "cost_usd": { "type": "number" },
+        "total_attempts": { "type": "integer" },
+        "escalated": { "type": "boolean" },
+        "escalated_to": { "type": "string", "enum": ["strong", "human"] }
+      }
+    },
+
+    "files_modified": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "action"],
+        "properties": {
+          "path": { "type": "string" },
+          "action": { "type": "string", "enum": ["created", "modified", "deleted"] },
+          "lines_added": { "type": "integer" },
+          "lines_removed": { "type": "integer" }
+        }
+      }
+    },
+
+    "contract_compliance": {
+      "type": "object",
+      "description": "Verificação de conformidade com o contrato da task",
+      "properties": {
+        "scope_respected": { "type": "boolean" },
+        "budget_respected": { "type": "boolean" },
+        "tools_used_only_allowed": { "type": "boolean" },
+        "violations": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

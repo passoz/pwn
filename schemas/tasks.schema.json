@@ -1,0 +1,193 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piwerness.dev/schemas/tasks.schema.json",
+  "title": "Piwerness Tasks Schema",
+  "description": "Schema para planos de tarefas atomizadas — documentos normativos validáveis",
+  "type": "object",
+  "required": ["meta", "work_id", "status", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "meta": {
+      "type": "object",
+      "required": ["version", "created_at"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "spec_reference": { "type": "string", "description": "Caminho para spec.json de origem" }
+      }
+    },
+
+    "work_id": {
+      "type": "string",
+      "pattern": "^\\d{4}$",
+      "description": "ID do Work (0001, 0002, ...)"
+    },
+
+    "status": {
+      "type": "string",
+      "enum": ["planning", "in_progress", "blocked", "review", "done", "cancelled"]
+    },
+
+    "scope": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["full", "partial"] },
+        "filter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Seções/processos incluídos se type=partial"
+        }
+      }
+    },
+
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status", "ac"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^T-\\d{3}$",
+            "description": "ID único da task (T-001, T-002, ...)"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 100
+          },
+          "description": { "type": "string" },
+
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "red", "green", "review", "done", "blocked"]
+          },
+
+          "requirement_id": {
+            "type": "string",
+            "pattern": "^(FR|QR)-\\d{3}$",
+            "description": "ID do requisito que esta task atende (1:1)"
+          },
+
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "default": "medium"
+          },
+
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^T-\\d{3}$" },
+            "description": "IDs de tasks que devem ser completadas antes"
+          },
+
+          "ac": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "statement"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^AC-\\d{3}$" },
+                "type": {
+                  "type": "string",
+                  "enum": ["test", "command", "assertion", "human_approval"]
+                },
+                "statement": { "type": "string" },
+                "command": { "type": "string", "description": "Comando a executar se type=command" },
+                "expected_exit_code": { "type": "integer", "default": 0 },
+                "file_reference": { "type": "string", "description": "Arquivo a verificar se type=test" }
+              }
+            },
+            "description": "Critérios de aceite executáveis"
+          },
+
+          "contract": {
+            "type": "object",
+            "description": "Contrato de execução da task",
+            "properties": {
+              "scope": {
+                "type": "object",
+                "properties": {
+                  "write_allow": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "write_deny": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "max_tokens": { "type": "integer" },
+                  "max_attempts": { "type": "integer", "default": 3 },
+                  "max_duration_minutes": { "type": "integer" }
+                }
+              },
+              "tools": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Tools permitidas para o executor"
+              }
+            }
+          },
+
+          "agent": {
+            "type": "string",
+            "enum": ["strong", "executor", "human"],
+            "default": "executor"
+          },
+
+          "attempts": {
+            "type": "integer",
+            "default": 0,
+            "description": "Número de tentativas de execução"
+          },
+
+          "evidence": {
+            "type": "string",
+            "description": "Caminho para evidence.json após conclusão"
+          }
+        }
+      }
+    },
+
+    "traceability": {
+      "type": "array",
+      "description": "Matriz de rastreabilidade FR/QR → T → AC → Evidence",
+      "items": {
+        "type": "object",
+        "properties": {
+          "requirement_id": { "type": "string", "pattern": "^(FR|QR)-\\d{3}$" },
+          "task_id": { "type": "string", "pattern": "^T-\\d{3}$" },
+          "ac_ids": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^AC-\\d{3}$" }
+          },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+
+    "coverage": {
+      "type": "object",
+      "description": "Resumo de cobertura",
+      "properties": {
+        "total_tasks": { "type": "integer" },
+        "completed": { "type": "integer" },
+        "blocked": { "type": "integer" },
+        "in_progress": { "type": "integer" },
+        "pending": { "type": "integer" },
+        "test_coverage_percent": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    }
+  }
+}

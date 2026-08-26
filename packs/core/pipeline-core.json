@@ -1,0 +1,581 @@
+{
+  "$schema": "../schemas/pipeline.schema.json",
+  "meta": {
+    "name": "pipeline-core",
+    "version": "1.0.0",
+    "description": "Pipeline canônico do Piwerness — do zero à entrega com gates determinísticos",
+    "author": "passoz",
+    "created_at": "2026-08-26T23:10:58Z"
+  },
+
+  "parameters": {
+    "scenario": {
+      "type": "enum",
+      "values": ["greenfield", "brownfield"],
+      "default": "greenfield",
+      "description": "greenfield = projeto novo; brownfield = feature/fix em projeto existente",
+      "required": true
+    },
+    "depth": {
+      "type": "enum",
+      "values": ["light", "normal", "deep", "exhaustive"],
+      "default": "normal",
+      "description": "Profundidade do grilling e rigor dos gates",
+      "required": true
+    },
+    "scope": {
+      "type": "enum",
+      "values": ["full", "partial"],
+      "default": "full",
+      "description": "full = todo o spec vira TODO; partial = apenas uma parte",
+      "required": false
+    },
+    "scope_filter": {
+      "type": "array",
+      "description": "Seções/processos a incluir quando scope=partial",
+      "required": false
+    }
+  },
+
+  "contract": {
+    "work_id": "${work_id}",
+    "scenario": "${scenario}",
+    "depth": "${depth}",
+    "scope": "${scope}",
+    "dimensions": {
+      "behavioral": "definido em spec",
+      "change": "definido em tasks",
+      "architecture": "definido em spec",
+      "acceptance": "definido em tasks (ACs)",
+      "scope": "write_allow + write_deny",
+      "budget": "tokens, tempo, tentativas",
+      "escalation": "quando escalar para humano/modelo forte"
+    }
+  },
+
+  "stages": {
+    "discovery": {
+      "when": "scenario == brownfield",
+      "description": "Descobrir contexto do projeto existente",
+      "actions": [
+        {
+          "name": "read_context",
+          "type": "file",
+          "paths": [
+            ".specs/system.json",
+            "CONTEXT.md",
+            "README.md",
+            "docs/adr/*.md"
+          ],
+          "output": "artifacts/discovery/context.md"
+        },
+        {
+          "name": "read_structure",
+          "type": "glob",
+          "patterns": [
+            "src/**/*.ts",
+            "tests/**/*.test.ts",
+            "package.json",
+            "*.config.*"
+          ],
+          "output": "artifacts/discovery/structure.json"
+        },
+        {
+          "name": "read_tests",
+          "type": "exec",
+          "command": "npm test -- --listTests 2>/dev/null || echo 'no tests'",
+          "output": "artifacts/discovery/tests.txt"
+        }
+      ],
+      "gate": {
+        "name": "discovery_complete",
+        "type": "deterministic",
+        "checks": [
+          "artifacts/discovery/context.md exists OR 'no context file' noted",
+          "artifacts/discovery/structure.json is valid JSON"
+        ],
+        "on_fail": "warn_and_continue"
+      },
+      "output": {
+        "artifact": "artifacts/discovery/summary.md",
+        "contract": {
+          "input": "none",
+          "output": "contexto coletado",
+          "evidence": "artifacts/discovery/*"
+        }
+      }
+    },
+
+    "grilling": {
+      "description": "Submeter a ideia a questionamento rigoroso proporcional à profundidade",
+      "input": [
+        "user idea (prompt)",
+        "artifacts/discovery/summary.md (if brownfield)"
+      ],
+      "actions": [
+        {
+          "name": "grill",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://grilling",
+          "parameters": {
+            "depth": "${depth}",
+            "scenario": "${scenario}",
+            "context": "artifacts/discovery/summary.md (if exists)"
+          },
+          "output": "artifacts/grilling/questions.json"
+        },
+        {
+          "name": "collect_answers",
+          "type": "interactive",
+          "prompt": "Responda as perguntas do grilling:",
+          "input_file": "artifacts/grilling/questions.json",
+          "output": "artifacts/grilling/answers.json"
+        },
+        {
+          "name": "synthesize_prd",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://prd-synthesis",
+          "input": [
+            "artifacts/grilling/questions.json",
+            "artifacts/grilling/answers.json"
+          ],
+          "output": "artifacts/prd/prd.json"
+        }
+      ],
+      "gate": {
+        "name": "prd_valid",
+        "type": "deterministic",
+        "checks": [
+          "artifacts/prd/prd.json exists",
+          "artifacts/prd/prd.json validates against prd.schema.json",
+          "artifacts/prd/prd.json.status == 'approved'",
+          "artifacts/prd/prd.json.decisions.length >= ${depth_thresholds.decisions}"
+        ],
+        "on_fail": "block",
+        "failure_message": "PRD inválido ou com decisões insuficientes para depth=${depth}"
+      },
+      "output": {
+        "artifact": "artifacts/prd/prd.json",
+        "contract": {
+          "input": "ideia + respostas do grilling",
+          "output": "PRD aprovado",
+          "evidence": "artifacts/prd/prd.json"
+        }
+      }
+    },
+
+    "spec": {
+      "description": "Gerar especificação técnica rastreável ao PRD",
+      "input": [
+        "artifacts/prd/prd.json",
+        "artifacts/discovery/summary.md (if brownfield)"
+      ],
+      "actions": [
+        {
+          "name": "generate_spec",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://technical-specification",
+          "parameters": {
+            "scenario": "${scenario}",
+            "reconcile": "${scenario == brownfield}",
+            "existing_spec": ".specs/system.json (if brownfield)"
+          },
+          "output": "artifacts/spec/spec.json"
+        },
+        {
+          "name": "validate_spec",
+          "type": "exec",
+          "command": "pwn validate-spec artifacts/spec/spec.json",
+          "output": "artifacts/spec/validation.json"
+        },
+        {
+          "name": "generate_traceability",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://traceability-matrix",
+          "input": [
+            "artifacts/prd/prd.json",
+            "artifacts/spec/spec.json"
+          ],
+          "output": "artifacts/spec/traceability.json"
+        }
+      ],
+      "gate": {
+        "name": "spec_valid",
+        "type": "deterministic",
+        "checks": [
+          "artifacts/spec/spec.json exists",
+          "artifacts/spec/spec.json validates against system.schema.json",
+          "artifacts/spec/validation.json.status == 'pass'",
+          "artifacts/spec/validation.json.gaps.filter(level >= L2).length == 0"
+        ],
+        "on_fail": "block",
+        "failure_message": "Spec contém lacunas materiais L2+ ou falhou na validação"
+      },
+      "output": {
+        "artifact": "artifacts/spec/spec.json",
+        "contract": {
+          "input": "PRD",
+          "output": "Spec técnica rastreável",
+          "evidence": "artifacts/spec/*"
+        }
+      }
+    },
+
+    "todo": {
+      "description": "Atomizar a spec em tarefas executáveis",
+      "input": [
+        "artifacts/spec/spec.json",
+        "artifacts/spec/traceability.json"
+      ],
+      "parameters": {
+        "scope": "${scope}",
+        "scope_filter": "${scope_filter}"
+      },
+      "actions": [
+        {
+          "name": "atomize",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://task-atomization",
+          "parameters": {
+            "scope": "${scope}",
+            "scope_filter": "${scope_filter}"
+          },
+          "input": "artifacts/spec/spec.json",
+          "output": "artifacts/todo/tasks.json"
+        },
+        {
+          "name": "assign_ids",
+          "type": "code",
+          "function": "generate_task_ids",
+          "input": "artifacts/todo/tasks.json",
+          "output": ".todo/${work_id}-tasks.json"
+        }
+      ],
+      "gate": {
+        "name": "todo_valid",
+        "type": "deterministic",
+        "checks": [
+          ".todo/${work_id}-tasks.json exists",
+          ".todo/${work_id}-tasks.json validates against tasks.schema.json",
+          ".todo/${work_id}-tasks.json.tasks[*].ac.all executable",
+          ".todo/${work_id}-tasks.json.tasks[*].id all unique"
+        ],
+        "on_fail": "block",
+        "failure_message": "TODO não atomizado ou ACs não executáveis"
+      },
+      "output": {
+        "artifact": ".todo/${work_id}-tasks.json",
+        "contract": {
+          "input": "Spec",
+          "output": "Tasks atomizadas com ACs",
+          "evidence": ".todo/${work_id}-tasks.json"
+        }
+      }
+    },
+
+    "tasks": {
+      "description": "Executar tarefas com TDD (RED→GREEN)",
+      "input": [
+        ".todo/${work_id}-tasks.json"
+      ],
+      "actions": [
+        {
+          "name": "execute_tasks",
+          "type": "loop",
+          "over": "tasks in .todo/${work_id}-tasks.json",
+          "parallel": false,
+          "each_task": [
+            {
+              "name": "red",
+              "type": "sub-agent",
+              "agent": "executor",
+              "skill": "internal://red-test",
+              "parameters": {
+                "task": "${task}",
+                "ac": "${task.ac}"
+              },
+              "output": "artifacts/tasks/${task.id}/red.test.ts",
+              "gate": {
+                "name": "red_exists",
+                "type": "deterministic",
+                "checks": [
+                  "artifacts/tasks/${task.id}/red.test.ts exists",
+                  "npm test -- ${task.id} exits with non-zero"
+                ],
+                "on_fail": "block"
+              }
+            },
+            {
+              "name": "green",
+              "type": "sub-agent",
+              "agent": "executor",
+              "skill": "internal://green-impl",
+              "parameters": {
+                "task": "${task}",
+                "test": "artifacts/tasks/${task.id}/red.test.ts",
+                "contract": {
+                  "scope": "${task.scope}",
+                  "budget": "${task.budget}",
+                  "tools": "${task.tools}"
+                }
+              },
+              "output": "artifacts/tasks/${task.id}/impl.ts",
+              "gate": {
+                "name": "green_passes",
+                "type": "deterministic",
+                "checks": [
+                  "artifacts/tasks/${task.id}/impl.ts exists",
+                  "npm test -- ${task.id} exits with 0"
+                ],
+                "on_fail": "block_or_escalate",
+                "escalate_to": "strong"
+              }
+            },
+            {
+              "name": "record_evidence",
+              "type": "code",
+              "function": "record_task_evidence",
+              "input": [
+                "artifacts/tasks/${task.id}/red.test.ts",
+                "artifacts/tasks/${task.id}/impl.ts",
+                "test output"
+              ],
+              "output": "artifacts/tasks/${task.id}/evidence.json"
+            }
+          ]
+        }
+      ],
+      "gate": {
+        "name": "all_tasks_complete",
+        "type": "deterministic",
+        "checks": [
+          "all tasks have evidence.json",
+          "npm test exits with 0"
+        ],
+        "on_fail": "block"
+      },
+      "output": {
+        "artifact": "artifacts/tasks/",
+        "contract": {
+          "input": "TODO",
+          "output": "Código + testes passando",
+          "evidence": "artifacts/tasks/*/evidence.json"
+        }
+      }
+    },
+
+    "review": {
+      "description": "Revisão final determinística + revisão semântica opcional",
+      "input": [
+        "artifacts/tasks/",
+        ".todo/${work_id}-tasks.json"
+      ],
+      "actions": [
+        {
+          "name": "deterministic_checks",
+          "type": "exec",
+          "commands": [
+            "npm test",
+            "npm run lint",
+            "npm run typecheck",
+            "npm run build"
+          ],
+          "output": "artifacts/review/checks.json"
+        },
+        {
+          "name": "semantic_review",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://code-review",
+          "parameters": {
+            "standards": ".specs/system.json",
+            "spec": "artifacts/spec/spec.json"
+          },
+          "input": "artifacts/tasks/",
+          "output": "artifacts/review/semantic.json",
+          "optional": true
+        },
+        {
+          "name": "generate_report",
+          "type": "code",
+          "function": "generate_review_report",
+          "input": [
+            "artifacts/review/checks.json",
+            "artifacts/review/semantic.json"
+          ],
+          "output": "artifacts/review/report.json"
+        }
+      ],
+      "gate": {
+        "name": "review_pass",
+        "type": "deterministic",
+        "checks": [
+          "artifacts/review/checks.json.all_passed == true",
+          "artifacts/review/semantic.json.critical_findings == 0 (if exists)"
+        ],
+        "on_fail": "block",
+        "failure_message": "Review falhou — checks não passaram"
+      },
+      "output": {
+        "artifact": "artifacts/review/report.json",
+        "contract": {
+          "input": "Código",
+          "output": "Aprovação para merge",
+          "evidence": "artifacts/review/*"
+        }
+      }
+    },
+
+    "finalize": {
+      "description": "Finalizar o Work e atualizar spec se necessário",
+      "actions": [
+        {
+          "name": "update_spec_coverage",
+          "type": "code",
+          "function": "update_coverage_register",
+          "input": ".specs/system.json",
+          "output": ".specs/system.json",
+          "when": "scenario == brownfield"
+        },
+        {
+          "name": "reconcile_spec",
+          "type": "sub-agent",
+          "agent": "strong",
+          "skill": "internal://spec-reconcile",
+          "input": ".specs/system.json",
+          "output": ".specs/system.json",
+          "when": "behavioral changes detected"
+        },
+        {
+          "name": "commit",
+          "type": "exec",
+          "command": "git add -A && git commit -m 'feat(work): complete ${work_id}'",
+          "output": "artifacts/finalize/commit.json"
+        },
+        {
+          "name": "archive_artifacts",
+          "type": "code",
+          "function": "archive_work_artifacts",
+          "source": "artifacts/",
+          "destination": ".archive/${work_id}/"
+        }
+      ],
+      "output": {
+        "artifact": ".archive/${work_id}/",
+        "contract": {
+          "input": "Work completo",
+          "output": "Commit + spec atualizada + arquivamento",
+          "evidence": "artifacts/finalize/commit.json"
+        }
+      }
+    }
+  },
+
+  "depth_thresholds": {
+    "light": {
+      "decisions": 1,
+      "test_coverage": 50,
+      "review_rigor": "basic"
+    },
+    "normal": {
+      "decisions": 3,
+      "test_coverage": 70,
+      "review_rigor": "standard"
+    },
+    "deep": {
+      "decisions": 5,
+      "test_coverage": 85,
+      "review_rigor": "thorough"
+    },
+    "exhaustive": {
+      "decisions": 10,
+      "test_coverage": 95,
+      "review_rigor": "exhaustive"
+    }
+  },
+
+  "escalation": {
+    "triggers": [
+      {
+        "condition": "task.attempts >= 3",
+        "escalate_to": "strong"
+      },
+      {
+        "condition": "gate.failures >= 2",
+        "escalate_to": "human"
+      },
+      {
+        "condition": "budget.exceeded",
+        "escalate_to": "human"
+      },
+      {
+        "condition": "scope_change_detected",
+        "escalate_to": "strong",
+        "action": "re_grill"
+      }
+    ],
+    "handlers": {
+      "strong": {
+        "agent": "strong",
+        "action": "retry_with_better_model"
+      },
+      "human": {
+        "action": "pause_and_notify",
+        "message": "Work ${work_id} requires human intervention at stage ${current_stage}"
+      }
+    }
+  },
+
+  "internal_skills": [
+    {
+      "name": "grilling",
+      "path": "skills/grilling/",
+      "description": "Questiona a ideia com profundidade variável"
+    },
+    {
+      "name": "prd-synthesis",
+      "path": "skills/prd-synthesis/",
+      "description": "Sintetiza PRD a partir do grilling"
+    },
+    {
+      "name": "technical-specification",
+      "path": "skills/technical-specification/",
+      "description": "Gera spec técnica rastreável"
+    },
+    {
+      "name": "traceability-matrix",
+      "path": "skills/traceability-matrix/",
+      "description": "Gera matriz de rastreabilidade PRD→Spec→Tasks"
+    },
+    {
+      "name": "task-atomization",
+      "path": "skills/task-atomization/",
+      "description": "Atomiza spec em tarefas executáveis"
+    },
+    {
+      "name": "red-test",
+      "path": "skills/red-test/",
+      "description": "Escreve teste falhando (RED)"
+    },
+    {
+      "name": "green-impl",
+      "path": "skills/green-impl/",
+      "description": "Implementa para passar no teste (GREEN)"
+    },
+    {
+      "name": "code-review",
+      "path": "skills/code-review/",
+      "description": "Revisão semântica contra spec e padrões"
+    },
+    {
+      "name": "spec-reconcile",
+      "path": "skills/spec-reconcile/",
+      "description": "Reconcilia spec com código implementado"
+    }
+  ]
+}

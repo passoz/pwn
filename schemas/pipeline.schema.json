@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piwerness.dev/schemas/pipeline.schema.json",
+  "title": "Piwerness Pipeline Schema",
+  "description": "Schema para pipelines do Piwerness — documentos normativos validáveis",
+  "type": "object",
+  "required": ["meta", "parameters", "contract", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["name", "version", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Nome único do pipeline (kebab-case)"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Versão semântica"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Descrição do propósito do pipeline"
+        },
+        "author": {
+          "type": "string",
+          "description": "Autor do pipeline"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de criação (ISO 8601)"
+        }
+      }
+    },
+
+    "parameters": {
+      "type": "object",
+      "description": "Parâmetros de entrada do pipeline",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["string", "number", "boolean", "enum", "array", "object"]
+          },
+          "description": {
+            "type": "string"
+          },
+          "default": {},
+          "required": {
+            "type": "boolean",
+            "default": false
+          },
+          "values": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Valores permitidos (apenas para type=enum)"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern (apenas para type=string)"
+          },
+          "minimum": {
+            "type": "number",
+            "description": "Valor mínimo (apenas para type=number)"
+          },
+          "maximum": {
+            "type": "number",
+            "description": "Valor máximo (apenas para type=number)"
+          }
+        }
+      }
+    },
+
+    "contract": {
+      "type": "object",
+      "description": "Contrato global do pipeline",
+      "required": ["work_id", "scenario", "depth"],
+      "additionalProperties": false,
+      "properties": {
+        "work_id": {
+          "type": "string",
+          "pattern": "^\\d{4}$",
+          "description": "ID do Work (0001, 0002, ...)"
+        },
+        "scenario": {
+          "type": "string",
+          "enum": ["greenfield", "brownfield"],
+          "description": "Cenário do projeto"
+        },
+        "depth": {
+          "type": "string",
+          "enum": ["light", "normal", "deep", "exhaustive"],
+          "description": "Profundidade do grilling e rigor"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["full", "partial"],
+          "default": "full",
+          "description": "Escopo do TODO"
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "Dimensões do contrato (SPEC.md §4.1)",
+          "properties": {
+            "behavioral": { "type": "string" },
+            "change": { "type": "string" },
+            "architecture": { "type": "string" },
+            "acceptance": { "type": "string" },
+            "scope": { "type": "string" },
+            "budget": { "type": "string" },
+            "escalation": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "stages": {
+      "type": "object",
+      "description": "Estágios do pipeline",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "when": {
+            "type": "string",
+            "description": "Condição para executar o stage (expressão)"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 5
+          },
+          "input": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Arquivos de entrada"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parâmetros específicos do stage"
+          },
+          "actions": {
+            "type": "array",
+            "description": "Ações a executar",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": {
+                  "type": "string",
+                  "enum": ["file", "glob", "exec", "sub-agent", "interactive", "parse", "code", "loop"]
+                },
+                "when": { "type": "string" },
+                "agent": {
+                  "type": "string",
+                  "enum": ["strong", "executor", "human"]
+                },
+                "skill": { "type": "string" },
+                "parameters": { "type": "object" },
+                "paths": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "patterns": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "command": { "type": "string" },
+                "commands": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "prompt": { "type": "string" },
+                "input": {
+                  "oneOf": [
+                    { "type": "string" },
+                    { "type": "array", "items": { "type": "string" } }
+                  ]
+                },
+                "input_file": { "type": "string" },
+                "output": { "type": "string" },
+                "pattern": { "type": "string" },
+                "extract": { "type": "string" },
+                "function": { "type": "string" },
+                "over": { "type": "string" },
+                "parallel": { "type": "boolean" },
+                "each_task": {
+                  "type": "array",
+                  "items": { "type": "object" }
+                },
+                "optional": { "type": "boolean" },
+                "destination": { "type": "string" },
+                "source": { "type": "string" }
+              }
+            }
+          },
+          "gate": {
+            "type": "object",
+            "description": "Gate determinístico do stage",
+            "required": ["name", "type", "checks"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["deterministic", "human_approval"]
+              },
+              "checks": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1
+              },
+              "on_fail": {
+                "type": "string",
+                "enum": ["block", "warn_and_continue", "block_or_escalate"]
+              },
+              "failure_message": { "type": "string" },
+              "escalate_to": {
+                "type": "string",
+                "enum": ["strong", "human"]
+              }
+            }
+          },
+          "output": {
+            "type": "object",
+            "required": ["artifact"],
+            "properties": {
+              "artifact": { "type": "string" },
+              "contract": {
+                "type": "object",
+                "properties": {
+                  "input": { "type": "string" },
+                  "output": { "type": "string" },
+                  "evidence": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "depth_thresholds": {
+      "type": "object",
+      "description": "Thresholds por nível de depth",
+      "properties": {
+        "light": { "$ref": "#/definitions/depth_config" },
+        "normal": { "$ref": "#/definitions/depth_config" },
+        "deep": { "$ref": "#/definitions/depth_config" },
+        "exhaustive": { "$ref": "#/definitions/depth_config" }
+      }
+    },
+
+    "escalation": {
+      "type": "object",
+      "description": "Regras de escalação",
+      "properties": {
+        "triggers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["condition", "escalate_to"],
+            "properties": {
+              "condition": { "type": "string" },
+              "escalate_to": {
+                "type": "string",
+                "enum": ["strong", "human"]
+              },
+              "action": { "type": "string" }
+            }
+          }
+        },
+        "handlers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "agent": { "type": "string" },
+              "action": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "internal_skills": {
+      "type": "array",
+      "description": "Skills internas referenciadas pelo pipeline",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "description"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "definitions": {
+    "depth_config": {
+      "type": "object",
+      "properties": {
+        "decisions": { "type": "integer", "minimum": 0 },
+        "test_coverage": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "review_rigor": {
+          "type": "string",
+          "enum": ["basic", "standard", "thorough", "exhaustive"]
+        }
+      }
+    }
+  }
+}
