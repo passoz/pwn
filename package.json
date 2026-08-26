@@ -1,0 +1,25 @@
+{
+  "name": "piwerness",
+  "version": "0.1.0",
+  "description": "Contract-governed agent harness framework for deterministic software engineering",
+  "main": "src/cli.ts",
+  "type": "module",
+  "bin": {
+    "pwn": "./bin/pwn.js"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "test": "node --test tests/**/*.test.ts",
+    "validate": "node src/cli.ts validate",
+    "check": "node validate.js"
+  },
+  "keywords": [
+    "agent-harness",
+    "contract-governed",
+    "tdd",
+    "piwerness",
+    "ai-engineering"
+  ],
+  "author": "Google DeepMind Advanced Agentic Coding",
+  "license": "MIT"
+}

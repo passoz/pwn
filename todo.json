@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 1,
+    "completed": 2,
     "in_progress": 1,
-    "pending": 6,
+    "pending": 5,
     "blocked": 0,
-    "test_coverage_percent": 12
+    "test_coverage_percent": 25
   },
   "tasks": [
     {
@@ -63,7 +63,7 @@
       "id": "T-002",
       "title": "Marco 2 — CLI pwn sobre o pack v3 (Fase 2)",
       "description": "Criar o CLI pwn em TypeScript/Bun expondo os subcomandos pwn work specify/contract/plan/run/audit/status e pwn task run/capsule",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "agent": "executor",
       "depends_on": ["T-001"],
@@ -87,7 +87,7 @@
       "id": "T-003",
       "title": "Marco 3 — Baseline de artefatos e revisões de Work (Fase 3)",
       "description": "Estabelecer artefatos sob .piwerness/work/<work-id>/, matriz de rastreabilidade e gates determinísticos GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "high",
       "agent": "strong",
       "depends_on": ["T-002"],
