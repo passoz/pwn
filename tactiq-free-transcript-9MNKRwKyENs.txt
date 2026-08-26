@@ -1,0 +1,1633 @@
+# tactiq.io free youtube transcript
+# Como Construir Qualquer App com IA Usando SDD (Discovery, PRD, SPEC, Sprints)
+# https://www.youtube.com/watch/9MNKRwKyENs
+
+00:00:00.080 Hoje nós vamos construir um produto do
+00:00:01.640 zero usando um pipeline de
+00:00:03.800 desenvolvimento. Mas nós vamos usar uma
+00:00:05.520 estratégia diferente. Nós vamos enxergar
+00:00:07.600 o frontend primeiro, utilizando o cloud
+00:00:10.040 design, que te permite criar mocapsis e
+00:00:13.160 muito bem feitos com comandos de texto.
+00:00:15.320 Isso te ajuda a você ter uma ideia
+00:00:17.160 melhor de como vai funcionar o seu
+00:00:19.240 sistema e como você vai enxergar ali o
+00:00:21.400 seu front end, a casca do seu produto
+00:00:23.840 antes de você desenvolver. Isso não é
+00:00:25.720 nenhuma novidade. Já existia o Figma, já
+00:00:28.840 existia n outras plataformas que faziam
+00:00:30.840 isso, mas o cloud veio aí realmente
+00:00:32.960 dando uma revolucionada nessa parte,
+00:00:34.879 porque realmente você consegue extrair
+00:00:36.840 tudo ali, o código, principalmente toda
+00:00:38.840 a instrução que um agente de A precisa
+00:00:41.320 para desenvolver aquele front end de
+00:00:43.559 forma perfeita. Então vamos mudar um
+00:00:45.559 pouco a estratégia, vamos fazer um front
+00:00:47.360 bonito e a partir desse front bonito,
+00:00:49.440 nós vamos trabalhar ali o back endar.
+00:00:52.960 E para isso nós vamos utilizar ali uma
+00:00:54.559 estratégia harness utilizando um
+00:00:56.480 pipeline de desenvolvimento desde o
+00:00:58.719 início, desde a criação dos user
+00:01:01.239 stories, desde a PRD, depois a spec, as
+00:01:04.400 sprints e o desenvolvimento e a
+00:01:06.280 validação disso tudo. Então esse vídeo
+00:01:08.119 ele pode ficar meio grande porque
+00:01:09.720 realmente nós vamos planejar um produto
+00:01:11.600 aqui e construir ele até o
+00:01:13.640 desenvolvimento. E depois eu vou mostrar
+00:01:15.159 ali o resultado para vocês como que
+00:01:16.759 ficou isso. E vai ser bem legal. Se você
+00:01:19.159 tem interesse em aprender como constrói
+00:01:21.280 aplicações da maneira correta, do zero,
+00:01:23.759 fique até o final deste vídeo que eu
+00:01:25.400 tenho certeza que você vai gostar do
+00:01:27.000 resultado. Meu nome é Breno, eu sou
+00:01:28.680 fundador da LOLab, comunidade de
+00:01:30.439 inteligência artificial, sou diretor de
+00:01:32.200 uma empresa de tecnologia e hoje tô aqui
+00:01:34.240 para passar o conhecimento para vocês.
+00:01:36.119 Então já deixa seu like no vídeo, segue
+00:01:38.079 o canal, muito importante pra gente
+00:01:39.680 continuar o nosso trabalho. O link da
+00:01:41.280 comunidade vai est disponível na
+00:01:42.840 descrição desse vídeo. Se você quiser
+00:01:44.560 aprender mais sobre desenvolvimento de
+00:01:46.399 aplicações utilizando inteligência
+00:01:48.360 artificial, você será muito bem-vindo.
+00:01:50.200 Venha contribuir com a gente e nós
+00:01:51.960 também vamos contribuir com vocês.
+00:01:53.719 Então, bora pro vídeo. Beleza? Então eu
+00:01:55.920 vou passar rapidamente com vocês aqui a
+00:01:57.759 ideia do que que eu vou desenvolver
+00:01:59.600 aqui. É, e aí a gente vai ali dar um
+00:02:01.719 pulo no cloud design para que vocês
+00:02:04.520 também vejam que é muito simples
+00:02:06.240 utilizar ali, não tem muito segredo. E
+00:02:08.280 depois a gente vai lá pro pipeline do
+00:02:10.440 Lion Clock, que é um sistema que é
+00:02:12.120 liberado aqui na comunidade, é um
+00:02:14.640 sistema construído em cima do agent SDK,
+00:02:16.920 basicamente é o cloud code ali
+00:02:19.000 encapsulado num frontezinho bonito.
+00:02:21.360 Então tudo que eu fizer aqui, mesmo que
+00:02:23.360 esteja aqui no sistema do Lion Claw,
+00:02:25.080 saibam que vocês conseguem fazer
+00:02:26.760 utilizando o Cloud Code tranquilamente,
+00:02:29.360 beleza? Então vamos lá. Aqui o que que a
+00:02:32.200 gente vai construir? Então é uma agente
+00:02:34.360 de A aqui 100% local com um reg aqui do
+00:02:38.239 Obsidian, é cara vai consultar o graf
+00:02:40.519 ali do Obsidian, é para fazer o
+00:02:42.680 retrieval ali de algumas informações. Aí
+00:02:45.000 quais informações, cara? qualquer uma
+00:02:47.000 que eu quiser colocar aqui, isso não vem
+00:02:48.800 ao caso. Hoje já tem aqui é uma parte
+00:02:50.959 aqui do do cérebro aqui é criada. Aqui
+00:02:53.440 não vem ao caso o que que tem aqui
+00:02:54.800 dentro. O importante é funcionar pra
+00:02:56.560 gente conseguir é e é consultar essas
+00:02:58.480 notas aqui dentro do meu volt do Obsían.
+00:03:01.200 Beleza? Então, cara, vai ser aqui uma
+00:03:03.319 solução 100% offline, zero cloud, né?
+00:03:06.599 Beleza, nenhum dado vai sair aqui da
+00:03:08.959 minha máquina. O diferencial, nós vamos
+00:03:10.879 criar aqui uma IUI premium, eh, vamos
+00:03:13.319 ter a soberania dos dados e vamos ter
+00:03:15.200 aqui custo zero, né? Rodando aqui da
+00:03:17.280 minha máquina, não vai eh ter custo
+00:03:19.319 nenhum. Beleza? Um front end aqui, nós
+00:03:21.879 vamos criar aqui um cinematográfico. V,
+00:03:24.120 vamos tentar pelo menos, né, criar algo
+00:03:25.879 aqui utilizando o cloud design, beleza?
+00:03:29.080 Eh, vamos ter aqui um chat premium,
+00:03:30.760 vamos ter streaming, né, que é quando os
+00:03:32.640 tokens ali vêm aparecendo na tela e
+00:03:35.239 vamos ter um agent trace pra gente poder
+00:03:37.280 eh trackar o que que o agente tá fazendo
+00:03:39.879 em tempo real. E ai, obviamente, gerada
+00:03:42.120 por IA, que é aqui o cloud design. Cara,
+00:03:44.560 a ideia aqui é a gente usar de XJS com
+00:03:46.519 TD, então já tenho mais ou menos uma
+00:03:48.480 ideia. Então, cara, o que que o agente
+00:03:50.319 vai fazer inicialmente? Tudo que ele vai
+00:03:52.360 fazer é ele vai responder com base no
+00:03:55.599 Volt, que é o que tá aqui do Obsidian,
+00:03:57.879 vai consultar uma base de conhecimento e
+00:03:59.760 vai me responder: &quot;Esse é o nosso MVP&quot;.
+00:04:02.239 Basicamente ele vai ser esse cara aqui,
+00:04:04.720 ó. Agent local. Nós vamos utilizar o LG
+00:04:07.200 graph para poder desenrolar isso. Então,
+00:04:09.560 vai ter aqui o agente supervisor, é que
+00:04:12.159 é o agente único, né? Não vamos ter
+00:04:14.319 subents agora. Nós vamos utilizar o
+00:04:16.238 graph, vai ter uma memória, então ele
+00:04:17.959 vai ter que ter essas tools disponíveis
+00:04:19.798 aqui de se para ele poder procurar ali
+00:04:21.959 dentro do eh das notas ali dentro do
+00:04:24.000 obsidian. É o websch aqui eu coloquei,
+00:04:26.520 mas eu acho que inicialmente nós não
+00:04:28.160 vamos colocar, beleza? Vamos tentar ser
+00:04:29.919 um pouco mais simples. E aqui obviamente
+00:04:31.960 ele vai consultar o obsidian aqui e os
+00:04:34.280 backlinks ali, que provavelmente nós
+00:04:36.199 vamos ali indexar e com SK Light,
+00:04:38.639 beleza? Tudo isso aqui utilizando eh a o
+00:04:41.400 LLM Studio, que aí eu vou rodar um
+00:04:43.199 modelo aqui que esteja treinado eh com
+00:04:45.600 tools, talvez vai ser o Quen 3.5, isso a
+00:04:49.120 gente vai ver, beleza? Show de bola.
+00:04:51.160 Então, estratégia produto vai ser esse
+00:04:53.360 aqui. Não tem nada muito é complexo de
+00:04:56.039 muitas telas e etc. Nós vamos agora lá
+00:04:58.919 pro cloud design. Show. E aí, já vindo
+00:05:01.120 aqui pro cloud design, pra gente não
+00:05:03.120 perder muito tempo aqui criando essa UI
+00:05:05.800 aqui não tem segredo. Então acho que eu
+00:05:07.759 não preciso ensinar isso aqui para
+00:05:09.680 vocês, né? Tem um monte de vídeo aí já
+00:05:11.960 falando do cloud design. A única coisa
+00:05:13.720 que você precisa saber é, existe um chat
+00:05:16.160 aqui. Esse chat você vai dar um prompt e
+00:05:19.560 esse prompt ele vai gerar aqui
+00:05:21.160 componentes os arquivos e vai gerar uma
+00:05:23.400 telinha aqui que você vai aprovar ou
+00:05:25.319 não. E a partir dessa telinha você vai
+00:05:27.840 discutir aqui com o seu chatzinho aqui
+00:05:30.400 até que a telinha fique funcional e um
+00:05:32.520 mocap fique bonito o suficiente que você
+00:05:35.039 se sinta satisfeito. Então,
+00:05:36.840 resumidamente é isso. Não tem muito
+00:05:38.759 segredo. Dei um prompt aqui para ele, ó.
+00:05:41.120 Wid local, ó. Interface de agente de A,
+00:05:43.440 rodando 100% local. Dashboard focado em
+00:05:45.560 três áreas. Histórico de trads à
+00:05:47.919 esquerda, chat do centro, painel de de
+00:05:50.759 observabilidade do agente à direita
+00:05:52.680 colapsável. E aí pedi obviamente pro
+00:05:55.440 cloud aqui, LLM chat normal, me ajuda
+00:05:58.440 aqui com design, eu quero assim, quero
+00:06:00.319 assado e ele fez esse prompt para mim.
+00:06:02.520 Eh, não é algo que você precisa ficar
+00:06:03.960 perdendo tanto tempo aqui, porque você
+00:06:06.000 vai soltando vários prometos ali até que
+00:06:08.400 você se sinta satisfeito. E o resultado
+00:06:10.840 foi esse cara aqui, ó. Deixa eu até
+00:06:12.560 tirar a minha carinha daqui. O resultado
+00:06:15.199 foi isso aqui, ó. Então, veja aqui,
+00:06:17.720 temos aqui um chat lateral aqui. Aqui é
+00:06:20.639 o chat do agente, o agente conversando.
+00:06:22.880 Aqui é o que eu posso falar. E aqui é o
+00:06:25.319 graph topology, ó, que é o, eu vou
+00:06:27.680 startar o chat aqui. Aí aqui o agente
+00:06:30.039 vai falar, ele vai chamar um atu que vai
+00:06:32.120 ser o obsidian aqui, algo para poder
+00:06:34.520 renderizar ali em tempo real. Beleza? Um
+00:06:37.479 desafio aí. Vamos ver se isso aqui vai
+00:06:39.319 performar. Aqui vamos ter as métricas,
+00:06:41.599 né, de tokenin, token out, quantos
+00:06:44.400 tokens por segundo tô rodando um LLM
+00:06:46.639 local. É um relativamente interessante
+00:06:49.319 você ter esse dado. E a latência aqui
+00:06:51.680 nós vamos ver isso aqui live. Aqui
+00:06:53.240 também vamos tirar a parte de contexto
+00:06:54.880 de tokens, né? Qual que é o contexto
+00:06:56.680 total do agente local, quanto que já
+00:06:58.879 gastamos de token pra gente poder
+00:07:00.319 controlar. E isso aqui tá na Yai. Então,
+00:07:02.919 e quando você entra aqui, você conversa,
+00:07:05.000 opa, tudo bom? Você vê que ele funciona
+00:07:07.720 maravilhosamente bem, ó. Ele já, cara,
+00:07:09.759 ele realmente ele, o mocap funciona, é
+00:07:12.039 um funcional, né? Aqui nós teremos aqui
+00:07:14.520 as informações do nosso Volt, eh qual o
+00:07:17.080 tamanho dele, quantas notas, enfim, tudo
+00:07:20.039 que tá aqui eh dentro desse Volt, vou
+00:07:22.560 ter que fazer ali eh aparecer ali dentro
+00:07:25.240 dessa tela, cara. Algo bem simples. Nós
+00:07:27.720 estamos partindo disso aqui, desse dessa
+00:07:30.000 tela aqui. E aí, o que que eu preciso
+00:07:32.280 fazer? O cloud aqui ele dá duas opções.
+00:07:35.280 A primeira opção é esse handof to cloud
+00:07:38.000 code. E aqui quando você clica, ele já
+00:07:41.240 automaticamente ele cria aqui um comando
+00:07:44.240 eh pro cloud code e o cloud code vai
+00:07:46.759 entender perfeitamente como montar isso
+00:07:49.120 aqui. Então é fica muito mais fácil é de
+00:07:52.159 você montar e obviamente no Figma ali
+00:07:54.759 você poderia copiar o código e aí você
+00:07:56.879 joga lá e aí o cara tem que desenrolar
+00:07:58.800 isso aqui. Nesse caso, o cara já
+00:08:01.159 previamente desenvolveu a maioria das
+00:08:02.840 coisas, os componentes, ele dá o caminho
+00:08:04.960 das pedras. Se você não quiser utilizar
+00:08:07.319 isso, você pode vir aqui e fazer o
+00:08:10.319 download do ZIP, beleza? Ou seja, eu
+00:08:13.280 tenho o que esse sisteminha aqui, front
+00:08:15.720 end aqui, funcionando, HTMLzinho, só que
+00:08:18.680 aqui também vem com as instruções de
+00:08:20.720 como fazer essa tela toda aqui funcionar
+00:08:23.240 perfeitamente, exatamente como está
+00:08:25.479 aqui. Beleza? Então eu já peguei esse
+00:08:27.960 arquivo aqui, o arquivo tá na minha
+00:08:29.479 máquina e agora nós vamos iniciar de
+00:08:31.199 fato a criação do produto, é utilizando
+00:08:33.880 aqui o Lion Claw. O Lion Claw é um
+00:08:35.958 sistema que é liberado aqui na
+00:08:37.159 comunidade, que os membros aqui
+00:08:38.719 conseguem baixar e utilizar. Enfim, ele
+00:08:41.120 é um assistente pessoal muito parecido
+00:08:43.120 ali com o OpenCla, só que ele roda em
+00:08:45.160 cima do agent SDK. Então e eh ele roda
+00:08:48.000 em cima da assinatura do cloud, não
+00:08:49.760 preciso pagar IPS. Aí tem estrutura de
+00:08:52.279 subage, skills, MCPs, eh tem aqui os
+00:08:56.120 Chroms, né? Enfim, tô usando aqui eh o
+00:08:58.399 meu Lion Cloud teste aqui, porque nós
+00:09:00.839 vamos testar aqui é o pipeline de
+00:09:03.200 desenvolvimento, esse carinha aqui.
+00:09:05.480 Beleza? Então, já vou colocar minha
+00:09:07.240 carinha aqui do lado, porque nós vamos
+00:09:09.200 entrar aqui. E aí, nesse novo pipeline,
+00:09:11.920 nós vamos seguir diversas etapas aqui de
+00:09:14.760 construção de um projeto, desde a ideia,
+00:09:17.399 a sementinha da ideia até a geração de
+00:09:19.959 PRDs, specs, validações, sprints e
+00:09:23.320 também a estratégia de desenvolvimento
+00:09:25.279 ali, onde um agente desenvolve, o outro
+00:09:27.440 avalia o desenvolvimento e pode ficar
+00:09:29.440 naqueles loops ali, tudo utilizando aqui
+00:09:31.959 a assinatura do cloud, um harness que eu
+00:09:33.880 tenho testado aqui, eh, e tô sempre
+00:09:35.880 melhorando e otimizando ele. Beleza?
+00:09:38.120 Então, vamos lá. Agent local é o nome do
+00:09:41.279 nosso projeto aqui. E eu vou escolher
+00:09:42.920 aqui um paff para ele, né? Vai tá aqui
+00:09:44.959 no agent local. Vou construir aqui. E aí
+00:09:47.399 o caminho sugerido aqui, tudo certo.
+00:09:49.680 Aqui eu vou colocar começar de do zero,
+00:09:52.360 né, diretamente no discovery. Aqui não
+00:09:54.839 tenho nenhuma spec aqui aprovada ou não
+00:09:57.360 ten spec para melhorar. Então eu vou
+00:09:59.240 criar o pipeline e eu vou responder aqui
+00:10:01.240 diversas perguntas. e e te convido a
+00:10:03.360 acompanhar para você entender mais ou
+00:10:05.279 menos eh como que a gente estrutura um
+00:10:07.079 produto aqui do zero. Beleza? Então, já
+00:10:09.320 de cara, a primeira pergunta é: &quot;A, qual
+00:10:11.760 é o problema que esse produto resolve?
+00:10:14.240 Me explica&quot;. Como se tivesse contando
+00:10:16.120 para um amigo, ó. E aí, para eu não
+00:10:17.839 ficar aqui é digitando a resposta aqui,
+00:10:20.240 eu já previamente pensei aqui nas
+00:10:22.399 respostas que eu vou dar e vou lendo
+00:10:23.839 para vocês. Então tenho aqui milhares de
+00:10:25.640 notas no Obsíia, mas na prática é
+00:10:27.240 conhecimento morto. É para achar algo,
+00:10:29.640 eu abro três, quatro notas, monto a
+00:10:31.560 resposta da minha cabeça. Soluções tipo
+00:10:33.560 notebook, LLM resolvem, mas manda tudo
+00:10:35.959 pra cloud, é inaceitável pro meu volt.
+00:10:37.760 Pessoal, o agente local é um chat que
+00:10:40.079 conversa com o meu Volt Obsidian,
+00:10:41.800 rodando 100% local, com o Quen aqui no
+00:10:44.360 OLAMA. Aí eu coloquei o Lama aqui, mas
+00:10:46.200 muito provavelmente nós vamos usar o LM
+00:10:48.240 Studio. Então zero dado vai sair da
+00:10:50.160 minha máquina. Isso é o que o meu
+00:10:51.880 sistema resolve. Eu vou colocar aqui LM
+00:10:54.480 Studio. E aí o que que esse agente vai
+00:10:57.560 resolver? Você vê aqui que a gente tá na
+00:10:59.320 primeira fase aqui, discovery, PRD,
+00:11:01.920 validação. Depois tem uma outra parte de
+00:11:04.360 PRD, tem as decisões tec aqui, front
+00:11:06.800 end, back end, que aí a gente vai chegar
+00:11:08.480 na parte do front end e aí ele vai
+00:11:11.320 gerando umas notas dentro aqui do
+00:11:13.839 projeto. Então, abri aqui o projeto, tá
+00:11:16.160 aqui, abrir aqui no antigravity mesmo e
+00:11:19.279 aqui tá aqui, ó, discovery notes. Ele
+00:11:20.800 vai me fazer várias perguntas e essas
+00:11:22.800 perguntas vão ser escritas aqui para que
+00:11:25.760 os próximos agentes ali, os geradores de
+00:11:28.120 PRD, de documentações, saibam dessa
+00:11:30.639 informação e me ajude a estruturar o
+00:11:32.360 produto. Beleza? Cara, esse problema é
+00:11:34.240 muito real, uma dor muito específica e
+00:11:36.040 tal, etc. Quem é o usuário principal me
+00:11:38.240 descreve essa pessoa. Então, o que que
+00:11:39.760 eu fiz aqui? Eu sou usuário principal.
+00:11:41.560 Eu preciso consultar minhas notas de
+00:11:43.000 maneira privada, usando apenas o meu
+00:11:44.600 hardware. Show. E a próxima pergunta
+00:11:46.760 aqui é: tem algum produto parecido como
+00:11:49.440 referência? tipo, quero algo como X, mas
+00:11:51.839 com Y diferente. Enfim, então o que que
+00:11:54.320 eu elaborei de resposta? Visivelmente,
+00:11:56.320 referência forte é o cloud desktop e o
+00:11:58.560 liner. Dark mod elegante, chat limpo, um
+00:12:01.079 painel lateral mostrando o que o agente
+00:12:02.959 tá fazendo em tempo real, tipo um
+00:12:04.720 artifact panel do cloud, só que com
+00:12:06.839 observabilidade de gráfico do link graph
+00:12:08.800 ao invés de código. Então o diferencial
+00:12:10.560 é virou a gente pensando qual note do
+00:12:12.279 gráfico tá ativo, quais tools ele
+00:12:13.760 chamou, quantos tokens, latência, etc. É
+00:12:16.360 isso. Nenhum concorrente tem ali. No
+00:12:18.240 notebook LLM é caixa preta. No chat EPT
+00:12:20.600 é caixa preta. Ali no cloud projects
+00:12:23.040 também a mesma coisa. Então vamos dar
+00:12:24.959 essa resposta aqui pro cara. E você vê
+00:12:26.560 que ele vai interagindo, ó. Faz todo
+00:12:28.079 sentido. Você é usuário, arquiteto ao
+00:12:29.800 mesmo tempo. Isso é ótimo. Enfim, ele
+00:12:32.120 vai aqui interagindo com você e te
+00:12:34.360 ajudando ali nas respostas. Beleza?
+00:12:36.480 Então aqui ele já já falou: &quot;Essa visão
+00:12:38.519 de observaridade é genial. Obrigado.
+00:12:40.639 Aqui vai ficar puxando o meu saco aqui.
+00:12:42.320 Beleza. Pit do agente local. O Agent
+00:12:45.079 Local é um chat que conversa com seu
+00:12:47.000 Volt Obsidian, usando o modelo de
+00:12:48.480 linguagem rodando 100% da sua máquina,
+00:12:50.160 sem nenhum dado sair pra nuvem,
+00:12:51.800 diferente de outras soluções. Tá
+00:12:53.440 perfeito aqui o pit dele. Isso é muito
+00:12:55.440 importante para que a gente elabore as
+00:12:57.360 próximas fases. Então, ó, esse pit
+00:12:59.600 captura bem, está perfeito. E aí, na
+00:13:01.680 próxima pergunta aqui é: &quot;Me liste três
+00:13:03.800 coisas principais que o usuário precisa
+00:13:05.920 fazer, só as três mais importantes.&quot;
+00:13:08.120 Porém, como eu já tenho uma tela ali que
+00:13:10.839 eu fiz lá no cloud, então eu até sei
+00:13:13.920 mais e que vai ter mais coisas que
+00:13:16.480 apenas três funcionalidades, né, do que
+00:13:18.519 o usuário pode fazer. Então aqui só do
+00:13:20.639 que a gente tá vendo, ó, o usuário ele
+00:13:21.959 pode consultar métricas, o usuário ele
+00:13:24.240 vai consultar aqui o grafo, a topologia
+00:13:26.399 do grafo, o usuário ele consulta aqui
+00:13:28.480 quantas notas tem no volt. Então tem
+00:13:30.199 mais coisas que o usuário faz além do
+00:13:31.920 chat, beleza? Então de fato, o que que
+00:13:34.160 eu vou responder aqui para ele, ó? Eu
+00:13:35.760 vou, eu vou conversar com Volte. O
+00:13:37.519 usuário pergunta em linguagem natural,
+00:13:39.199 agente navega pelas pastas, lê os
+00:13:40.920 arquivos MD. O usuário vê o agente
+00:13:42.880 pensando ao vivo. Basicamente eu tô
+00:13:44.519 descrevendo aquela tela que eu fiz ali.
+00:13:46.639 É, no cloud design. Vai ter
+00:13:48.320 funcionalidades secundárias que ele vai
+00:13:49.839 navegar ali na estrutura do Volt, o
+00:13:51.480 agente lista pastas e tal, busca textual
+00:13:54.480 por notas, enfim, vai fazer grep
+00:13:56.199 inteligente. Então, ou seja, eu descrevi
+00:13:58.399 ali o que que o agente vai poder fazer.
+00:14:00.680 E aí eu coloquei aqui humano, que é esse
+00:14:02.959 HITl, que é quando o agente ele tem que
+00:14:05.199 te pedir permissão para poder fazer
+00:14:06.600 certas coisas e tal. E aí depois a gente
+00:14:08.920 vai estruturar tudo isso. Basicamente eu
+00:14:11.199 expliquei para ele o que que de fato
+00:14:13.399 como usuário e vou poder fazer ali junto
+00:14:16.160 com a gente. Beleza? E aí, ó, aqui
+00:14:18.480 desculpe bem pensado, você já tem um
+00:14:20.079 design de agente muito claro e tal.
+00:14:21.639 Então aqui o produto precisa se conectar
+00:14:23.839 com algum sistema externo, API ou
+00:14:26.800 serviço que você já usa. Então o sistema
+00:14:29.320 aqui ele vai ser local, né? Beleza. Vou
+00:14:31.440 colocar aqui um provedor de LLM Goku N3.
+00:14:34.199 Aí eu vou também acessar aqui o Phil
+00:14:36.160 System do Obsidian, que é lido direto do
+00:14:38.160 disco, então apontado pro PEF. É, e vou
+00:14:40.720 usar aqui o SQLite local, porque como
+00:14:42.680 nós vamos usar o LG graph para eu
+00:14:44.399 persistir a memória ali e eu os
+00:14:46.639 checkpoints ali, os trads, eu vou
+00:14:48.360 precisar é de um banco local. Nós vamos
+00:14:50.600 utilizar o SK. Então aqui eu já tô dando
+00:14:52.519 ideia para ele que, cara, vamos usar o
+00:14:54.519 SK, já fica ligeiro aí. Eh, anota isso
+00:14:57.320 aí, beleza? E aí, aqui ele já falou,
+00:14:59.320 stack 100% confirmada, beleza?
+00:15:01.759 Monetização, como você pretende
+00:15:03.680 monetizar? Assinatura mensal, créditos
+00:15:05.720 por uso, não vou monetizar porque aqui,
+00:15:08.440 cara, se você vai monetizar o seu
+00:15:09.839 produto, esse é o momento de você falar,
+00:15:11.480 vai ter créditos, vai ser venda, vai ser
+00:15:13.320 assinatura, vai ser o cara vai te
+00:15:15.120 comprar o produto, etc. Aqui é o momento
+00:15:17.279 de você falar se ele vai mais um pouco a
+00:15:20.000 fundo aqui, se você eh explicar para ele
+00:15:22.519 como vai ser sua forma de monetização.
+00:15:24.800 Beleza? E aqui a nossa próxima pergunta
+00:15:26.920 é a techia
+00:15:30.040 aqui que eu tenha preferência. E aí,
+00:15:31.639 cara, como eu já sei aqui a tecnologia
+00:15:33.880 que eu vou utilizar, caso vocês não
+00:15:35.600 saibam, cara, aí usa a LLM favorita de
+00:15:37.920 vocês, explica o projeto. É claro que
+00:15:39.759 você tem que ter um planejamento prévio
+00:15:41.440 para começar isso aqui. Então, pra gente
+00:15:43.399 aqui vai ser back end, vai ser Python
+00:15:45.199 com festa API. Vamos utilizar aqui LG
+00:15:47.440 graph, o SK Light Saver para persistir
+00:15:49.720 os trads, LLM Studio, já falamos,
+00:15:52.279 frontend vai ser next JS com T indies,
+00:15:55.040 os tend para poder fazer ali o estado
+00:15:56.959 granular que vai consumir os eventos ali
+00:15:59.399 via SSE. E é principalmente porque eu
+00:16:01.360 vou ter que renderizar ali umas
+00:16:03.040 informações meio que em tempo real ali.
+00:16:05.199 É, isso pode ficar pesado, tem que ficar
+00:16:06.839 bem construído. E aqui dados vai ser
+00:16:09.240 volte do obsidian, beleza? Direto do
+00:16:11.319 file system, sem banco vetorial. que é
+00:16:13.839 light único para trads e checkpints do
+00:16:16.040 Leng Graph. Beleza, tranquilo.
+00:16:18.279 Stackzinha padrãozinha, vai ficar show.
+00:16:20.800 E aqui ele perguntou se o produto
+00:16:22.000 precisa funcionar no celular. E aqui eu
+00:16:23.279 respondi: &quot;Não precisa, vai ser apenas
+00:16:24.920 web local&quot;. E aqui a pergunta 10, ó, tem
+00:16:27.440 wireframe, imagem, fluxo, referência
+00:16:29.399 visual para poder compartilhar? Pode ser
+00:16:30.880 um link do Figma, descrição do layout ou
+00:16:32.720 qualquer referência que me ajude a
+00:16:34.440 entender o que você imagina. Opa, se
+00:16:36.519 temos amigo aqui agora, pela primeira
+00:16:38.800 vez eu faço um front end antes do back
+00:16:41.199 end. Vou dar um print aqui bem bonito e
+00:16:43.560 vou mandar aqui para ele que eu já tenho
+00:16:46.199 a referência do meu próprio produto.
+00:16:48.040 Este print da UI que eu já previamente e
+00:16:52.079 aí escrevi aqui para ele este print é da
+00:16:54.279 UI que eu já previamente criei no cloud
+00:16:56.160 design. E aqui, ó, beleza, mandei o
+00:16:58.120 wireframe, ele entendeu, design
+00:17:00.160 incrível, OK? E ele me pergunta, tem
+00:17:02.440 algo mais que eu deveria saber sobre o
+00:17:04.039 produto ou o contexto? Pode ser o risco
+00:17:06.280 técnico, uma decisão já tomada,
+00:17:07.839 restrição, qualquer coisa relevante.
+00:17:09.319 Como nós estamos no Discovery Notes e eu
+00:17:11.439 já sei mais ou menos aqui o que eu
+00:17:12.919 quero, então eu já coloquei algumas
+00:17:14.959 coisas aqui que são relevantes para mim.
+00:17:17.119 Então vou ler aqui para vocês, para
+00:17:18.599 vocês entenderem. Mas cara, isso aqui eu
+00:17:21.160 já sei mais ou menos como funciona é
+00:17:23.119 esses agentes e então já é algo que isso
+00:17:26.119 já tá na minha experiência. Mas cara, um
+00:17:28.039 LLM aqui conseguiria resolver eh isso
+00:17:30.240 aqui para você tranquilamente, desde que
+00:17:32.080 você já previamente de discutiu algo com
+00:17:34.520 ela. Então, primeiro, performance do
+00:17:36.799 trace ao vivo no front end. Já
+00:17:38.880 identifiquei no bundle do call design
+00:17:40.799 que o streaming com set intervalo em 24
+00:17:43.720 ms causa rerrender em cascata sem susio
+00:17:46.919 e memoização. Então, se não aplicar as
+00:17:49.160 otimizações, estado granular, react
+00:17:51.280 memo, deb nas metas, a vai engasgar com
+00:17:54.480 conversas longas. Então, decisão já
+00:17:56.559 tomada, o agente do frontend deve
+00:17:58.440 implementar sus desde o início, não como
+00:18:01.440 refector depois, porque geralmente o
+00:18:03.000 cara quer implementar um negócio muito
+00:18:04.320 simples ali no MVP e o negócio já vai
+00:18:06.919 começar a engasgar desde o início e não
+00:18:09.000 vai ficar legal. Beleza? E aí explicando
+00:18:11.400 isso aqui, pá, um cara um pouco mais
+00:18:13.240 leigo aqui, cara, tudo isso aqui, cara,
+00:18:14.960 que fica renderizando e mudando aqui em
+00:18:16.760 tempo real, eh, enfim, tudo que tá sendo
+00:18:19.240 escrito, a quantidade de tokens aqui de
+00:18:21.400 contexto que vai ter que ser e inserida
+00:18:23.520 aqui, tudo isso gera aqui vários updates
+00:18:26.360 na tela ao mesmo tempo, eh, que tem que
+00:18:29.120 ficar acontecendo aqui enquanto o chat
+00:18:30.760 tá rolando. Eh, para você não vai
+00:18:32.799 precisar apertar um F5 aqui na tela para
+00:18:34.880 poder mudar os dados. Isso vai ter que
+00:18:36.880 acontecer. Esse cara aqui também vai ter
+00:18:38.640 que, né, ter uma animação aqui enquanto
+00:18:40.600 o agente tá conversando. Então, por isso
+00:18:43.520 que eu já tô previamente avisando,
+00:18:45.320 porque eu sei que isso pode acontecer.
+00:18:47.240 Beleza? É, e aqui o escopo de uso, ó, o
+00:18:50.080 produto é pessoal, single user, sem
+00:18:52.039 autenticação, não é feito para rodar em
+00:18:53.760 servidor compartilhado, nem expor a
+00:18:55.240 internet. Se alguém fizer isso, o file
+00:18:57.320 system fica exposto sem controle. Então,
+00:18:59.039 restrição do V1 roda exclusivamente em
+00:19:01.159 local host, nada de deploy. Beleza?
+00:19:03.600 decisões já tomadas que vale reforçar o
+00:19:06.600 Volt é read have, mas tem WR com
+00:19:09.120 Humanop, ou seja, o que que significa?
+00:19:11.080 Que se ele quiser escrever no meu Vold,
+00:19:13.520 ele tem que me pedir autorização para
+00:19:15.520 isso, senão ele não vai poder escrever.
+00:19:17.400 Beleza? E aqui a UI já está 100%
+00:19:20.320 definida. Tô reforçando aqui com o
+00:19:22.240 bundle exportado, design, tokens
+00:19:24.159 travados, paleta definida. Frontend
+00:19:26.640 apenas porta e entrega, não redesenha
+00:19:29.360 pro agente não ficar inventando lá da
+00:19:31.280 cabeça dele. Beleza? Aqui eu também
+00:19:33.600 coloquei o contrato de SSE do back end
+00:19:36.400 que eu já tinha mappeado. Olhando a
+00:19:38.640 tela, eu sei que eu tenho o event
+00:19:40.679 tokens, tem o Matrix Update, o Node
+00:19:43.480 enter, exit to calling. Então,
+00:19:45.679 basicamente tudo que eu mostrei para
+00:19:47.039 vocês ali na tela que vai ficar e eh
+00:19:49.720 atualizando ali enquanto o chat tá
+00:19:51.240 rolando, eu já tô dando aqui é que ele
+00:19:53.760 vai ter que fazer, beleza? Então, vou
+00:19:55.840 mandar aqui para ele a resposta. Vai
+00:19:57.360 gerar um resumo aqui, vai perguntar se
+00:19:59.240 tá tudo correto, eu já posso clicar no
+00:20:00.880 botão aprovar. Então você vê que ele já
+00:20:02.480 gerou tudo aqui bonitinho. E se eu
+00:20:04.720 entrar lá na pasta do projeto, tá tudo
+00:20:07.679 escrito aqui, ó, perfeitamente. É o
+00:20:10.080 arquivo aqui é o primeiro arquivo que a
+00:20:11.640 gente gera o discovery. E tá, cara,
+00:20:13.919 explicou tudo aqui. Você vê que aqui tem
+00:20:15.919 uma parte aqui de banco de dados,
+00:20:17.080 fronteback que ainda não tem nada é
+00:20:19.120 preenchido. Beleza? Então vamos voltar
+00:20:21.720 lá, vamos clicar em aprovar. E agora nós
+00:20:24.320 vamos gerar os user stories, que é
+00:20:27.320 extremamente importante para você se ver
+00:20:29.760 utilizando o produto. E aí quando gerar
+00:20:32.120 aqui a gente dá uma lida e vocês vão
+00:20:34.000 entender porque que isso aqui é tão
+00:20:35.760 importante. Agora então o agente ele vai
+00:20:37.799 ler todo esse Discovery Notes e vai
+00:20:39.880 gerar um user stories ali baseado no que
+00:20:42.919 ele leu no Discover. e eu vou ter que
+00:20:44.720 aprovar isso tudo. E aí aqui ele já
+00:20:47.159 gerou o stories requisitos e
+00:20:49.320 automaticamente o stories requisitos ele
+00:20:51.280 é gerado de forma automática a partir
+00:20:53.799 aqui do Discovery Notes. Então aqui ó,
+00:20:56.400 18/04 agent local e tal. E aqui eu já
+00:20:59.760 lanço um validador que ele vai validar
+00:21:02.360 se o que tem aqui no user stories está
+00:21:05.640 lá no Discover e se tem alguma coisa que
+00:21:08.240 tá conflitando, se o agente eh ele não
+00:21:10.720 brisou ali, não alucinou, não duplicou
+00:21:13.279 alguma coisa, então eu já lanço o
+00:21:15.080 validador. E nessa fase eu ainda nem e
+00:21:18.279 olhei aqui o stories e requisitos e o
+00:21:20.159 validador já tá vendo. Então cara, a o
+00:21:22.960 user stories, só para vocês entenderem,
+00:21:24.840 ele funciona mais ou menos dessa forma,
+00:21:26.480 ó, ó. Domínio, chat e conversação com
+00:21:29.520 Volt. Então aqui como o knowledge worker
+00:21:32.720 aqui, eu quero fazer perguntas em
+00:21:34.640 linguagem natural sobre o meu volt do
+00:21:36.520 obsidian para ter as respostas
+00:21:38.320 sintetizadas sem precisar abrir
+00:21:40.360 múltiplas notas manualmente. Então o
+00:21:42.799 campo de input aqui ele aceita texto
+00:21:44.840 livre e envia ali o pressionar enter ou
+00:21:47.200 clica no botão de envio. Aí o agente
+00:21:49.320 retorna uma resposta sintetizada baseada
+00:21:51.919 exclusivamente no conteúdo. A resposta é
+00:21:54.240 exibida na área de chat, na label agent
+00:21:56.760 e aí o graph name. Então aqui pergunta
+00:21:58.840 sobre o tema no Volt resultam respostas
+00:22:00.880 indicando. Então assim, percebam que eu
+00:22:02.760 não vou ler obviamente o stories inteiro
+00:22:05.039 aqui para vocês que é muito gigantesco,
+00:22:07.159 mas perceba que é como usuário eu quero
+00:22:09.840 fazer isso, como usuário eu quero fazer
+00:22:11.799 aquilo. E aí você se vê usando o sistema
+00:22:15.120 para você gerar um documento de produto,
+00:22:17.279 você precisa ter isso muito bem
+00:22:19.080 definido, todas as regras e todos os
+00:22:21.440 caminhos. Então aqui, ó, ver modelo
+00:22:23.600 ativo na janela de contexto. Um outro
+00:22:25.360 exemplo, ó, como o knowledge worker, que
+00:22:27.919 aqui tá como o usuário, né, ele colocou
+00:22:30.520 aqui como no worker, como ele criou, eu
+00:22:32.880 quero ver o nome do modelo em uso,
+00:22:34.679 tamanho do contexto disponível na
+00:22:36.360 interface de chat para saber com qual
+00:22:38.799 modelo estou interagindo e me e
+00:22:40.360 monitorar o uso do contexto. Então veja
+00:22:42.760 que eu preciso disso. E e tudo isso foi
+00:22:45.240 baseado no Discovery Notes. Quando a
+00:22:47.039 gente olhou essa tela aqui, você vi que
+00:22:49.559 isso aqui tava aqui e eu enviei isso
+00:22:52.000 para ele. Então precisa ter um stories
+00:22:54.039 falando que, cara, eu preciso ver aqui o
+00:22:56.279 tamanho do contexto que o agente tá
+00:22:57.679 gastando para eu poder monitorar isso.
+00:22:59.480 Então é muito simples e aí você tem que
+00:23:01.480 ler e validar tudo. Então o cara
+00:23:03.640 domínios da ferramenta do Volt e aí ele
+00:23:05.880 vai criar vários user stories aqui e
+00:23:08.240 depois ele vem pros requisitos
+00:23:09.880 funcionais que aí ó, domínio, chat
+00:23:12.520 conversação. Então, input de mensagem do
+00:23:14.559 usuário. O sistema deve permitir campo
+00:23:17.080 de input de texto na área central do
+00:23:18.840 chat pro usuário enviar mensagens e
+00:23:20.360 linguagem natural. O input deve ser
+00:23:22.159 desabilitado enquanto houver streaming
+00:23:24.480 ativo e reabilitado automaticamente ao
+00:23:26.960 evento run complete. Cara, parece óbvio,
+00:23:29.039 né? Pô, enquanto o cara tá falando, eu
+00:23:30.679 não posso ficar lá digitando de novo e
+00:23:32.520 mandando mais mensagens em cima. Mas se
+00:23:34.720 você não escrever, ele não sabe disso.
+00:23:36.960 Então, talvez ele, você vai tentar
+00:23:39.159 mandar um um texto por cima ali e aí se
+00:23:41.679 ele não trata igual o cloud, o cloud
+00:23:43.960 SDK, isso pode gerar um problema para
+00:23:46.000 você. Mas beleza, então ele gerou aqui
+00:23:48.559 requisitos funcionais, requisitos não
+00:23:50.600 funcionais. Eh, e beleza. E aí, esse
+00:23:53.559 agente meu aqui, ó, ele valida o user
+00:23:56.159 stories contra o nosso querido Discovery
+00:23:58.880 Note. Ou seja, esse cara aqui gerou esse
+00:24:02.080 esse documento em cima do Discovery
+00:24:04.320 Notes. Esse agente aqui, que é o nosso
+00:24:06.520 agente validador, ele vai validar o
+00:24:08.679 trabalho do agente. Então, o que que ele
+00:24:10.200 tá comparando? O Stor Requisitos contra
+00:24:12.640 o Discovery Note. São esses dois
+00:24:14.440 documentos aqui, ó. Puf, esses dois
+00:24:16.640 caras aqui. Beleza? Show. Então, tudo
+00:24:19.480 certo. Ele validou isso. E aí, o que que
+00:24:22.159 ele já me falou aqui de cara, ó,
+00:24:23.600 conflito, onde aparece no US04 seu
+00:24:26.600 critério de aceita, literalmente o lama,
+00:24:29.039 nome do modelo. E aí o RF4 abstrai
+00:24:32.480 provider, local roxo, porta ancora e
+00:24:35.000 olama. Ou seja, aqui mesmo eu falando
+00:24:37.320 que era só LM Stúo, o cara já começou a
+00:24:40.440 falar o lama. E aí aqui, olha, para você
+00:24:43.159 ver, por causa da da imagem que eu
+00:24:45.520 mandei para ele, é, como referência,
+00:24:47.960 você vê que aqui tá escrito o lama, ele
+00:24:51.399 deve ter pegado isso aqui e ele usou
+00:24:53.320 isso no user stories. Então, tá errado,
+00:24:56.080 eu vou ter que corrigir isso aqui,
+00:24:57.840 porque ele foi lá e mencionou no user
+00:25:00.200 stories que eu vou utilizar o lama, só
+00:25:02.799 que eu vou utilizar LM Studio. Primeira
+00:25:04.840 coisa, precisa resolver, ó, todo stack
+00:25:07.120 especifica LM Studio, etc e tal. E aqui
+00:25:09.760 eu vou responder, beleza? Aqui header do
+00:25:12.600 chat, títulos mais tokens e mensagens
+00:25:14.440 não cobertas. Não existe nenhum
+00:25:15.919 requisito funcional e o es cobrindo
+00:25:17.679 esses três elementos. Beleza? OK. Aqui
+00:25:21.000 tag do gráfico ativa acima do input sem
+00:25:23.240 requisito. Discovery why tag ativa
+00:25:26.159 exibindo aqui o research graph. Então
+00:25:28.320 esse elemento de Y está explicitamente
+00:25:30.279 no design, mas não virou nenhum story
+00:25:32.600 nem requisito. Ou seja, esqueceu desta
+00:25:35.600 parte aqui que a gente tinha falado, que
+00:25:37.720 é esse carinha aqui, ó. esqueceu desse
+00:25:39.480 cara aqui, não falou. Então, ou seja,
+00:25:41.840 olha para você ver o tanto que é
+00:25:43.039 importante quando o agente ele foi gerar
+00:25:45.679 aqui eh os requisitos, eh, ele não, ele
+00:25:48.559 simplesmente pula, pulou algumas partes
+00:25:50.799 ali simplesmente não fez eh talvez ele
+00:25:53.640 não achou relevante, simplesmente
+00:25:55.600 descartou. Por isso que você tem que
+00:25:57.279 lançar um validador sempre. Beleza? E
+00:25:59.320 aqui ele também fala de ambiguidade. Ele
+00:26:01.600 fala que é onde aparece outros problemas
+00:26:04.600 aqui de título dos trads. Eh, requisito
+00:26:07.919 aqui, critério fraco, ó, referência de
+00:26:09.960 set interno de forma equivocada. Cara,
+00:26:12.399 você vai ter que ler tudo isso aqui, né?
+00:26:14.600 No caso, eu vou ler tudo isso aqui e eu
+00:26:16.720 vou dar a resposta e eu vou e ele
+00:26:18.640 pergunta aqui, ó. Você quer discutir
+00:26:20.000 cada ponto antes da gente partir pra
+00:26:21.559 edição? Ou seja, eu vou ter que editar
+00:26:23.679 esse cara aqui porque ele tá faltando um
+00:26:25.559 monte de coisas. E aí vou elaborar as
+00:26:27.799 respostas aqui para para esse vídeo aqui
+00:26:29.600 não ficar com 3 horas. Eu vou editar as
+00:26:31.679 respostas, eh, e vou realmente falar o
+00:26:34.039 que que realmente tem que ter ali. Mas
+00:26:36.039 basicamente ele já me apontou todos os
+00:26:38.080 problemas e como eu sei do produto, eu
+00:26:39.760 vou saber responder e ele vai editar e
+00:26:42.240 de forma correta. Beleza? Então,
+00:26:43.960 respondi todas as perguntas aqui e ele
+00:26:46.240 tá, ó, fez aqui o que o basicamente aqui
+00:26:48.799 o resumo para eu mostrar para vocês, ó.
+00:26:50.919 Cara, eu coloquei aqui, cara, que não
+00:26:52.799 tem o lama ali, ó. LM Stúo. Aqui o
+00:26:55.320 header aqui o título da tradot tokens e
+00:26:57.600 a contagem de mensagens. A gente criou
+00:26:59.080 aqui um RF novo, né? Um requisito novo
+00:27:01.840 para isso. Eh, criamos um outro
+00:27:03.880 requisito novo aqui para falar da
+00:27:05.520 tagraph name acima do input. E aqui,
+00:27:08.640 cara, criei e aqui da RF01, input
+00:27:11.200 desabilitado. User 13. Aqui eu realmente
+00:27:14.240 alterei aqui é o place holder nova
+00:27:16.520 conversa para geração automática de
+00:27:18.159 título via LLM, menor que seis palavras.
+00:27:21.080 Ou seja, detalhes aqui do produto, eh eh
+00:27:23.679 que a maioria também pode ser até eh
+00:27:25.559 meio que passando uma maquiagem ali para
+00:27:27.600 ficar um pouco mais bonito, mas os
+00:27:29.679 outros ali eram bugs. A partir desse
+00:27:32.279 momento que o validador já fez aqui as
+00:27:35.080 alterações, é, eu valido, obviamente,
+00:27:37.600 tenho que ler tudo isso aqui, cara, um
+00:27:39.159 documento super importante, eu vou
+00:27:41.360 aprovar e aí vai ser gerada de fato a
+00:27:44.279 PRD agora, que é PRD mais estamos aqui
+00:27:47.840 na quarta etapa do nosso pipeline. Então
+00:27:50.159 vai gerar PRD aqui. E daqui a pouco a
+00:27:53.159 gente vai eh falar aqui agora sobre
+00:27:55.279 tecnologia, que é front end, back end,
+00:27:57.720 banco de dados eh e segurança. antes e
+00:28:01.240 da gente criar a nossa spec. Beleza? E
+00:28:03.799 aí agora PRD já foi gerado. Se você
+00:28:07.159 entrar aqui na pasta do projeto, vai tá
+00:28:09.399 aqui o nosso querido PRD, ó, que o tudo
+00:28:12.399 que tem resumo executivo, o que que é o
+00:28:14.720 problema que resolve diferencial,
+00:28:16.919 público alvo, as personas aqui, quem que
+00:28:19.279 é o knowledge worker aqui que é o Breno,
+00:28:22.519 enfim, e user stories, vai vir tudo
+00:28:25.120 bonitinho, todos os critérios de aceite,
+00:28:27.120 todas e eh todas as camadas que veio lá
+00:28:30.480 do user stores, mais eh o que foi
+00:28:32.760 definido ali com o stories e requisitos,
+00:28:35.519 eu já incluí aqui diretamente na PRD.
+00:28:38.440 Então você vê que já tá um documento já
+00:28:41.039 que já está bem grande, né? Um documento
+00:28:43.360 aqui de 600 linhas. Então realmente já
+00:28:46.360 está um documento bem gigantesco. Mas
+00:28:49.440 beleza, agora a gente tem que ir pra
+00:28:51.640 parte de banco de dados. E ele já
+00:28:54.360 iniciou aqui, ó. Então ele, ó, eu sou
+00:28:56.679 especialista aqui de banco de dados do
+00:28:58.600 projeto local. e ele já leu aqui os
+00:29:01.240 documentos, já leu a PRD, já leu os
+00:29:02.960 Discovery Notes. E aí ele já me abriu
+00:29:05.600 aqui alguns tópicos pra gente discutir.
+00:29:08.440 E aqui esses caras eles já vão te
+00:29:10.720 ajudando, né? Então, a ele dá uma opção
+00:29:13.320 A aqui, opção B e ele dá sempre a
+00:29:16.279 recomendação dele e ele explica por e
+00:29:18.880 você vai avaliar e se aceita ou não.
+00:29:21.600 Então, cara, todas aqui que ele fez, eu
+00:29:23.679 li aqui e eu realmente concordo com
+00:29:25.960 todas as decisões dele. Eh, que o driver
+00:29:29.039 aqui de acesso do SK Lite e no Python
+00:29:31.919 com Fash API, ele deu aqui opção A,
+00:29:34.279 opção B e opção C. Eh, e cara, aqui
+00:29:37.279 opção C que es SK Alkim aqui é tipo
+00:29:40.159 matar uma formiga com canhão. Eh, não
+00:29:42.760 preciso disso. Então, el a recomendação
+00:29:44.880 dele é a recomendação A. Então, ele te
+00:29:46.880 confronta ali com o que tá escrito e o
+00:29:49.559 que ele sugere de banco de dados. E aí,
+00:29:52.480 cara, eu vou simplesmente falar assim,
+00:29:54.039 ó, concordo com todas as suas sugestões.
+00:29:59.080 E ele vai automaticamente agora lançar
+00:30:01.120 na PRD a parte de banco de dados, que eu
+00:30:04.240 já previamente concordei aqui com ele. A
+00:30:06.559 PRD tá aqui, eu também consigo ler ela
+00:30:08.640 aqui na Yai, na UI, ó, para ficar um
+00:30:10.519 pouco mais gostoso de ler aqui do que
+00:30:13.039 simplesmente ler um arquivo markdown lá
+00:30:15.080 dentro do antigravity. Eh, mas beleza. E
+00:30:17.480 aí vai consolidar aqui e a gente vai
+00:30:19.960 partir paraa parte de back end. Beleza?
+00:30:22.720 E aqui, ó, ele já incluiu, ó, decisões
+00:30:24.880 técnicas aqui, ó, banco de dados.
+00:30:26.960 Exatamente aqui o que a gente combinou.
+00:30:29.600 Ele já previamente fez aqui e imputou as
+00:30:32.600 informações. E agora nós vamos para cima
+00:30:35.159 aqui do agente backend. Ó, sou
+00:30:37.720 especialista back end. Já li aqui tudo
+00:30:40.240 bonitinho, registrá-las no PRD. Eh,
+00:30:42.960 enfim. E aqui ele já começou com as
+00:30:44.840 perguntas, ó. backend, Python Version,
+00:30:47.240 qual que o gerenciamento de
+00:30:48.760 dependências, é o que que eu vou ter que
+00:30:50.880 utilizar como pack manager, eh, e enfim.
+00:30:53.600 E agora eu vou começar a responder todas
+00:30:55.919 essas perguntas aqui, é, pra gente
+00:30:58.240 trabalhar. É legal aqui. E aí, já
+00:31:00.399 voltando, meu amigo, olha o tamanho que
+00:31:03.600 foi a minha discussão com ele do back
+00:31:05.960 end. Então, assim, o back end ele é uma
+00:31:08.519 das coisas mais importantes que tem.
+00:31:10.039 Então, cara, eu escrevi muita coisa
+00:31:11.919 aqui, validei fora, eh, enfim, dei uma
+00:31:15.039 olhada na documentação, eh, e, cara,
+00:31:17.440 sempre com assistência aqui de uma outra
+00:31:19.440 LLM, me ajudando a tomar as decisões.
+00:31:22.039 Eh, e ele implementou, eh, toda a
+00:31:23.880 estrutura do projeto que eu precisava,
+00:31:25.960 principalmente os end points que eu
+00:31:27.679 precisava para fazer aquela tela lá e do
+00:31:30.559 cloud design funcionar legal. Então,
+00:31:33.279 discuti bastante aqui com ele e aí
+00:31:35.519 matei. E agora nós vamos paraa parte de
+00:31:37.480 front end, que vai ser em teoria a mais
+00:31:39.639 fácil, porque eu já vou dar um arquivo
+00:31:41.960 pronto para ele. Então vamos aprovar
+00:31:44.159 aqui. E aí esse cara, ele vai primeiro
+00:31:47.000 tentar me dar aqui eh uma sugestão,
+00:31:49.480 porque ele não sabe que eu já fiz essa
+00:31:51.480 parte do front ali com o cloud design.
+00:31:54.000 Então, ele vai realmente já me dar aqui
+00:31:56.159 eh sugestões e eu já vou cortar ele. E
+00:31:58.679 aí o que eu fiz eh quando o cloud design
+00:32:02.039 ele te libera ali eh dentro da
+00:32:04.720 plataforma eh o o handoff, né, que é o o
+00:32:08.200 documento aqui é o o arquivo zip ou o
+00:32:11.279 handoff aqui de cloud code, ele libera
+00:32:13.600 vários arquivos, né? E esse cara aqui é
+00:32:16.600 dentro do Lion Claw, ele não vai ler
+00:32:18.240 todos esses arquivos. Então o que que eu
+00:32:20.240 tive que fazer? Eh, eu peguei todos os
+00:32:22.600 arquivos e eu tive que consolidar eles
+00:32:25.320 eh nesse cara aqui. Então, eu tenho esse
+00:32:27.799 arquivo inteiro aqui que é o agent aqui,
+00:32:30.519 que é o agent local handoff. Eh, e esse
+00:32:33.720 arquivo ele basicamente vai ser o
+00:32:35.960 arquivo que vai ter que ser desenvolvido
+00:32:38.120 para poder gerar aquela tela. Então eu
+00:32:40.159 vou referenciar esse arquivo aqui e ele
+00:32:42.519 vai ter que colocar as decisões lá, eh,
+00:32:44.679 obviamente um pouco mais resumido, eh,
+00:32:46.840 para que na spec também conste, eh, que
+00:32:49.760 ele vai ter que olhar esse arquivo aqui,
+00:32:52.039 eh, agentlo local.
+00:32:54.320 Na hora do desenvolvimento, beleza? E
+00:32:56.320 aí, como esperado, ele já fez aqui, ó. E
+00:32:58.799 aí, o que eu falei para ele, cara, o
+00:33:00.120 seguinte, veja o arquivo local handoff,
+00:33:02.799 que é o arquivo que tá com todas as
+00:33:05.200 informações do que eu fiz lá no cloud
+00:33:06.720 design. Ele está no mesmo PF do PRD por
+00:33:09.240 MD e ele já tem a UI pronta totalmente
+00:33:11.519 funcional do que vamos precisar
+00:33:13.000 desenvolver. Você vai entender isso e
+00:33:15.279 vai colocar apenas as referências do
+00:33:17.159 frontend na PRD, porque a spec aqui é a
+00:33:19.639 PRD devem referenciar esse arquivo que
+00:33:21.760 vai ser usado para o desenvolvimento. Me
+00:33:23.679 aviso se entendeu? Ou seja, eu não tenho
+00:33:25.960 como eu pegar um arquivo aqui que tem é
+00:33:28.679 2065 linhas aqui e inserir isso aqui
+00:33:31.519 dentro da PRD. Quando for gerar spec
+00:33:33.840 ali, cara, o agente ele vai eh alucinar
+00:33:36.720 muita informação que ele precisa para
+00:33:39.039 poder gerar o negócio perfeito. Então,
+00:33:41.000 como eu já tenho isso aqui pronto para
+00:33:43.279 poder desenvolver, eh, o agente e ele
+00:33:45.639 vai referenciar isso na spec quando
+00:33:47.440 chegar no desenvolvimento do frontend.
+00:33:49.200 Eh, isso tem que funcionar. Então, o que
+00:33:52.120 e rolou aqui é que ele colocou as
+00:33:54.279 informações aqui do da steck aqui, tudo
+00:33:57.760 bonitinho dentro do PRD, o que que vai
+00:33:59.720 ter aqui na steack, o que que não vai
+00:34:01.240 ter. Aí ele colocou aqui as cores, ó,
+00:34:03.600 tudo bonitinho, os valores, ele tirou do
+00:34:05.399 meu documento. Eh, e aí faltou aqui
+00:34:07.679 algumas coisas que eu falei para ele,
+00:34:09.359 né? O carregamento histórico, o chat
+00:34:12.079 string, que, ou seja, eu li tudo. Então,
+00:34:14.399 assim, veja que eu li tudo, todas essas
+00:34:16.599 informações aqui, eh, eu leio, né?
+00:34:18.839 Então, eh, o vídeo aqui ele já tá
+00:34:21.239 ficando longo, mas para mim aqui que tô
+00:34:23.639 lendo e com calma e fazendo tudo isso
+00:34:26.399 aqui é duas vezes mais longo. Então, se
+00:34:29.000 esse vídeo aqui ficar com 1 hora, 1 hora
+00:34:31.719 meia, você pode ter certeza que eu tô
+00:34:33.599 gastando aqui pelo menos 3 horas ou 3
+00:34:36.359 horas para poder fazer isso aqui tudo.
+00:34:38.760 Beleza? Então, ele concordou aqui
+00:34:40.839 perfeitamente. Fiz aqui. Agora nós vamos
+00:34:43.199 pra parte de segurança. Então, vou
+00:34:45.199 aprovar. Galera da segurança agora vai
+00:34:47.599 vir e vai dar uma criticada aqui do meu
+00:34:49.679 projeto. Como esse projeto aqui ele é
+00:34:51.440 local, então assim, não vou entrar numas
+00:34:55.000 aqui com ele em questão de segurança,
+00:34:56.839 porque ele tá 100% rodando na minha
+00:34:58.560 máquina. Então não tem muita coisa aqui
+00:34:59.960 que realmente eh o cara tenha que
+00:35:02.200 decidir aqui e criticar em cima do meu
+00:35:04.079 projeto. Mas ele tá sentando o bambu
+00:35:06.680 aqui, ó, e lendo o documento inteiro.
+00:35:09.560 Vamos lá. Mandou aqui decisão, discussão
+00:35:12.000 PAF transversal. OK. Ó, sou especial em
+00:35:15.440 segurança. Antes de começar,
+00:35:16.680 identifiquei o que já está decidido.
+00:35:19.839 OK. Beleza. Então, assim, o que que ele
+00:35:21.720 me pediu aqui, ó? Confinamento por PAF,
+00:35:24.960 simples e robust. Cada ferramenta valida
+00:35:27.400 é o caminho recebido. OK. É aceitável. E
+00:35:31.280 aqui eu discuti um pouco ali com o
+00:35:33.760 Cloud. Eh, e realmente tem essa parte
+00:35:36.359 aqui de segurança. É uma é uma discussão
+00:35:38.320 legal. Eh, eu aceitei e aí eu é é o mais
+00:35:41.359 ou menos o controle das tools ali. Eu
+00:35:43.440 não vou entrar muito no técnico aqui,
+00:35:45.480 mas o que que o agente ele pode, o que
+00:35:46.960 que ele não pode fazer ali é importante.
+00:35:49.160 Então agora ele tá soltando aqui
+00:35:50.319 sanitização de logs e ele falou aqui
+00:35:53.079 também eh do CSP aqui do front end, ó,
+00:35:55.920 front end aqui, page roots e tal. Enfim,
+00:35:58.160 vou dar uma lida aqui. Eh, mas aqui eu
+00:36:00.599 já a a a opção que ele deu aqui
+00:36:02.680 realmente e já é a opção melhor que é a
+00:36:05.480 opção A aqui, CSP e estrita. E aí, cara,
+00:36:08.359 esse agente ele, como ele é treinado
+00:36:11.079 aqui, cara, se você tiver desenvolvendo
+00:36:12.520 uma solução que ela vai pra web, você
+00:36:14.079 vai vender, esse agente aqui, ele é um
+00:36:15.440 dos mais importantes, mas como a gente
+00:36:17.119 tá construindo aqui o negócio local, ele
+00:36:19.000 cara tá fazendo muitas coisas aqui, que
+00:36:20.920 é o que a gente chama de overkill, né?
+00:36:22.960 Coisa que você não precisa, cara, por
+00:36:24.720 pelo pelo que eu vou fazer aqui e vou
+00:36:26.280 rodar internamente. Então eu tive que
+00:36:28.160 dar uma cortada boa nele aqui. Eu falei:
+00:36:29.760 &quot;Cara, é essas opções aqui vai fazer
+00:36:32.240 isso aqui, vai fazer o resto, cara. Você
+00:36:34.400 pode abandonar aí o suficiente para V1.
+00:36:37.280 pode fechar só com essas quatro decisões
+00:36:39.599 e vamos para cima. Então, tive que dar
+00:36:40.960 uma cortada nele. Mas, cara, se você
+00:36:42.680 tiver utilizando lá um clock, não corte
+00:36:45.000 ele. Se você quiser monetizar e
+00:36:47.079 trabalhar com segurança, é, fique
+00:36:49.160 tranquilo e e discuta bastante com esse
+00:36:51.720 cara aqui, beleza? E aí agora a gente
+00:36:53.640 vai seguir agora vai ter a geração da
+00:36:55.960 spec a partir da PRD. Então, depois que
+00:36:59.560 já geramos tudo isso aqui, então pensa
+00:37:01.400 que eu já tô aqui há mais de 2 horas,
+00:37:03.760 nós vamos finalmente gerar a spec a
+00:37:05.960 partir do PRD. E aí vou mostrar até o
+00:37:08.599 PRD final aqui para vocês. Ele tá
+00:37:11.040 olhando aqui as permissões. Eu vou
+00:37:13.760 aprovar. E aqui agora nós vamos pra
+00:37:16.720 geração da spec. Esse cara vai gerar a
+00:37:19.480 spec baseado no PRD. Beleza? E aí,
+00:37:23.640 enquanto isso, vou mostrar aqui para
+00:37:25.400 vocês o PRD como ficou. Ele ficou aqui
+00:37:28.359 com 100 linhas. E, cara, tá perfeito
+00:37:32.560 aqui toda a estrutura, desde tudo que a
+00:37:35.079 gente conversou. Veja quantos arquivos a
+00:37:37.160 gente já gerou até agora. E aqui, cara,
+00:37:40.319 é você tem que dominar esse arquivo
+00:37:42.960 aqui. Então, eu li ele algumas vezes
+00:37:45.119 para poder tomar as decisões que eu
+00:37:46.960 precisava tomar pra gente poder
+00:37:48.880 desenvolver isso aqui que a gente vai
+00:37:50.560 fazer. Então veja que você tá
+00:37:52.880 desenvolvendo o sistema aqui. Eu eu não
+00:37:54.800 tô longe ainda da parte de chegar lá e
+00:37:57.280 cara coda aí faz isso aqui acontecer.
+00:38:00.079 Ainda vai ter aqui o spec validator.
+00:38:02.640 Vamos enriquecer a spec depois e aí
+00:38:05.200 depois vamos gerar as sprints, validar
+00:38:07.319 essas prints e aí sim nós vamos
+00:38:09.920 finalmente pro desenvolvimento. Então
+00:38:11.720 veja que tem várias etapas aqui antes do
+00:38:14.640 desenvolvimento e não se pode pular
+00:38:17.440 nenhuma dessas etapas. que aqui agora,
+00:38:19.480 cara, nossa spec está gerada, né? Como
+00:38:22.440 que funciona esse fluxo aqui da spec? É,
+00:38:26.079 o agente ele lê o PRD completo e ele tem
+00:38:30.040 que gerar uma spec a partir do documento
+00:38:32.599 do PRD. Então, veja que o documento PD
+00:38:34.800 ficou bem grande. É, então, cara, ele
+00:38:37.240 teve que ler tudo aqui e a partir do
+00:38:39.800 momento que ele gera a primeira spec, eu
+00:38:42.560 já lanço automaticamente um agente para
+00:38:45.160 poder validar o trabalho dele. Um agente
+00:38:47.119 com contexto limpo, com único prompt.
+00:38:49.599 Valide se tudo que tem na PRD está
+00:38:52.800 contido de forma correta na Spec. E aí
+00:38:55.880 esse agente ele pode ter até três loops
+00:38:58.760 com o agente que gerou a spec. Então,
+00:39:01.640 cara, veja aqui que, cara, rolou esse
+00:39:03.520 loop e ele, ó, feio, ó. A primeira coisa
+00:39:06.200 aqui, ele já validou, teve um feio aqui
+00:39:08.400 de conflito. E aí o outro agente veio
+00:39:10.720 aqui, beleza, tem todos os contextos
+00:39:12.240 necessários, foi lá, aplicou as as
+00:39:14.760 correções aqui. Cara, essa essa fase
+00:39:17.040 aqui demorou mais ou menos uns 15
+00:39:19.000 minutos para poder rodar cada uma dessa
+00:39:21.480 dessas gerações. Então, são arquivos
+00:39:23.640 grandes, né? Então, os agentes têm que
+00:39:25.200 trabalhar. E aí aqui ele colocou
+00:39:27.359 resultado PES, beleza? fez toda a
+00:39:29.440 validação e me deu o resultado aqui, ó,
+00:39:31.560 940 linhas, estruturado em cinco
+00:39:34.200 sessões. E agora eu li toda, acabei de
+00:39:36.640 ler toda essa spec aqui, realmente foi
+00:39:38.480 um trabalho que o cara fez um trabalho
+00:39:40.480 muito bom. E aí ela aparece aqui do lado
+00:39:42.839 aqui toda estruturada, os uses, o data
+00:39:46.119 esquema. Então aparece tudo bonitinho
+00:39:48.760 aqui, cara. Todas as informações que a
+00:39:50.839 gente veio discutindo aqui desde o
+00:39:53.040 início desse vídeo, desde o início do
+00:39:55.119 processo, ele referenciou o arquivo lá
+00:39:57.599 do frontend que a gente fez lá do cloud
+00:39:59.760 design, que ele é a verdade absoluta,
+00:40:02.640 todo os bares aqui, os eventos que vão
+00:40:05.560 ser gerados aqui na conversa, no chat,
+00:40:08.280 cara, tá muito bem estruturado. Eh,
+00:40:10.760 ficou muito bom mesmo. Eu até achei que,
+00:40:13.240 cara, eu eu ia ter que falar mais coisas
+00:40:15.119 aqui de Eu, cara. ali com muita calma,
+00:40:17.680 só a leitura disso aqui e meio que
+00:40:19.680 validação do que eu tive que fazer. Já
+00:40:21.520 levei mais ou menos uns 20 a 30 minutos
+00:40:23.599 aqui. É, mas aparentemente tá tudo
+00:40:26.160 certo. E agora nós vamos pra próxima
+00:40:28.319 etapa, que é o enriquecimento da spec.
+00:40:31.400 Porque mesmo que eu tenha olhado aqui e
+00:40:33.440 eu tenha mandado um validador aqui, eh,
+00:40:35.839 eu preciso colocar um outro agente aqui
+00:40:38.119 que vai ter uma visão pouco mais
+00:40:39.960 crítica. vai fazer um advogado do diabo,
+00:40:42.319 vai ser aquele agente que vai falar
+00:40:43.599 assim, ó: &quot;Mas e se você clicar aqui
+00:40:46.400 para deletar esse chat enquanto o agente
+00:40:48.599 tá streamando?&quot; Ele vai começar a me
+00:40:50.480 fazer diversas perguntas e me provocar e
+00:40:53.119 vai enriquecer o meu documento. Eh, não
+00:40:55.560 vai só pensar aqui no caminho feliz, né?
+00:40:57.680 No rap e ele vai me ajudar e a melhorar
+00:41:01.200 ainda mais a minha spec. Então, vou dar
+00:41:03.560 o aprovar e agora o enrech aqui, essa
+00:41:07.119 fase 10 vai começar a rodar. Beleza?
+00:41:10.480 Vamos deixar ele trabalhar aqui e eu já
+00:41:12.640 volto com o resultado. Então aqui, ó,
+00:41:15.000 olha só para você ver. Eu sou W Richer,
+00:41:17.760 um analista de produto cético e
+00:41:19.800 meticuloso, especializado em em tornar
+00:41:22.319 especificações de software a prova de
+00:41:24.640 ambibidade. Então você já vê que esse
+00:41:26.280 cara vai vir criticando meu documento
+00:41:28.040 aqui e a gente vai ter boas discussões
+00:41:30.880 aqui. E eu já volto dando um overview
+00:41:33.280 aqui para vocês do que que esse cara
+00:41:35.040 fez. Então, voltando aqui, o nosso
+00:41:37.119 querido Enricher cético aqui, com
+00:41:39.359 certeza ele me trouxe aqui 20
+00:41:41.680 observações que, cara, a maioria delas
+00:41:45.040 era muito relevante. Então eu realmente,
+00:41:47.599 cara, tive que ler de novo, novamente
+00:41:49.720 aqui mais uma fasezinha aqui de 30
+00:41:52.440 minutos aqui eu trabalhando com esse
+00:41:53.920 cara. E aí eu montei uma resposta aqui
+00:41:56.119 para cada uma da das sugestões dele,
+00:41:58.880 outras que eu preferi retirar aqui da
+00:42:00.960 SPEC, não precisava responder. E ele foi
+00:42:03.800 lá e olha o tanto de edit e ele aplicou
+00:42:06.880 aqui todos os 20 aqui barra 20.
+00:42:09.319 Bonitinho, cara. Fez um excelente
+00:42:11.160 trabalho. Então esse spec reiter aqui é
+00:42:14.000 um dos caras mais importantes porque ele
+00:42:16.720 realmente pega ali a ambiguidade, coisa
+00:42:18.800 que realmente você não fez bem feito, é
+00:42:21.960 ou faltou alguma parte. E agora a nossa
+00:42:24.520 spec aqui, cara, ela tá bonitona, tá
+00:42:27.480 assim, realmente muito bem feita. Eh, e
+00:42:30.559 agora o próximo passo é a gente ir pro
+00:42:33.000 planner, que o planner o que que ele
+00:42:34.800 faz? Ele vai dividir essa spec aqui em
+00:42:38.240 sprints. Eu tô utilizando hoje Jzon,
+00:42:41.160 tenho defendido aqui nesse canal durante
+00:42:43.200 um tempo que tem eu tenho tido um
+00:42:45.040 resultado legal utilizando as sprints em
+00:42:47.520 Jon, os agentes estão lendo e de uma
+00:42:49.599 maneira mais fácil, enfim. Eh, então tem
+00:42:52.559 dado certo, né? Defendo aqui que, cara,
+00:42:55.000 tem estratégias e estratégias, não tem
+00:42:57.440 certo ou errado. Eu tô usando essa aqui
+00:42:59.559 nesse momento e tem dado muito certo.
+00:43:02.000 Beleza? E aí uma única coisa só que eh
+00:43:04.880 eu reparei aqui que eu vou ter que
+00:43:06.440 mexer, que é, cara, quando e quando você
+00:43:09.240 vai discutindo ali com os agentes, os
+00:43:11.319 agentes eles gostam de ser proativos,
+00:43:13.440 né? Então, fui ver aqui no final da
+00:43:15.800 minha spec, eh, e o Enricher
+00:43:17.880 simplesmente colocou aqui, eh, escopo
+00:43:20.559 negativo, o que não vai fazer. Uma
+00:43:23.839 informação completamente inútil para
+00:43:25.680 você ter uma spec, ah, por que que o
+00:43:27.760 agente que vai desenvolver precisa saber
+00:43:29.400 o que que não vai fazer? Então o que eu
+00:43:31.480 vou fazer aqui é simplesmente dar uma
+00:43:33.920 deletada em tudo que está aqui, porque
+00:43:36.960 eu não preciso dessa informação, é uma
+00:43:39.359 informação inútil para mim. E aí eu
+00:43:42.200 diminuo um pouco do contexto aqui,
+00:43:44.280 porque agora o meu planner vai ter que
+00:43:46.000 ler tudo isso aqui e vai ter que gerar
+00:43:48.880 sprints. E aí o que eu faço depois
+00:43:51.640 disso? Vou aprovar aqui, ó. O que eu
+00:43:54.000 faço depois disso? Como todos os
+00:43:56.000 processos aqui, eu vou lançar o sprint
+00:43:59.119 validator. Então, o planner vai gerar as
+00:44:01.480 sprints a partir da spec. Depois eu
+00:44:03.839 lanço esse carinha aqui, ó, que vai
+00:44:07.000 entrar com contexto limpo e com prompt
+00:44:09.559 muito simples. Você vai validar que se
+00:44:11.839 tudo que tem lá na spec estão
+00:44:14.640 contemplados nessa sprint aqui. E aí
+00:44:17.000 esse carinha aqui, ele vai me falar o
+00:44:19.040 que que tá faltando, vai me sugerir e eu
+00:44:21.680 vou autorizar ele a alterar as sprints.
+00:44:25.079 Então o plan, cara, você vê que ele tá
+00:44:26.920 gerando o Jzon aqui. O que que ele faz?
+00:44:28.960 Além dele gerar as sprints, ele vai lá
+00:44:31.400 nos meus subadients aqui, ó, e ele vai
+00:44:33.920 escolher o melhor subadient para
+00:44:35.960 desenvolver naquela sprint específica.
+00:44:39.119 Então, se o cara vai desenvolver front
+00:44:40.720 end, ele vai escolher frontend. Se o a
+00:44:43.119 aplicação é electron, ele vai escolher
+00:44:44.960 lá o Electron Pro. Se a aplicação é em
+00:44:47.280 Node, ele vai colocar lá o Node JS Pro,
+00:44:50.480 que o cara tem um prompt só e disso e
+00:44:53.119 ele é especializado nisso. Todos esses
+00:44:55.400 subadients eu validei pessoalmente,
+00:44:57.520 então já são subents que eu já trabalho
+00:44:59.760 com eles. Então isso vai gerar ali
+00:45:01.480 sprints de altíssima qualidade, é que
+00:45:04.599 somente agentes especializados vão
+00:45:07.520 desenvolver em cima dela. Então vou
+00:45:09.520 deixar agora eles brincando aqui e aí
+00:45:11.680 quando o validator me der a resposta, o
+00:45:13.559 último passo aqui vai ser a gente ir pro
+00:45:16.160 desenvolvimento. Então veja que até
+00:45:18.480 agora, tirando aqui, né, a parte de
+00:45:21.319 sprints que ainda não saiu, olha a
+00:45:23.240 quantidade de documentos que a gente
+00:45:25.240 gerou. Então isso aqui, galera, é o
+00:45:27.480 processo de desenvolvimento. Olha, esta
+00:45:29.359 quantidade de documentação é para
+00:45:31.640 realmente sair algo eh bem feito e e
+00:45:35.119 documentado, eh, já de primeira. Então,
+00:45:38.400 ah, vai ter erro. Vai ter erro. Sempre
+00:45:40.800 falo aqui, cara, vai ter erro, mas eu
+00:45:42.839 garanto para vocês que vai sair uma
+00:45:44.440 solução muito mais bem feita, muito mais
+00:45:46.520 robusta do que eu sair ali sem
+00:45:48.680 planejamento nenhum. Eh, e simplesmente
+00:45:51.599 sair conversando ali, vibe codando, né?
+00:45:54.680 Conversando e tentando resolver as
+00:45:56.280 coisas sem um planejamento prévio.
+00:45:58.440 Beleza? Vou deixar os caras rodar aqui e
+00:46:00.680 aí a gente volta já já para dar uma
+00:46:02.520 olhadinha nisso aqui antes de mandar pro
+00:46:04.240 desenvolvimento. E depois de 3 horas com
+00:46:07.480 toda essa documentação, eh, o agente
+00:46:10.240 planner aqui gerou aqui as sprints. Eh,
+00:46:13.720 o validador de sprints aqui me deu
+00:46:15.920 algumas recomendações aqui, que todas
+00:46:17.960 são válidas, então eu já aceitei. É, e
+00:46:20.640 agora eu vou aprovar e a gente vai
+00:46:22.599 partir pro desenvolvimento. Ficou bem
+00:46:24.760 tranquilo aqui, ó. 10 sprints no total
+00:46:27.480 que nós vamos desenvolver. E nós vamos
+00:46:29.599 agora aprovar aqui e vamos partir aqui
+00:46:33.040 pro desenvolvimento, iniciar aqui o
+00:46:35.280 nosso querido desenvolvimento. Então
+00:46:37.800 vamos lá para cima. E aqui ele já vai
+00:46:40.359 automaticamente aqui gerar essa tela
+00:46:42.880 onde eu vou conseguir acompanhar tudo.
+00:46:45.240 Então aqui para você ver tem a definição
+00:46:47.359 da sprint, ó. O que que tem na sprint,
+00:46:49.920 ó? Quem é o coder? backend developer,
+00:46:52.760 eh, complexidade. E aqui é a stack que
+00:46:55.720 ele vai desenvolver. E aqui é tudo que
+00:46:58.160 ele vai ter que executar. E aqui vai
+00:47:00.480 começar um stream em tempo real. Ó, o
+00:47:03.240 arquivo Speck me deu uma especificação
+00:47:04.960 técnica e tal, não há indício de
+00:47:06.720 malware, continua com a implementação da
+00:47:08.720 Sprint. Ele vai aqui validar aqui é o
+00:47:11.160 que tem na spec para poder dar um
+00:47:13.119 contexto para ele e ele vai validar aqui
+00:47:15.800 a sprint um e começar a desenvolver o
+00:47:18.559 projeto ali, começar ali e a primeira
+00:47:21.040 parte. E aí aqui do lado tem o
+00:47:23.680 Evaluator, que é o cara que vai validar
+00:47:26.359 aqui o que esse coder e vai desenvolver.
+00:47:29.800 Então o processo é muito simples. Esse
+00:47:32.040 cara aqui vai sair desenvolvendo e aqui
+00:47:35.280 você vê que tem os rounds aqui, ou seja,
+00:47:37.720 até cinco rounds aqui que o evaluator eh
+00:47:40.880 eh der bomba no código eh do nosso
+00:47:43.760 querido coder. E eu aceito acima de
+00:47:46.520 cinco rounds, tem que travar. Eh, e aí
+00:47:48.599 eu vou ter que dar uma olhada para
+00:47:49.760 entender o que que eh os caras aqui tão
+00:47:51.760 em loop infinito, mas até hoje aqui eh
+00:47:54.240 nunca passou de três rounds aqui eh eh
+00:47:56.839 um processo entre esses dois caras aqui.
+00:47:59.119 Eles estão trabalhando alinhadinhos.
+00:48:01.800 Então todas as sprints aqui estão
+00:48:03.839 construídas. Agora é, eu vou deixar
+00:48:06.200 esses caras trabalhando aqui. Vai
+00:48:08.040 demorar pelo menos umas 3 horas um
+00:48:10.040 desenvolvimento desse, pelo que eu
+00:48:12.319 entendo aqui da dificuldade e aí todos
+00:48:15.040 esses loops que vão gerar e de
+00:48:17.119 validação. Então eu vou agora me retirar
+00:48:19.280 e vou dormir e vou deixar aqui esses
+00:48:21.400 caras trabalhando. É, e amanhã a gente
+00:48:23.760 volta aqui para ver o resultado e o
+00:48:25.400 nosso produto completo, eh, do da forma
+00:48:28.200 como a gente planejou. Então, veja o
+00:48:30.359 tanto de fases que nós passamos aqui.
+00:48:32.720 Todas essas fases estão registradas
+00:48:35.000 aqui. Eu já tenho as métricas do que foi
+00:48:37.559 até agora. Então você vê que aqui tá
+00:48:39.400 1:30 foi o tempo total agentes aqui
+00:48:43.240 trabalhando. Mas todas essas 3 horas
+00:48:46.079 aqui foi eu lendo, eu discutindo, eu
+00:48:49.000 tentando resolver os problemas, eu é
+00:48:51.040 formulando os textos e respondendo para
+00:48:53.319 eles as dúvidas. E todo o resto aqui é
+00:48:56.079 tá aqui, ó, custo por etapa. Então, cada
+00:48:58.640 o que que custou e eh esse projeto até
+00:49:01.400 agora, obviamente aqui eu tô rodando e
+00:49:03.799 com a assinatura do cloud, então eu não
+00:49:05.720 tô gastando com API KIS, mas se fosse
+00:49:08.200 API KIS até o momento eu já teria
+00:49:10.240 gastado aqui 11 e agora obviamente o
+00:49:13.119 custo maior vai ser com o
+00:49:14.520 desenvolvimento. Então assim, vai elevar
+00:49:16.640 bastante aqui o custo do Coder e o do
+00:49:18.960 Evaluator. Aqui eu tenho todas as
+00:49:21.119 métricas que é o é o essencial para que
+00:49:23.760 eu melhore o meu sistema harness aqui, é
+00:49:26.319 o meu processo de desenvolvimento.
+00:49:28.160 Depois eu tenho que analisar todas essas
+00:49:29.760 métricas e ver onde eu posso melhorar,
+00:49:31.799 beleza? E aí amanhã eu volto aqui e a
+00:49:34.119 gente vai rodar esse projetinho aqui,
+00:49:36.040 mas eu tenho certeza que ficou bem
+00:49:37.480 organizado, então vai ficar bem legal.
+00:49:39.720 Show de bola. Então até mais. E aí, bom
+00:49:42.400 dia a todos. voltamos aqui rodando à
+00:49:44.680 noite aqui o processo de
+00:49:45.720 desenvolvimento. Eh, e o projeto total
+00:49:47.880 aqui, cara, 4:30 aqui, eh, dele de LLMs
+00:49:52.000 aí trabalhando, né? Então, né, o tempo
+00:49:55.440 total que todos os agentes aqui
+00:49:57.640 trabalharam, é, a gente tá marcando
+00:49:59.880 aqui. Obviamente que eu não marco o
+00:50:02.200 tempo que eu tô lendo uma documentação,
+00:50:04.319 tô lendo uma spec, eu tô analisando ali
+00:50:07.200 e eh as ponderações do agente, eh, com
+00:50:09.720 certeza isso e teria ficado uma duração
+00:50:11.960 muito maior para um projeto desse.
+00:50:13.839 Então, cara, quantidade de tokens aqui
+00:50:15.480 que rolou, quantidade de API requests
+00:50:17.599 aqui que teve no total, nossa, 807. E
+00:50:20.520 aqui eu tenho todas as métricas aqui, ó.
+00:50:22.720 Ontem quando a gente tinha olhado ali,
+00:50:24.319 eh, eu acho que o Enricher era o mais
+00:50:26.240 caro, o Coder aqui sozinho. Se fosse API
+00:50:29.079 Kis ali gastando com Opos, o Sonit ali
+00:50:31.480 teria dado $4 ali. O Evaluator foi um
+00:50:35.400 cara bem mais de boa ali na hora de
+00:50:37.359 validar. Ó, o desenvolvedor back end
+00:50:39.520 aqui foi o que mais gastou grana. Enfim,
+00:50:41.520 tem o next JS aqui e aí depois cada
+00:50:44.200 agente aqui também a gente tem o custo
+00:50:46.079 por agente. Então aqui eu eu obviamente
+00:50:49.079 eu analiso tudo isso aqui, vejo quais
+00:50:51.359 foram as falhas que aconteceram no
+00:50:53.480 projeto e aí eu vou cada vez melhorando
+00:50:55.880 isso aqui. Será que eu preciso de mais
+00:50:57.359 um agente, um cara para analisar certo
+00:50:59.839 tipo de erro, determinado tipo de erro,
+00:51:02.000 a parte de lint ali do código ou outro
+00:51:04.599 tipo de erro? Enfim, aqui o projeto ele
+00:51:07.040 vai começar a ser analisado agora eh
+00:51:09.200 depois que ele seguiu todo e esse
+00:51:11.040 processo aqui. Como era algo um pouco
+00:51:13.280 mais simples no começo, a gente sempre
+00:51:14.799 começa com algo simples, eh muito
+00:51:16.799 provavelmente esse projeto já vai rodar
+00:51:18.160 aqui eh tranquilamente de primeira. Aqui
+00:51:20.799 nas sprints, eh, tivemos um problema
+00:51:23.520 aqui na Sprint 5, eh, onde o validador
+00:51:26.599 aqui deu bomba numa parte da Sprint.
+00:51:28.520 Então, aqui eu também tem as métricas
+00:51:30.280 aqui, o que que aconteceu. Eh, e aqui,
+00:51:33.000 cara, realmente o evaluator aqui ele
+00:51:34.559 falhou numa sprint aqui. Mesmo assim
+00:51:36.440 aqui o o sistema ele segue o jogo. Eh,
+00:51:39.200 não vi aqui o que que de fato que que
+00:51:40.960 foi o problema desse sprint aqui. Nesse
+00:51:42.599 outro aqui eu vi era algo bem simples
+00:51:44.160 ali que o Evaluator deu bomba aqui pro
+00:51:46.359 pro Coder. E aí, como ele passou,
+00:51:48.760 ultrapassou o limite loops que eu tinha
+00:51:51.200 previamente configurado, é, ele parou e
+00:51:53.640 eu olhei aqui, cara, basicamente é algo
+00:51:56.119 de front end, não afeta nada a o
+00:51:58.440 projeto, mas obviamente eu tenho tudo
+00:52:00.280 registrado aqui, eu vou saber exatamente
+00:52:02.200 é qual feature aqui da sprint não foi
+00:52:04.839 cumprida, né? Então, uma dessas features
+00:52:06.839 aqui, em algum pedaço delas, isso aqui
+00:52:09.319 não foi cumprida. Eh, e aí agora eu vou
+00:52:11.680 tratar isso aqui, beleza? não vai ser
+00:52:13.760 nada demais pro nosso eh eh nossa
+00:52:16.200 estrutura aqui, o agent local. Então
+00:52:18.400 aqui eu já até coloquei aqui as
+00:52:20.200 variáveis de ambiente aqui, cara, no
+00:52:22.000 como é tudo local, então não tem chave
+00:52:24.119 de API, não tem nada aqui. Então no nas
+00:52:26.839 variáveis aqui do front end, coloquei
+00:52:28.839 aqui só o next public back end e nas
+00:52:30.760 variáveis do back end aqui é coloquei
+00:52:33.000 aqui o LM Studio que vai rodar local, o
+00:52:35.240 banco de dados e aqui o voltame aqui que
+00:52:38.040 é o o Obsidian, né, que é esse cara aqui
+00:52:40.599 que é o que a gente vai usar pra nossa
+00:52:42.440 LLM. local aqui, consultar ali as
+00:52:44.839 informações. Aqui é um sistema de CRM,
+00:52:47.799 enfim, eh não vem ao caso, que é e a de
+00:52:50.720 fato as informações do Vold. O
+00:52:52.480 importante é que o agente tem que
+00:52:53.559 funcionar e ele tem que consultar essa
+00:52:54.960 base de conhecimento, esse cérebro, esse
+00:52:56.799 cérebro aqui. Beleza? Então, eh, uma vez
+00:53:00.000 configurei aqui, a gente vai rodar o
+00:53:01.480 projeto pra gente entender se realmente
+00:53:02.960 ficou fiel, né? As documentações todas
+00:53:05.079 que foram geradas foram essas aqui. Aqui
+00:53:07.920 tem o spec progress, ó, que é quando os
+00:53:09.880 agentes estão desenvolvendo, eles vão e
+00:53:11.960 marcando o progresso aqui, ó, sprint
+00:53:13.920 concluída e aí, ó, trads, o que o que
+00:53:16.960 exatamente foi entregue. Então, eu tenho
+00:53:18.640 rastreabilidade de tudo que foi
+00:53:20.559 desenvolvido do projeto. Beleza? Então,
+00:53:22.920 cara, vamos rodar o front end aqui
+00:53:24.760 primeiro, depois a gente vai rodar o
+00:53:26.359 back end. Aqui esse sistema foi rodado
+00:53:28.839 com UV, então nesse caso aqui el uma
+00:53:31.720 arquitetura um pouco mais mais moderna,
+00:53:33.839 se eu não preciso e instalar os
+00:53:35.720 requirements para isso aqui, ele já vai
+00:53:37.799 funcionar legal. Então vamos dar uma
+00:53:39.680 olhada aqui agora, ó. Mas aqui, deixa eu
+00:53:42.040 ver se eu coloco a minha carinha aqui,
+00:53:44.720 ó. Cara, o sistema tá tá igual, né? A
+00:53:47.720 tela tá simples aqui, as métricas estão
+00:53:50.480 aqui. Aqui tem a parte, ó, o volt já tá
+00:53:53.079 conectado, funcionou, ó. 117 notas,
+00:53:56.200 backlinks.
+00:53:57.720 Beleza, não tem nenhuma conversa. E
+00:53:59.799 agora o que que a gente tem que fazer?
+00:54:01.240 Eu tenho que ir lá no LM Studio e eu
+00:54:04.079 tenho que conectar a o agente local.
+00:54:06.680 Então vamos abrir o LM Studio aqui e
+00:54:08.880 vamos dar um download no módel aqui.
+00:54:10.640 Vamos usar o Quen 3.5. Ele é um bom
+00:54:13.119 modelo. 27 bilhões. Ele vai, eu vou
+00:54:15.799 rodar ele denso.
+00:54:18.400 OK, cara. 28 GB. Tá beleza. Vamos lo
+00:54:21.440 nele aqui. E aí, teoria, quando eu
+00:54:23.640 iniciar ali o chat, ele já tem que
+00:54:25.640 capturar isso aqui e já conseguir
+00:54:28.280 conversar com ele. Deixar ele download
+00:54:30.000 aqui e aí vamos ver se vai rodar legal
+00:54:31.880 aqui, porque tá gravando vídeo e tá
+00:54:33.680 consumindo muita memória aqui da minha
+00:54:35.520 GPU ao mesmo tempo. Beleza, o modelo
+00:54:37.599 rodou aqui. Vamos dar uma olhada aqui.
+00:54:40.000 Vamos iniciar um novo chat. Ó, ele já
+00:54:42.079 pegou aqui, ó, Quen 327 bilion. Até o
+00:54:45.920 momento tudo OK. Então, vamos dar um olá
+00:54:48.119 aqui. Olá, tudo bem?
+00:54:52.200 Ó, o agente pensando aqui do lado, ó, do
+00:54:54.359 jeito que eu tinha que falar. Olá, tudo
+00:54:55.720 bem? Sim, como posso ajudar? Posso
+00:54:57.200 pesquisar suas notas do obsidian? Cara,
+00:54:59.799 legal, funcionou. Agora te mostrar aqui
+00:55:02.240 as métricas ali no volte ali. Eu vou
+00:55:04.640 deixar minha minha tela do lado de cá,
+00:55:06.119 ó. 31 tokens por segundo. 52. OK. 2500
+00:55:11.960 tokenzinho, 166 tokens out. Beleza?
+00:55:15.520 Aqui, ó, sessão, ó, 2.6 token que tá
+00:55:18.319 batendo, cara. Me parece que tá rodando
+00:55:21.359 legal. Vamos fazer uma busca aqui no
+00:55:23.240 Volt. Me fale sobre e a funcionalidade
+00:55:27.200 de campanha. Aqui eu já sei, é, é o que
+00:55:29.520 eu tô pesquisando. Obviamente o Volt é
+00:55:31.160 meu, mas a gente precisa testar o agente
+00:55:33.280 usando essas tools. Olha, foi super
+00:55:35.599 rápido, cara. Missões, metas e, cara,
+00:55:38.599 deu a resposta. A resposta tá correta
+00:55:40.280 aqui. New campaign trigger cupons. Cara,
+00:55:45.200 olha, ainda ainda fala quais são as
+00:55:46.760 notas que foram consultadas, ó, cara.
+00:55:49.280 Trouxe perfeitamente aqui a quantidade
+00:55:51.799 de tokens. 37 tokens por segundo. Não é
+00:55:54.440 muito rápido, mas aqui tem uma latência
+00:55:56.079 aqui porque tá passando pelo Link Graft
+00:55:57.880 também, não é direto do LM Studio. E eu
+00:56:00.200 ainda tô gravando esse vídeo aqui e em
+00:56:02.760 cima aqui da Bia GPU. Então, enfim,
+00:56:05.000 cara, funcionou de primeira. Você vê que
+00:56:07.039 o layout ele tá muito parecido ou igual.
+00:56:09.960 Vamos olhar aqui, cara. Tá igual o
+00:56:12.160 layout, né? Lout tá aí dentro. Tudo bem
+00:56:14.240 que não era um layout muito muito bem
+00:56:16.200 elaborado, mas você vê que tá idêntico.
+00:56:18.559 Ele realmente pegou o arquivo lá, o
+00:56:20.240 handoff do cloud design e jogou aqui
+00:56:22.400 dentro. E, cara, funcionou de primeira,
+00:56:25.119 entendeu? Isso aqui é o que a gente pode
+00:56:27.039 chamar de one shot, né? Que o cara fala
+00:56:29.680 lá que vai desenvol desenvolve tudo com
+00:56:31.440 um único comando de texto, com prompt e
+00:56:34.200 tal. Então assim, vamos falar que esse
+00:56:35.799 one shot aqui foi essas 4 horas aqui do
+00:56:39.119 projeto rodando com agentes, mais umas 3
+00:56:41.319 horas de eu validando. Então foi um one
+00:56:43.280 shot de 7 horas para poder fazer isso
+00:56:45.480 aqui rodar. E aí aqui agora o que que eu
+00:56:47.280 tenho que validar? Vou ter que validar
+00:56:48.599 se esses tokens aqui estão batendo e com
+00:56:51.440 LM Studio, porque obviamente é isso
+00:56:53.640 aqui, as informações vem dele. Então
+00:56:55.640 deixa eu até tentar. Me fale sobre, me
+00:56:58.520 fale a visão geral do desconto
+00:57:02.280 aplicativo. Vamos dar uma olhada lá no
+00:57:04.160 LM Studio, ó, porque aqui ele já roda,
+00:57:06.119 ó, os tokens gerados aqui, ó,
+00:57:08.079 processando o prompt e aqui ele vai
+00:57:10.079 gerar os tokens e tá enviando para lá e
+00:57:13.440 tá rodando muito rápido, muito mais
+00:57:15.280 rápido do que eu imaginava.
+00:57:17.920 Realmente, cara, tá sensacional. Aqui eu
+00:57:20.720 tenho que validar porque uma coisa que
+00:57:22.359 eu não lembro é se eu tinha colocado
+00:57:24.280 isso aqui para sumarizar todos os
+00:57:26.160 tokenzinos da sessão ou se era para
+00:57:28.520 rodar em tempo real aqui a cada
+00:57:30.559 mensagem. Não me lembro. É para falar a
+00:57:32.880 verdade. Aqui eu sei que era o da
+00:57:34.200 sessão. Uma outra coisa que ele não
+00:57:35.880 pegou também é esse contexto aqui. Muito
+00:57:37.920 provavelmente vou ter que corrigir, mas
+00:57:39.760 você vê que no geral o sistema tá
+00:57:41.319 funcionando legal. É, aqui tinha uma
+00:57:43.839 barra colapsável, funcionou beleza.
+00:57:45.799 Aparentemente o nosso sistema Harness
+00:57:47.599 aqui, banco de dados tá OK, porque ele
+00:57:50.000 vai rodar no SK Lite, eh, tá consultando
+00:57:52.920 as notas do Obsidian e tô integrado aqui
+00:57:55.240 direto com LM Studio. Cara, a tela ficou
+00:57:57.559 perfeita, o streaming tá funcionando, é,
+00:58:00.119 as notas aqui tá conectado com o Volt,
+00:58:02.079 tá tudo certo. Só apenas rodei ali o
+00:58:04.359 front end e, o back end. Esperava que ia
+00:58:06.359 ter um pouco mais de erro aqui, talvez
+00:58:08.440 algum detalhe aqui de erro da tela.
+00:58:10.359 Obviamente ficou mais simples aqui essa
+00:58:12.319 tela, mas cara, você vê que com o
+00:58:14.160 planejamento correto e o desenvolvimento
+00:58:16.480 correto, eu construí aqui um sistema é
+00:58:19.240 para um agente a que conecta diretamente
+00:58:21.240 no VVT usando a biblioteca do Leng
+00:58:23.680 Graph. Então agora eu posso começar a
+00:58:25.440 colocar outros tipos de tools, posso
+00:58:27.359 colocar MCPs, é de uma maneira muito
+00:58:29.920 mais fácil, porque eu já tenho a
+00:58:31.160 arquitetura pronta e e consegui fazer
+00:58:33.280 isso tudo aqui utilizando uma estratégia
+00:58:35.599 correta de desenvolvimento. Aí vou
+00:58:37.280 buscar os erros que aconteceram na
+00:58:40.119 sprint aqui, tanto um des com essa
+00:58:42.760 outra. Basta eu vou conseguir consultar
+00:58:44.760 ali exatamente o que que o o evaluator
+00:58:46.960 fala que em algum momento aqui vai ter
+00:58:49.000 aqui, ó, veredit fail. E aí ele vai
+00:58:51.160 mostrar aqui qual, qual foi a sprint
+00:58:53.119 aqui que deu feio, ó. No estado colapso
+00:58:55.640 você dá apenas a borda vertical. Enfim,
+00:58:57.559 eu tenho acesso a esse arquivo aqui e eu
+00:58:59.319 vou dar uma olhada. Obviamente isso
+00:59:00.880 aqui, o outro agente de codificação, ele
+00:59:03.079 efetivamente resolveu esse problema. Eh,
+00:59:05.559 mas eu vou ter que achar aqui dessas
+00:59:06.880 duas sprints qual foi uma dessas
+00:59:08.720 features aqui. Aparentemente não foi uma
+00:59:10.960 feature que era determinante para rodar
+00:59:13.520 o projeto, mas isso tenho dois erros
+00:59:15.799 aqui que eu preciso resolver. E aí aqui
+00:59:17.960 depois eu posso consultar a estrutura, a
+00:59:20.039 spec que foi gerada, vai tá aqui todas
+00:59:22.559 as decisões aqui, banco de dados, toda a
+00:59:24.720 conversa que eu tive com a gente fica
+00:59:26.480 persistida aqui. Eu posso consultar,
+00:59:28.200 PRD, tá aqui, então vou conseguir
+00:59:30.400 consultar tudo isso aqui para mim poder
+00:59:32.520 melhorar aqui o meu processo. Então veja
+00:59:34.640 que, cara, quando você tem uma
+00:59:35.760 estratégia legal, eh, você realmente
+00:59:38.079 consegue, tá aqui, ó, agente local,
+00:59:40.599 vocês, quando você tem uma estratégia
+00:59:42.039 correta, você consegue realmente eh sair
+00:59:44.480 do outro lado de lá com uma facilidade
+00:59:46.720 maior. Eh, e aí aqui agora, cara, vou
+00:59:49.480 desenvolver mais features aqui em cima
+00:59:51.119 desse sistema. sistema que vai rodar
+00:59:52.839 100% local, não tô gastando R$ 1. Claro
+00:59:55.119 que tem que ter um hardware bom para
+00:59:56.720 rodar eh um LLM igual o Co 3.5 denso,
+00:59:59.880 mas para esse tipo de consulta aqui tem
+01:00:02.319 vários modelos menores ali que rodam com
+01:00:04.359 hardwares menores, eh, que conseguiria
+01:00:06.359 acessar aqui o Obsidian aqui
+01:00:08.240 tranquilamente, é, e me dar as respostas
+01:00:10.400 que eu preciso e eu não preciso pagar
+01:00:12.799 ali e chamadas de API ali e ou
+01:00:15.440 assinaturas e para ter esse tipo de
+01:00:18.000 funcionalidade aqui. Beleza? Então, com
+01:00:20.000 o direcionamento certo, com organização
+01:00:22.119 e você realmente se planejar para você
+01:00:24.000 construir seus produtos, você consegue
+01:00:26.079 ter resultados muito melhores, mesmo que
+01:00:28.079 demore muito mais tempo. Grande parte do
+01:00:30.240 tempo aqui eu gastei realmente
+01:00:31.559 planejando, obviamente que o
+01:00:33.400 desenvolvimento demorou ali pelo menos 2
+01:00:35.280 horas, mas eu gastei muito mais tempo
+01:00:37.280 que isso planejando antes de desenvolver
+01:00:40.000 a feature. E os agentes entregaram um
+01:00:41.520 sistema funcional, já utilizando o cloud
+01:00:43.839 design, que que realmente ajudou muito a
+01:00:45.680 entregar essa parte do frontend de forma
+01:00:47.760 perfeita, mas com calma e planejamento
+01:00:49.720 você também consegue. Esse sistema da
+01:00:51.359 Line Claw é um sistema que é liberado
+01:00:52.760 aqui na comunidade, os membros utilizam
+01:00:54.799 para poder fazer aí os desenvolvimentos
+01:00:56.520 das suas aplicações. É, mas tudo o que
+01:00:58.760 eu fiz aqui é possível fazer ali dentro
+01:01:01.119 do cloud Code, dentro do antigravity.
+01:01:03.559 Basta você conseguir se organizar, eh,
+01:01:05.920 colocar ali os agentes para trabalhar no
+01:01:07.920 momento certo, eh, e trabalhar alguns
+01:01:09.920 workflows ali de gerações, eh, de specs,
+01:01:12.440 de PRD. Então, tudo isso é possível e o
+01:01:14.640 ideal é que realmente você se organize,
+01:01:17.240 é que se você quiser realmente construir
+01:01:19.359 aplicações utilizando inteligência
+01:01:21.280 artificial. O link da comunidade vai est
+01:01:23.200 disponível na descrição desse vídeo. Se
+01:01:25.079 você quiser aprender mais sobre a e
+01:01:26.799 desenvolvimento de aplicações, é, você
+01:01:28.920 será muito bem-vindo. Venha compartilhar
+01:01:30.920 aí seu conhecimento com a gente e nós
+01:01:32.760 também vamos compartilhar com vocês,
+01:01:35.079 beleza? Um forte abraço a todos e até
+01:01:37.440 mais.
