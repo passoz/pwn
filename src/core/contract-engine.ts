@@ -51,8 +51,61 @@ export interface TaskContractV4 {
   };
 }
 
-export function createDefaultContractV4(taskId: string, workId: string, title: string, riskLevel: RiskLevel = 'L1'): TaskContractV4 {
+/**
+ * Create a default contract with risk-appropriate defaults.
+ *
+ * The contract is now less generic than v0.1.0:
+ * - Behavioral scenarios derive from the task title
+ * - scope_contract.write_allow targets only the relevant directories
+ * - architecture invariants are risk-level dependent
+ * - budget limits scale with risk level
+ */
+export function createDefaultContractV4(
+  taskId: string,
+  workId: string,
+  title: string,
+  riskLevel: RiskLevel = 'L1',
+  options?: {
+    writeAllow?: string[];
+    writeDeny?: string[];
+    invariants?: string[];
+    scenarios?: TaskContractV4['behavioral_contract']['scenarios'];
+  },
+): TaskContractV4 {
   const isHighRisk = riskLevel === 'L3' || riskLevel === 'L4';
+
+  // Risk-scaled budget defaults
+  const budgetByRisk: Record<RiskLevel, { max_tokens: number; max_cost_usd: number; max_duration_minutes: number }> = {
+    L0: { max_tokens: 10_000, max_cost_usd: 0.10, max_duration_minutes: 5 },
+    L1: { max_tokens: 30_000, max_cost_usd: 0.30, max_duration_minutes: 10 },
+    L2: { max_tokens: 50_000, max_cost_usd: 0.50, max_duration_minutes: 15 },
+    L3: { max_tokens: 100_000, max_cost_usd: 2.00, max_duration_minutes: 30 },
+    L4: { max_tokens: 200_000, max_cost_usd: 5.00, max_duration_minutes: 60 },
+  };
+
+  const budget = budgetByRisk[riskLevel];
+
+  // Risk-appropriate defaults
+  const defaultScenarios: TaskContractV4['behavioral_contract']['scenarios'] = options?.scenarios ?? [
+    {
+      id: `SCENARIO-${taskId}-01`,
+      given: `Dado que a tarefa "${title}" foi atribuída com risco ${riskLevel}`,
+      when: `Quando o agente executa a tarefa ${taskId}`,
+      then: `Então o resultado deve ser funcional, sem regressões e dentro do escopo declarado`,
+    },
+    {
+      id: `SCENARIO-${taskId}-02`,
+      given: `Dado que existem invariantes arquiteturais definidos`,
+      when: `Quando o agente modifica código`,
+      then: `Então as invariantes permanecem intactas`,
+    },
+  ];
+
+  const defaultInvariants = options?.invariants ?? [
+    'Não quebrar retrocompatibilidade nem expor dados sensíveis',
+    'Manter cobertura de testes existente',
+    ...(isHighRisk ? ['Exigir revisão humana para mudanças estruturais'] : []),
+  ];
 
   return {
     contract_version: '4.0',
@@ -65,41 +118,168 @@ export function createDefaultContractV4(taskId: string, workId: string, title: s
     },
     validation_strategy: isHighRisk ? 'tdd-strict' : 'regression-guarded',
     behavioral_contract: {
-      scenarios: [
-        {
-          id: `SCENARIO-${taskId}-01`,
-          given: `Dado o contexto da task ${taskId}`,
-          when: 'Quando o código é executado',
-          then: 'Então o comportamento esperado é satisfeito sem regressões',
-        },
-      ],
+      scenarios: defaultScenarios,
     },
     change_contract: {
-      target_files: [`src/**`],
+      target_files: options?.writeAllow ?? ['src/**'],
       affected_components: ['core'],
     },
     architecture_contract: {
-      invariants: ['Não quebrar retrocompatibilidade nem expor dados sensíveis'],
+      invariants: defaultInvariants,
     },
     acceptance_contract: {
       commands: ['bun test'],
       required_evidence: ['evidence.json'],
     },
     scope_contract: {
-      write_allow: [`src/**`, `tests/**`],
-      write_deny: [`.git/**`, `package.json`],
+      write_allow: options?.writeAllow ?? ['src/**', 'tests/**'],
+      write_deny: options?.writeDeny ?? ['.git/**', 'package.json', '.env*'],
       out_of_scope: ['Mudanças de infraestrutura ou banco não especificadas'],
     },
     budget_contract: {
-      max_tokens: 50000,
-      max_cost_usd: 0.50,
-      max_duration_minutes: 10,
-      max_attempts: 3,
+      max_tokens: budget.max_tokens,
+      max_cost_usd: budget.max_cost_usd,
+      max_duration_minutes: budget.max_duration_minutes,
+      max_attempts: isHighRisk ? 2 : 3,
     },
     escalation_contract: {
       on_write_violation: 'block_and_escalate',
-      on_budget_exceeded: 'escalate_to_strong_agent',
-      on_attempt_failed: 'retry_with_strong',
+      on_budget_exceeded: riskLevel === 'L4' ? 'human_review' : 'escalate_to_strong_agent',
+      on_attempt_failed: riskLevel === 'L4' ? 'human_review' : 'retry_with_strong',
     },
   };
+}
+
+// ── BudgetController ───────────────────────────────────────────────
+
+export type BudgetViolationReason = 'max_tokens' | 'max_cost_usd' | 'max_duration_minutes' | 'max_attempts';
+
+export interface BudgetViolation {
+  reason: BudgetViolationReason;
+  limit: number;
+  actual: number;
+  message: string;
+}
+
+export interface BudgetUsage {
+  tokens: number;
+  costUsd: number;
+  durationMs: number;
+  attempts: number;
+}
+
+/**
+ * BudgetController — enforces budget limits at runtime.
+ *
+ * Tracks accumulated usage and blocks execution when any limit is exceeded.
+ * This transforms the declarative budget_contract into an executable constraint.
+ */
+export class BudgetController {
+  private contract: TaskContractV4;
+  private usage: BudgetUsage;
+  private startTime: number;
+
+  constructor(contract: TaskContractV4) {
+    this.contract = contract;
+    this.startTime = Date.now();
+    this.usage = { tokens: 0, costUsd: 0, durationMs: 0, attempts: 0 };
+  }
+
+  /** Record tokens consumed by a single LLM call. */
+  recordTokens(count: number): void {
+    this.usage.tokens += count;
+  }
+
+  /** Record cost incurred by a single LLM call. */
+  recordCost(usd: number): void {
+    this.usage.costUsd += usd;
+  }
+
+  /** Record that an attempt was made. */
+  recordAttempt(): void {
+    this.usage.attempts += 1;
+    this.usage.durationMs = Date.now() - this.startTime;
+  }
+
+  /** Get current usage snapshot. */
+  getUsage(): Readonly<BudgetUsage> {
+    return { ...this.usage, durationMs: Date.now() - this.startTime };
+  }
+
+  /**
+   * Check if any budget limit has been exceeded.
+   * Returns null if OK, or the first violation found.
+   */
+  checkBudget(): BudgetViolation | null {
+    const b = this.contract.budget_contract;
+    const u = this.getUsage();
+
+    if (b.max_attempts !== undefined && u.attempts >= b.max_attempts) {
+      return {
+        reason: 'max_attempts',
+        limit: b.max_attempts,
+        actual: u.attempts,
+        message: `Limite de tentativas excedido: ${u.attempts}/${b.max_attempts}`,
+      };
+    }
+
+    if (b.max_duration_minutes !== undefined) {
+      const durationMinutes = u.durationMs / 60_000;
+      if (durationMinutes >= b.max_duration_minutes) {
+        return {
+          reason: 'max_duration_minutes',
+          limit: b.max_duration_minutes,
+          actual: Math.round(durationMinutes * 10) / 10,
+          message: `Limite de duração excedido: ${durationMinutes.toFixed(1)}min/${b.max_duration_minutes}min`,
+        };
+      }
+    }
+
+    if (b.max_tokens !== undefined && u.tokens >= b.max_tokens) {
+      return {
+        reason: 'max_tokens',
+        limit: b.max_tokens,
+        actual: u.tokens,
+        message: `Limite de tokens excedido: ${u.tokens}/${b.max_tokens}`,
+      };
+    }
+
+    if (b.max_cost_usd !== undefined && u.costUsd >= b.max_cost_usd) {
+      return {
+        reason: 'max_cost_usd',
+        limit: b.max_cost_usd,
+        actual: u.costUsd,
+        message: `Limite de custo excedido: $${u.costUsd.toFixed(4)}/$${b.max_cost_usd}`,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Should the execution be interrupted?
+   * Returns true if any budget limit is exceeded.
+   */
+  shouldInterrupt(): boolean {
+    return this.checkBudget() !== null;
+  }
+
+  /** Load persisted usage from a JSON file. */
+  static loadUsage(filePath: string): BudgetUsage | null {
+    if (!fs.existsSync(filePath)) return null;
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  /** Persist current usage to a JSON file. */
+  saveUsage(filePath: string): void {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(this.getUsage(), null, 2), 'utf8');
+  }
 }

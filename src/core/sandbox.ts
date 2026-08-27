@@ -2,6 +2,13 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+export class SandboxError extends Error {
+  constructor(message: string, public readonly runId: string, public readonly reason: string) {
+    super(message);
+    this.name = 'SandboxError';
+  }
+}
+
 export interface SandboxSession {
   runId: string;
   worktreePath: string;
@@ -33,13 +40,15 @@ export function createGitWorktreeSandbox(runId: string, rootDir: string = proces
   });
 
   if (proc.status !== 0) {
-    // Fallback: return direct rootDir if worktree creation fails (e.g. not in git repo or detached HEAD)
-    return {
+    const stderr = proc.stderr || '';
+    const reason = proc.error?.message || stderr || `git worktree add exited with code ${proc.status}`;
+    throw new SandboxError(
+      `[SANDBOX ABORT] Falha ao criar worktree para run ${sanitizeId}. ` +
+      `Execução bloqueada — agente NÃO será executado no rootDir. ` +
+      `Motivo: ${reason}`,
       runId,
-      worktreePath: rootDir,
-      branchName: 'main',
-      created: false,
-    };
+      reason,
+    );
   }
 
   return {
@@ -51,7 +60,7 @@ export function createGitWorktreeSandbox(runId: string, rootDir: string = proces
 }
 
 export function cleanupGitWorktreeSandbox(session: SandboxSession, rootDir: string = process.cwd()): void {
-  if (!session.created || session.worktreePath === rootDir) {
+  if (!session.created) {
     return;
   }
 

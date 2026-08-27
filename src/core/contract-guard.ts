@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { minimatch } from './glob-utils.js';
 
 export interface FileDiffCheckResult {
   allowed: boolean;
@@ -13,30 +13,12 @@ export interface ContractDiffCheckReport {
   violations: FileDiffCheckResult[];
 }
 
-function matchGlobPattern(filePath: string, pattern: string): boolean {
-  // Normalize paths with forward slashes
-  const normalizedFile = filePath.replace(/\\/g, '/');
-  const normalizedPattern = pattern.replace(/\\/g, '/');
-
-  if (normalizedPattern.endsWith('**')) {
-    const prefix = normalizedPattern.slice(0, -2);
-    return normalizedFile.startsWith(prefix);
-  }
-  
-  if (normalizedPattern.endsWith('*')) {
-    const prefix = normalizedPattern.slice(0, -1);
-    return normalizedFile.startsWith(prefix);
-  }
-
-  return normalizedFile === normalizedPattern || normalizedFile.startsWith(normalizedPattern);
-}
-
 export function checkFileAgainstScope(filePath: string, writeAllow: string[], writeDeny: string[]): FileDiffCheckResult {
-  const normalizedPath = filePath.replace(/^\.\//, '');
+  const normalizedPath = filePath.replace(/^\.\/+/, '');
 
   // 1. Check write_deny first (deny list always overrides allow)
   for (const denyPattern of writeDeny) {
-    if (matchGlobPattern(normalizedPath, denyPattern)) {
+    if (minimatch(normalizedPath, denyPattern)) {
       return {
         allowed: false,
         violationType: 'write_deny',
@@ -49,7 +31,7 @@ export function checkFileAgainstScope(filePath: string, writeAllow: string[], wr
   // 2. Check write_allow
   let allowedByAllowlist = false;
   for (const allowPattern of writeAllow) {
-    if (matchGlobPattern(normalizedPath, allowPattern)) {
+    if (minimatch(normalizedPath, allowPattern)) {
       allowedByAllowlist = true;
       break;
     }
