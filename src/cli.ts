@@ -4,6 +4,7 @@ import { handleValidateCommand } from './commands/validate.js';
 import { handleSkillCommand } from './commands/skill.js';
 import { handlePackCommand } from './commands/pack.js';
 import { handleQueueCommand } from './commands/queue.js';
+import { handleTargetCommand } from './commands/target.js';
 
 const VERSION = '0.1.0';
 
@@ -19,6 +20,8 @@ COMANDOS DISPONÍVEIS:
                       (specify, contract, plan, run, audit, status)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
+  target <subcomando> Gerencia runtimes e materialização de targets
+                      (list, materialize)
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   validate [path]     Valida documentos normativos JSON contra JSON Schemas
@@ -80,6 +83,10 @@ export function main(): void {
 
     case 'queue':
       handleQueueCommand(subcommand, commandArgs);
+      break;
+
+    case 'target':
+      handleTargetCommand(subcommand, commandArgs);
       break;
 
     default:

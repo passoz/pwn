@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 5,
+    "completed": 6,
     "in_progress": 1,
-    "pending": 2,
+    "pending": 1,
     "blocked": 0,
-    "test_coverage_percent": 62
+    "test_coverage_percent": 75
   },
   "tasks": [
     {
@@ -141,7 +141,7 @@
       "id": "T-006",
       "title": "Marco 6 — OpenCode, omp e sub-agents (Fase 6)",
       "description": "Criar adapters headless para OpenCode e omp com capability matrix, preservando contratos sem perda silenciosa",
-      "status": "in_progress",
+      "status": "done",
       "priority": "medium",
       "agent": "executor",
       "depends_on": ["T-005"],
@@ -159,7 +159,7 @@
       "id": "T-007",
       "title": "Marco 7 — Editor visual de pipelines (Fase 7)",
       "description": "Construir pwn-gui como utilitário HTML/CSS/JS standalone em file:// para edição visual e validação de pipelines YAML/JSON",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "medium",
       "agent": "executor",
       "depends_on": ["T-006"],
