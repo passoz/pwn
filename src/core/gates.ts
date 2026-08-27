@@ -72,7 +72,6 @@ export function evaluateGateDiscReq(workId: string, workDir: string): GateOutput
       const reqList = reqData.requirements || reqData.user_stories || [];
       covered = reqList.length;
 
-      // Check if all requirements have non-empty acceptance criteria
       reqList.forEach((req: any, index: number) => {
         if (!req.acceptance_criteria || req.acceptance_criteria.length === 0) {
           findings.push({
@@ -252,6 +251,147 @@ export function evaluateGatePrdSpec(workId: string, workDir: string): GateOutput
     gate: 'GATE-PRD-SPEC',
     work_id: workId,
     input_versions: { prd: 1, technical_decisions: 1, spec: 1 },
+    result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
+    summary: {
+      covered,
+      gaps: findings.filter(f => f.type === 'coverage_gap').length,
+      conflicts: findings.filter(f => f.type === 'conflict').length,
+      ambiguities: findings.filter(f => f.type === 'ambiguity').length,
+    },
+    findings,
+  };
+}
+
+export function evaluateGateSpecPlan(workId: string, workDir: string): GateOutput {
+  const specPath = path.join(workDir, 'spec.json');
+  const planPath = path.join(workDir, 'plan.json');
+
+  const findings: GateFinding[] = [];
+  let covered = 0;
+
+  if (!fs.existsSync(planPath)) {
+    findings.push({
+      id: 'FIND-PLAN-01',
+      severity: 'critical',
+      type: 'coverage_gap',
+      source_refs: ['plan.json'],
+      target_refs: [],
+      description: 'Artefato plan.json ausente no Work',
+      required_resolution: 'Decompor a spec técnica em plano executável de tarefas',
+      resolution_owner: 'planner',
+      status: 'open',
+    });
+  } else {
+    try {
+      const planData = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+      const tasks = planData.tasks || [];
+      covered = tasks.length;
+
+      if (covered === 0) {
+        findings.push({
+          id: 'FIND-PLAN-02',
+          severity: 'high',
+          type: 'coverage_gap',
+          source_refs: ['plan.json'],
+          target_refs: [],
+          description: 'Plano não contém tarefas atomizadas declaradas',
+          required_resolution: 'Adicionar tarefas ao plan.json',
+          resolution_owner: 'planner',
+          status: 'open',
+        });
+      }
+    } catch (e: any) {
+      findings.push({
+        id: 'FIND-PLAN-ERR',
+        severity: 'critical',
+        type: 'ambiguity',
+        source_refs: ['plan.json'],
+        target_refs: [],
+        description: `Erro ao ler plan.json: ${e.message}`,
+        required_resolution: 'Corrigir formato do plan.json',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+  }
+
+  const hasCriticalOrHigh = findings.some(f => (f.severity === 'critical' || f.severity === 'high') && f.status === 'open');
+
+  return {
+    gate: 'GATE-SPEC-PLAN',
+    work_id: workId,
+    input_versions: { spec: 1, work_governance: 1, plan: 1 },
+    result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
+    summary: {
+      covered,
+      gaps: findings.filter(f => f.type === 'coverage_gap').length,
+      conflicts: findings.filter(f => f.type === 'conflict').length,
+      ambiguities: findings.filter(f => f.type === 'ambiguity').length,
+    },
+    findings,
+  };
+}
+
+export function evaluateGatePlanContract(workId: string, workDir: string): GateOutput {
+  const planPath = path.join(workDir, 'plan.json');
+
+  const findings: GateFinding[] = [];
+  let covered = 0;
+
+  if (!fs.existsSync(planPath)) {
+    findings.push({
+      id: 'FIND-CTR-01',
+      severity: 'critical',
+      type: 'coverage_gap',
+      source_refs: ['plan.json'],
+      target_refs: [],
+      description: 'Plano ausente para congelar contratos de tarefas',
+      required_resolution: 'Criar plan.json antes de gerar contratos',
+      resolution_owner: 'planner',
+      status: 'open',
+    });
+  } else {
+    try {
+      const planData = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+      const tasks = planData.tasks || [];
+      covered = tasks.length;
+
+      tasks.forEach((t: any) => {
+        if (!t.contract_id) {
+          findings.push({
+            id: `FIND-CTR-TASK-${t.id}`,
+            severity: 'high',
+            type: 'coverage_gap',
+            source_refs: [t.id],
+            target_refs: [],
+            description: `Task ${t.id} não vincula contract_id congelado`,
+            required_resolution: 'Atribuir contract_id à task',
+            resolution_owner: 'architect',
+            status: 'open',
+          });
+        }
+      });
+    } catch (e: any) {
+      findings.push({
+        id: 'FIND-CTR-ERR',
+        severity: 'critical',
+        type: 'ambiguity',
+        source_refs: ['plan.json'],
+        target_refs: [],
+        description: `Erro ao ler plan.json: ${e.message}`,
+        required_resolution: 'Corrigir plan.json',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+  }
+
+  const hasCriticalOrHigh = findings.some(f => (f.severity === 'critical' || f.severity === 'high') && f.status === 'open');
+
+  return {
+    gate: 'GATE-PLAN-CONTRACT',
+    work_id: workId,
+    input_versions: { plan: 1, task_contracts: 1 },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,

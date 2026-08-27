@@ -45,8 +45,8 @@ test('pwn pack list exibe os packs instalados', () => {
   assert.match(result.stdout, /software-engineering/);
 });
 
-test('pwn task capsule simula a geração de cápsula de contexto', () => {
+test('pwn task capsule exibe a cápsula de contexto formatada', () => {
   const result = runPwn(['task', 'capsule']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Context capsule gerado com sucesso/);
+  assert.match(result.stdout, /PWN TASK CONTEXT CAPSULE/);
 });

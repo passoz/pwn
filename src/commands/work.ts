@@ -1,6 +1,6 @@
 import { runPackScript } from '../core/runner.js';
 import { initWorkDirectory, getWorkArtifactsPaths } from '../core/work-artifacts.js';
-import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec } from '../core/gates.js';
+import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract } from '../core/gates.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -33,8 +33,12 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           output = evaluateGateReqPrd(workId, paths.workDir);
         } else if (gateId === 'GATE-PRD-SPEC') {
           output = evaluateGatePrdSpec(workId, paths.workDir);
+        } else if (gateId === 'GATE-SPEC-PLAN') {
+          output = evaluateGateSpecPlan(workId, paths.workDir);
+        } else if (gateId === 'GATE-PLAN-CONTRACT') {
+          output = evaluateGatePlanContract(workId, paths.workDir);
         } else {
-          console.error(`Gate desconhecido: ${gateId}. Opções: GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC`);
+          console.error(`Gate desconhecido: ${gateId}. Opções: GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC, GATE-SPEC-PLAN, GATE-PLAN-CONTRACT`);
           process.exit(1);
         }
 

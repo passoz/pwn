@@ -1,4 +1,6 @@
 import { runPackScript } from '../core/runner.js';
+import { createDefaultContractV4 } from '../core/contract-engine.js';
+import { generateContextCapsule } from '../core/capsule.ts';
 
 export function handleTaskCommand(subcommand: string, args: string[]): void {
   switch (subcommand) {
@@ -13,10 +15,15 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
       break;
 
     case 'capsule':
-      console.log('=== [pwn task capsule] Gerando Context Capsule mínimo da task ===');
       {
-        console.log('Context capsule gerado com sucesso para a task.');
-        console.log('Limites de escrita, comandos de validação e orçamento congelados.');
+        const taskId = args[0] || 'T-001';
+        const workId = args[1] || '0001';
+        console.log(`=== [pwn task capsule] Gerando Context Capsule mínimo para ${taskId} ===\n`);
+
+        const defaultContract = createDefaultContractV4(taskId, workId, `Implementação da Task ${taskId}`, 'L1');
+        const capsuleText = generateContextCapsule({ task: defaultContract });
+
+        console.log(capsuleText);
         process.exit(0);
       }
       break;

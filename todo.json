@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 3,
+    "completed": 4,
     "in_progress": 1,
-    "pending": 4,
+    "pending": 3,
     "blocked": 0,
-    "test_coverage_percent": 37
+    "test_coverage_percent": 50
   },
   "tasks": [
     {
@@ -105,7 +105,7 @@
       "id": "T-004",
       "title": "Marco 4 — Contract Engine v4 (Fase 4)",
       "description": "Implementar Contract Engine com 7 dimensões, níveis L0-L4, estratégias de validação (tdd-strict, contract-first, etc.) e enforcement de write allowlist",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "agent": "strong",
       "depends_on": ["T-003"],
@@ -123,7 +123,7 @@
       "id": "T-005",
       "title": "Marco 5 — Executor econômico e escalação (Fase 5)",
       "description": "Implementar roteamento declarativo por papel (cheap/strong/review/plan), git worktrees por run, budget de tokens/custo e fila assíncrona queue/review/",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "high",
       "agent": "executor",
       "depends_on": ["T-004"],
