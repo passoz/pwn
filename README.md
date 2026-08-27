@@ -61,12 +61,14 @@ bun bin/pwn.js --version
 # Validação de Schemas JSON Normativos
 bun bin/pwn.js validate [caminho]
 
-# Gestão de Works e Portões (Gates)
-bun bin/pwn.js work init 0001
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0001
+# Gestão de Works e Portões (Gates) — Auto-incremento inteligente de Work IDs
+bun bin/pwn.js work init                       # Auto-atribui o próximo Work ID (ex: 0001, 0002)
+bun bin/pwn.js work init 0001                  # Inicializa um Work ID específico
+bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
 
 # Cápsula de Contexto de Tarefas (Contrato v4)
+bun bin/pwn.js task capsule T-001              # Usa o último Work ID ativo automaticamente
 bun bin/pwn.js task capsule T-001 0001
 
 # Fila de Revisão Humana Assíncrona (AFK)
@@ -85,6 +87,18 @@ bun bin/pwn.js metrics optimize
 # Skills e Packs do Harness
 bun bin/pwn.js skill list
 bun bin/pwn.js pack list
+```
+
+## ⚡ Scripts Utilitários de Pré-Implementação
+
+O Piwerness disponibiliza scripts autônomos para acelerar o ciclo de pré-implementação e aprovação nos 5 portões determinísticos até o congelamento da cápsula de contexto V4:
+
+```bash
+# Greenfield (sem spec legada): Cria e aprova a esteira até a pré-implementação a partir de uma ideia
+./scripts/prepare-greenfield-work.sh "Novo Módulo de Pagamentos PIX"
+
+# Brownfield (com spec legada): Importa a spec.md legada, vincula requisitos e aprova os portões
+./scripts/prepare-legacy-reimplementation.sh /caminho/para/sua-spec.md
 ```
 
 ---

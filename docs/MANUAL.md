@@ -272,14 +272,14 @@ Guarda aprendizados e convenções descobertas durante execuções locais em `.p
 ### `pwn validate [path]`
 Valida documentos normativos JSON contra os JSON Schemas formais.
 
-### `pwn work init <work-id>`
-Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id>/`.
+### `pwn work init [work-id]`
+Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id>/`. Se `<work-id>` for omitido, o Piwerness calcula e atribui **automaticamente o próximo ID sequencial** (ex: `0001`, `0002`, `0003`...).
 
-### `pwn work gate <gate-id> --work <work-id>`
-Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`).
+### `pwn work gate <gate-id> [--work <work-id>]`
+Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`). Se `--work` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
 ### `pwn task capsule <task-id> [work-id]`
-Exibe a cápsula de contexto formatada com limites de escrita, cenários e orçamento da tarefa.
+Exibe a cápsula de contexto formatada com limites de escrita, cenários e orçamento da tarefa. Se `work-id` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
 ### `pwn queue [list|approve|reject] [run-id]`
 Gerencia a fila de revisão humana assíncrona.
@@ -300,37 +300,45 @@ Gerencia packs de domínio instalados (`software-engineering`).
 
 ## 14. Tutorial Passo a Passo: Criando um Work Greenfield
 
-Abaixo está o fluxo completo para iniciar uma nova funcionalidade no Piwerness:
+Abaixo está o fluxo para iniciar uma nova funcionalidade no Piwerness, que pode ser feito de forma automática via script ou passo a passo via CLI:
 
-### Passo 1: Inicializar a Estrutura do Work
+### Opção A: Modo Automatizado (Via Script Greenfield)
+Execute o script informando apenas o título ou ideia da funcionalidade (o Work ID é auto-incrementado):
 ```bash
-bun bin/pwn.js work init 0002
+./scripts/prepare-greenfield-work.sh "Sistema de Notificações em Tempo Real"
 ```
-Isso criará a pasta `.piwerness/work/0002/` com os arquivos iniciais:
+
+### Opção B: Modo Passo a Passo via CLI
+
+#### Passo 1: Inicializar a Estrutura do Work (Auto-Incrementado)
+```bash
+bun bin/pwn.js work init
+```
+O comando criará automaticamente a pasta sequencial (ex: `.piwerness/work/0002/`) com os arquivos iniciais:
 - `discovery.json`
 - `requirements.json`
 - `prd.json`
 - `traceability-matrix.json`
 
-### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
-Edite `.piwerness/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão:
+#### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
+Edite `.piwerness/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão (se omitido, `--work` usa o último Work ID):
 ```bash
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0002
+bun bin/pwn.js work gate GATE-DISC-REQ
 ```
 
-### Passo 3: Consolidar o PRD e Rodar o Segundo Gate
+#### Passo 3: Consolidar o PRD e Rodar o Segundo Gate
 Vincule os requisitos aceitos em `.piwerness/work/0002/prd.json` e execute:
 ```bash
-bun bin/pwn.js work gate GATE-REQ-PRD --work 0002
+bun bin/pwn.js work gate GATE-REQ-PRD
 ```
 
-### Passo 4: Congelar Contratos e Gerar a Cápsula de Tarefa
+#### Passo 4: Congelar Contratos e Gerar a Cápsula de Tarefa
 Após ter a especificação e o plano aprovados nos portões `GATE-PRD-SPEC` e `GATE-SPEC-PLAN`, gere a cápsula de execução da primeira tarefa:
 ```bash
-bun bin/pwn.js task capsule T-001 0002
+bun bin/pwn.js task capsule T-001
 ```
 
-### Passo 5: Materializar Runtimes e Executar
+#### Passo 5: Materializar Runtimes e Executar
 Materialize a configuração do seu runtime de preferência (ex: OpenCode ou Pi) e inicie a execução isolada em sandbox:
 ```bash
 bun bin/pwn.js target materialize --target opencode
