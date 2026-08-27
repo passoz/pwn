@@ -497,6 +497,15 @@
     const AVAILABLE_ROLES = ["cheap", "strong", "plan", "review"];
     const AVAILABLE_PROVIDERS = ["anthropic", "openai", "ollama", "openrouter", "vllm", "custom"];
 
+    const PROVIDER_DEFAULTS = {
+      anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY', defaultModel: 'claude-3-7-sonnet' },
+      openai: { baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY', defaultModel: 'gpt-4o' },
+      ollama: { baseUrl: 'http://localhost:11434/v1', apiKeyEnv: 'OLLAMA_API_KEY', defaultModel: 'qwen3.5:27b' },
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: 'OPENROUTER_API_KEY', defaultModel: 'anthropic/claude-3.7-sonnet' },
+      vllm: { baseUrl: 'http://localhost:8000/v1', apiKeyEnv: 'VLLM_API_KEY', defaultModel: 'qwen2.5-coder-32b' },
+      custom: { baseUrl: 'http://localhost:8080/v1', apiKeyEnv: 'CUSTOM_API_KEY', defaultModel: 'custom-model' }
+    };
+
     const textarea = document.getElementById('json-input');
     const stagesContainer = document.getElementById('stages-container');
     const modelsGrid = document.getElementById('models-grid');
@@ -613,7 +622,13 @@
       modelsGrid.querySelectorAll('.model-provider-select').forEach(select => {
         select.addEventListener('change', (e) => {
           const role = e.target.dataset.role;
-          state.default_models[role].provider = e.target.value;
+          const newProvider = e.target.value;
+          state.default_models[role].provider = newProvider;
+          
+          if (PROVIDER_DEFAULTS[newProvider]) {
+            state.default_models[role].apiKeyEnv = PROVIDER_DEFAULTS[newProvider].apiKeyEnv;
+            state.default_models[role].baseUrl = PROVIDER_DEFAULTS[newProvider].baseUrl;
+          }
           updateJsonTextarea();
         });
       });
