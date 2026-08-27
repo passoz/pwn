@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Piwerness — Visual Pipeline Editor (pwn-gui)</title>
+  <title>Piwerness — Visual Pipeline & Model Editor (pwn-gui)</title>
   <style>
     :root {
       --bg-dark: #0B0F19;
@@ -14,6 +14,7 @@
       --accent-violet: #8B5CF6;
       --accent-green: #10B981;
       --accent-red: #EF4444;
+      --accent-amber: #F59E0B;
       --text-main: #F3F4F6;
       --text-muted: #9CA3AF;
       --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
@@ -119,11 +120,28 @@
       box-shadow: 0 0 14px rgba(6, 182, 212, 0.5);
     }
 
+    .btn-success {
+      background: linear-gradient(135deg, var(--accent-green), #059669);
+      border: none;
+      color: white;
+    }
+
+    .btn-danger {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: var(--accent-red);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      background-color: var(--accent-red);
+      color: white;
+    }
+
     /* Main Grid */
     main {
       flex: 1;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 420px 1fr;
       gap: 1px;
       background-color: var(--border-color);
       overflow: hidden;
@@ -210,22 +228,102 @@
       color: var(--accent-red);
     }
 
-    /* Visual Graph Pane */
-    .graph-view {
+    /* Interactive Graph & Config Pane */
+    .view-content {
       flex: 1;
       padding: 24px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 24px;
       background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.05), transparent 70%);
     }
 
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    /* Model Routing Form Card */
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .model-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .model-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--accent-cyan);
+    }
+
+    .role-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .form-control {
+      background-color: #0A0D14;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-control:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* Editable Stage Cards */
     .stage-card {
       background-color: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
       position: relative;
       transition: all 0.2s ease;
     }
@@ -235,55 +333,27 @@
       box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
     }
 
-    .stage-header {
+    .stage-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 140px 140px;
+      gap: 10px;
+    }
+
+    .stage-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .stage-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .stage-id {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--accent-cyan);
-      background: rgba(6, 182, 212, 0.1);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .gate-badge {
-      font-size: 11px;
-      font-family: var(--font-mono);
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: rgba(139, 92, 246, 0.15);
-      color: var(--accent-violet);
-      border: 1px solid rgba(139, 92, 246, 0.3);
-    }
-
-    .stage-details {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.4;
+      gap: 6px;
+      justify-content: flex-end;
     }
 
     .stage-connect-arrow {
       text-align: center;
-      color: var(--border-color);
+      color: var(--text-muted);
       font-size: 18px;
-      margin: -6px 0;
+      margin: -12px 0;
+      user-select: none;
     }
 
-    /* Modal / Utility */
     .hidden { display: none !important; }
   </style>
 </head>
@@ -292,21 +362,22 @@
   <header>
     <div class="brand">
       <div class="brand-logo">P</div>
-      <div class="brand-title">Piwerness Pipeline Editor</div>
-      <span class="brand-badge">pwn-gui v1.0</span>
+      <div class="brand-title">Piwerness Pipeline & Model Editor</div>
+      <span class="brand-badge">pwn-gui v2.0 (Edição Interativa)</span>
     </div>
     <div class="header-actions">
       <button class="btn" id="btn-load-example">⚡ Carregar Exemplo</button>
-      <button class="btn" id="btn-validate">✓ Validar Schema</button>
-      <button class="btn btn-primary" id="btn-export">↓ Exportar JSON</button>
+      <button class="btn" id="btn-add-stage">➕ Adicionar Estágio</button>
+      <button class="btn btn-primary" id="btn-export-pipeline">↓ Exportar pipeline.json</button>
+      <button class="btn btn-success" id="btn-export-routing">↓ Exportar routing.json</button>
     </div>
   </header>
 
   <main>
-    <!-- Pane 1: Editor JSON -->
+    <!-- Pane 1: Editor JSON Interativo em Tempo Real -->
     <div class="panel">
       <div class="panel-header">
-        <span>Editor de Especificação (JSON)</span>
+        <span>Editor de Código (JSON)</span>
         <div class="status-indicator">
           <div class="dot" id="status-dot"></div>
           <span id="status-text">Sintaxe OK</span>
@@ -320,14 +391,36 @@
       </div>
     </div>
 
-    <!-- Pane 2: Grafo de Estágios -->
+    <!-- Pane 2: Editor Gráfico de Estágios e Modelos Roteados -->
     <div class="panel">
       <div class="panel-header">
-        <span>Visualização do Grafo de Execução</span>
+        <span>Edição Visual & Roteamento de Modelos</span>
         <span style="font-family: var(--font-mono); font-size: 11px;" id="stage-count">0 Estágios</span>
       </div>
-      <div class="graph-view" id="graph-container">
-        <!-- Renderizado dinamicamente pelo JavaScript -->
+      <div class="view-content">
+
+        <!-- Seção 1: Configuração de Modelos Padrão (Routing Table) -->
+        <section>
+          <div class="section-title">
+            <span>⚙️ Roteamento de Modelos Padrão (Routing Table)</span>
+            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">Configuração por Papéis</span>
+          </div>
+          <div class="models-grid" id="models-grid">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+        </section>
+
+        <!-- Seção 2: Estágios Sequenciais da Pipeline -->
+        <section>
+          <div class="section-title">
+            <span>🔄 Estágios e Portões da Pipeline</span>
+            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" id="btn-add-stage-inline">➕ Novo Estágio</button>
+          </div>
+          <div id="stages-container" style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+        </section>
+
       </div>
     </div>
   </main>
@@ -337,7 +430,13 @@
       "$schema": "../../schemas/pipeline.schema.json",
       "pipeline_version": "4.0",
       "name": "Pipeline Autônoma Piwerness Standard",
-      "description": "Fluxo nativo de governança contratual e TDD para Piwerness",
+      "description": "Fluxo nativo de governança contratual, TDD e roteamento de modelos por papéis",
+      "default_models": {
+        "cheap": { "defaultModel": "qwen3.5:27b", "maxTokens": 4000, "temperature": 0.2 },
+        "strong": { "defaultModel": "claude-3-7-sonnet", "maxTokens": 16000, "temperature": 0.1 },
+        "plan": { "defaultModel": "claude-3-7-sonnet", "maxTokens": 12000, "temperature": 0.2 },
+        "review": { "defaultModel": "claude-3-5-haiku", "maxTokens": 8000, "temperature": 0.1 }
+      },
       "stages": [
         {
           "id": "STG-01",
@@ -384,90 +483,281 @@
       ]
     };
 
+    const AVAILABLE_GATES = [
+      "",
+      "GATE-DISC-REQ",
+      "GATE-REQ-PRD",
+      "GATE-PRD-SPEC",
+      "GATE-SPEC-PLAN",
+      "GATE-PLAN-CONTRACT",
+      "GATE-AUDIT"
+    ];
+
+    const AVAILABLE_ROLES = ["cheap", "strong", "plan", "review"];
+
     const textarea = document.getElementById('json-input');
-    const graphContainer = document.getElementById('graph-container');
+    const stagesContainer = document.getElementById('stages-container');
+    const modelsGrid = document.getElementById('models-grid');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
     const validationBar = document.getElementById('validation-bar');
     const stageCount = document.getElementById('stage-count');
 
-    // Preencher editor inicial
-    textarea.value = JSON.stringify(DEFAULT_PIPELINE, null, 2);
+    let isUpdatingFromForm = false;
+    let state = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
 
-    function validateAndRender() {
-      const raw = textarea.value;
-      let parsed;
+    textarea.value = JSON.stringify(state, null, 2);
 
-      try {
-        parsed = JSON.parse(raw);
-        statusDot.className = 'dot';
-        statusText.innerText = 'Sintaxe OK';
-        validationBar.className = 'validation-bar';
-        validationBar.innerText = '✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json';
-      } catch (err) {
-        statusDot.className = 'dot invalid';
-        statusText.innerText = 'Erro de Sintaxe';
-        validationBar.className = 'validation-bar error';
-        validationBar.innerText = '✗ Erro JSON: ' + err.message;
-        return;
+    function updateJsonTextarea() {
+      isUpdatingFromForm = true;
+      textarea.value = JSON.stringify(state, null, 2);
+      validateAndUpdateVisuals(false);
+      isUpdatingFromForm = false;
+    }
+
+    function validateAndUpdateVisuals(shouldParseTextarea = true) {
+      if (shouldParseTextarea && !isUpdatingFromForm) {
+        try {
+          state = JSON.parse(textarea.value);
+          statusDot.className = 'dot';
+          statusText.innerText = 'Sintaxe OK';
+          validationBar.className = 'validation-bar';
+          validationBar.innerText = '✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json';
+        } catch (err) {
+          statusDot.className = 'dot invalid';
+          statusText.innerText = 'Erro de Sintaxe';
+          validationBar.className = 'validation-bar error';
+          validationBar.innerText = '✗ Erro JSON: ' + err.message;
+          return;
+        }
       }
 
-      // Validar estrutura básica contra pipeline schema
-      if (!parsed.stages || !Array.isArray(parsed.stages)) {
+      if (!state.stages || !Array.isArray(state.stages)) {
         validationBar.className = 'validation-bar error';
         validationBar.innerText = '✗ Erro de Schema: Campo "stages" (Array) é obrigatório';
         return;
       }
 
-      renderGraph(parsed.stages);
+      if (!state.default_models) {
+        state.default_models = JSON.parse(JSON.stringify(DEFAULT_PIPELINE.default_models));
+      }
+
+      renderModelForms();
+      renderStageForms();
     }
 
-    function renderGraph(stages) {
-      graphContainer.innerHTML = '';
-      stageCount.innerText = `${stages.length} Estágios`;
+    // Renderizar formulários dos modelos de IA
+    function renderModelForms() {
+      modelsGrid.innerHTML = '';
 
-      stages.forEach((stg, index) => {
+      AVAILABLE_ROLES.forEach(role => {
+        const modelData = state.default_models[role] || { defaultModel: '', maxTokens: 4000, temperature: 0.1 };
         const card = document.createElement('div');
-        card.className = 'stage-card';
+        card.className = 'model-card';
 
         card.innerHTML = `
-          <div class="stage-header">
-            <div class="stage-title">
-              <span class="stage-id">${stg.id || 'STG-' + (index + 1)}</span>
-              ${stg.name || 'Estágio sem nome'}
-            </div>
-            ${stg.gate ? `<span class="gate-badge">🔒 ${stg.gate}</span>` : ''}
+          <div class="model-card-header">
+            <span>Papel: ${role.toUpperCase()}</span>
+            <span class="role-badge">${role}</span>
           </div>
-          <div class="stage-details">
-            ${stg.description || 'Sem descrição.'}
-            <div style="margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan);">
-              Papel: <strong>${stg.agent_role || 'cheap'}</strong>
-            </div>
+          <div class="form-group">
+            <label>Modelo LLM</label>
+            <input type="text" class="form-control model-name-input" data-role="${role}" value="${modelData.defaultModel || ''}" placeholder="ex: claude-3-7-sonnet">
+          </div>
+          <div class="form-group">
+            <label>Max Tokens</label>
+            <input type="number" class="form-control model-tokens-input" data-role="${role}" value="${modelData.maxTokens || 4000}">
+          </div>
+          <div class="form-group">
+            <label>Temperature</label>
+            <input type="number" step="0.05" min="0" max="1" class="form-control model-temp-input" data-role="${role}" value="${modelData.temperature ?? 0.1}">
           </div>
         `;
 
-        graphContainer.appendChild(card);
+        modelsGrid.appendChild(card);
+      });
 
-        if (index < stages.length - 1) {
-          const arrow = document.createElement('div');
-          arrow.className = 'stage-connect-arrow';
-          arrow.innerText = '↓';
-          graphContainer.appendChild(arrow);
-        }
+      // Bind events nos inputs de modelo
+      modelsGrid.querySelectorAll('.model-name-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].defaultModel = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-tokens-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].maxTokens = parseInt(e.target.value, 10) || 4000;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-temp-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].temperature = parseFloat(e.target.value) || 0.1;
+          updateJsonTextarea();
+        });
       });
     }
 
+    // Renderizar cartões interativos de estágios da Pipeline
+    function renderStageForms() {
+      stagesContainer.innerHTML = '';
+      stageCount.innerText = `${state.stages.length} Estágios`;
+
+      state.stages.forEach((stg, index) => {
+        const card = document.createElement('div');
+        card.className = 'stage-card';
+
+        const gateOptionsHTML = AVAILABLE_GATES.map(g => `
+          <option value="${g}" ${stg.gate === g ? 'selected' : ''}>${g || '(Nenhum Gate)'}</option>
+        `).join('');
+
+        const roleOptionsHTML = AVAILABLE_ROLES.map(r => `
+          <option value="${r}" ${stg.agent_role === r ? 'selected' : ''}>${r}</option>
+        `).join('');
+
+        card.innerHTML = `
+          <div class="stage-row">
+            <div class="form-group">
+              <label>ID Estágio</label>
+              <input type="text" class="form-control stage-id-input" data-index="${index}" value="${stg.id || ''}">
+            </div>
+            <div class="form-group">
+              <label>Nome do Estágio</label>
+              <input type="text" class="form-control stage-name-input" data-index="${index}" value="${stg.name || ''}">
+            </div>
+            <div class="form-group">
+              <label>Portão (Gate)</label>
+              <select class="form-control stage-gate-select" data-index="${index}">${gateOptionsHTML}</select>
+            </div>
+            <div class="form-group">
+              <label>Papel do Agente</label>
+              <select class="form-control stage-role-select" data-index="${index}">${roleOptionsHTML}</select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Descrição do Estágio</label>
+            <input type="text" class="form-control stage-desc-input" data-index="${index}" value="${stg.description || ''}">
+          </div>
+          <div class="stage-actions">
+            <button class="btn btn-danger btn-delete-stage" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">🗑️ Excluir</button>
+            ${index > 0 ? `<button class="btn btn-move-up" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">⬆️ Mover P/ Cima</button>` : ''}
+            ${index < state.stages.length - 1 ? `<button class="btn btn-move-down" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">⬇️ Mover P/ Baixo</button>` : ''}
+          </div>
+        `;
+
+        stagesContainer.appendChild(card);
+
+        if (index < state.stages.length - 1) {
+          const arrow = document.createElement('div');
+          arrow.className = 'stage-connect-arrow';
+          arrow.innerText = '↓';
+          stagesContainer.appendChild(arrow);
+        }
+      });
+
+      // Bind events de edição de estágio
+      stagesContainer.querySelectorAll('.stage-id-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages[idx].id = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.stage-name-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages[idx].name = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.stage-gate-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages[idx].gate = e.target.value || undefined;
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.stage-role-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages[idx].agent_role = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.stage-desc-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages[idx].description = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.btn-delete-stage').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          state.stages.splice(idx, 1);
+          updateJsonTextarea();
+        });
+      });
+
+      stagesContainer.querySelectorAll('.btn-move-up').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          if (idx > 0) {
+            const temp = state.stages[idx];
+            state.stages[idx] = state.stages[idx - 1];
+            state.stages[idx - 1] = temp;
+            updateJsonTextarea();
+          }
+        });
+      });
+
+      stagesContainer.querySelectorAll('.btn-move-down').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          if (idx < state.stages.length - 1) {
+            const temp = state.stages[idx];
+            state.stages[idx] = state.stages[idx + 1];
+            state.stages[idx + 1] = temp;
+            updateJsonTextarea();
+          }
+        });
+      });
+    }
+
+    function addStage() {
+      const nextId = `STG-0${state.stages.length + 1}`;
+      state.stages.push({
+        id: nextId,
+        name: `Novo Estágio ${state.stages.length + 1}`,
+        description: 'Descrição da tarefa do estágio',
+        gate: 'GATE-DISC-REQ',
+        agent_role: 'cheap'
+      });
+      updateJsonTextarea();
+    }
+
     // Events
-    textarea.addEventListener('input', validateAndRender);
+    textarea.addEventListener('input', () => validateAndUpdateVisuals(true));
 
     document.getElementById('btn-load-example').addEventListener('click', () => {
-      textarea.value = JSON.stringify(DEFAULT_PIPELINE, null, 2);
-      validateAndRender();
+      state = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
+      updateJsonTextarea();
     });
 
-    document.getElementById('btn-validate').addEventListener('click', validateAndRender);
+    document.getElementById('btn-add-stage').addEventListener('click', addStage);
+    document.getElementById('btn-add-stage-inline').addEventListener('click', addStage);
 
-    document.getElementById('btn-export').addEventListener('click', () => {
+    document.getElementById('btn-export-pipeline').addEventListener('click', () => {
       const blob = new Blob([textarea.value], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -477,8 +767,19 @@
       URL.revokeObjectURL(url);
     });
 
+    document.getElementById('btn-export-routing').addEventListener('click', () => {
+      const routingData = state.default_models || DEFAULT_PIPELINE.default_models;
+      const blob = new Blob([JSON.stringify(routingData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'routing.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
     // Render Inicial
-    validateAndRender();
+    validateAndUpdateVisuals(true);
   </script>
 </body>
 </html>
