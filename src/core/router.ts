@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export type AgentRole = 'cheap' | 'strong' | 'review' | 'plan';
+export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high';
 
 export interface ModelRoutingConfig {
   role: AgentRole;
   defaultModel: string;
   maxTokens: number;
   temperature: number;
+  reasoningEffort?: ReasoningEffort;
   baseUrl?: string;
   provider?: string;
   apiKeyEnv?: string;
@@ -20,24 +22,28 @@ export const DEFAULT_ROUTING_TABLE: Record<AgentRole, ModelRoutingConfig> = {
     defaultModel: 'qwen3.5:27b',
     maxTokens: 4000,
     temperature: 0.2,
+    reasoningEffort: 'low',
   },
   strong: {
     role: 'strong',
     defaultModel: 'claude-3-7-sonnet',
     maxTokens: 16000,
     temperature: 0.1,
+    reasoningEffort: 'high',
   },
   review: {
     role: 'review',
     defaultModel: 'claude-3-5-haiku',
     maxTokens: 8000,
     temperature: 0.1,
+    reasoningEffort: 'low',
   },
   plan: {
     role: 'plan',
     defaultModel: 'claude-3-7-sonnet',
     maxTokens: 12000,
     temperature: 0.2,
+    reasoningEffort: 'medium',
   },
 };
 
@@ -55,6 +61,7 @@ export function getRoutingTable(rootDir: string = process.cwd()): Record<AgentRo
           if (fileData[role].defaultModel) table[role].defaultModel = fileData[role].defaultModel;
           if (fileData[role].maxTokens) table[role].maxTokens = fileData[role].maxTokens;
           if (fileData[role].temperature !== undefined) table[role].temperature = fileData[role].temperature;
+          if (fileData[role].reasoningEffort !== undefined) table[role].reasoningEffort = fileData[role].reasoningEffort;
           if (fileData[role].baseUrl !== undefined) table[role].baseUrl = fileData[role].baseUrl;
           if (fileData[role].provider !== undefined) table[role].provider = fileData[role].provider;
           if (fileData[role].apiKeyEnv !== undefined) table[role].apiKeyEnv = fileData[role].apiKeyEnv;
@@ -81,6 +88,11 @@ export function getRoutingTable(rootDir: string = process.cwd()): Record<AgentRo
   if (process.env.PWN_API_KEY_STRONG) table.strong.apiKey = process.env.PWN_API_KEY_STRONG;
   if (process.env.PWN_API_KEY_REVIEW) table.review.apiKey = process.env.PWN_API_KEY_REVIEW;
   if (process.env.PWN_API_KEY_PLAN) table.plan.apiKey = process.env.PWN_API_KEY_PLAN;
+
+  if (process.env.PWN_REASONING_CHEAP) table.cheap.reasoningEffort = process.env.PWN_REASONING_CHEAP as ReasoningEffort;
+  if (process.env.PWN_REASONING_STRONG) table.strong.reasoningEffort = process.env.PWN_REASONING_STRONG as ReasoningEffort;
+  if (process.env.PWN_REASONING_REVIEW) table.review.reasoningEffort = process.env.PWN_REASONING_REVIEW as ReasoningEffort;
+  if (process.env.PWN_REASONING_PLAN) table.plan.reasoningEffort = process.env.PWN_REASONING_PLAN as ReasoningEffort;
 
   return table;
 }

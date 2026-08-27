@@ -433,10 +433,10 @@
       "name": "Pipeline Autônoma Piwerness Standard",
       "description": "Fluxo nativo de governança contratual, TDD e roteamento de modelos por papéis",
       "default_models": {
-        "cheap": { "defaultModel": "qwen3.5:27b", "provider": "ollama", "baseUrl": "http://localhost:11434/v1", "apiKeyEnv": "OLLAMA_API_KEY", "apiKey": "", "maxTokens": 4000, "temperature": 0.2 },
-        "strong": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 16000, "temperature": 0.1 },
-        "plan": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 12000, "temperature": 0.2 },
-        "review": { "defaultModel": "claude-3-5-haiku", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 8000, "temperature": 0.1 }
+        "cheap": { "defaultModel": "qwen3.5:27b", "provider": "ollama", "baseUrl": "http://localhost:11434/v1", "apiKeyEnv": "OLLAMA_API_KEY", "apiKey": "", "maxTokens": 4000, "temperature": 0.2, "reasoningEffort": "low" },
+        "strong": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 16000, "temperature": 0.1, "reasoningEffort": "high" },
+        "plan": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 12000, "temperature": 0.2, "reasoningEffort": "medium" },
+        "review": { "defaultModel": "claude-3-5-haiku", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 8000, "temperature": 0.1, "reasoningEffort": "low" }
       },
       "stages": [
         {
@@ -496,6 +496,7 @@
 
     const AVAILABLE_ROLES = ["cheap", "strong", "plan", "review"];
     const AVAILABLE_PROVIDERS = ["anthropic", "openai", "ollama", "openrouter", "vllm", "custom"];
+    const AVAILABLE_REASONING = ["off", "low", "medium", "high"];
 
     const PROVIDER_DEFAULTS = {
       anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY', defaultModel: 'claude-3-7-sonnet' },
@@ -570,6 +571,10 @@
           <option value="${p}" ${(modelData.provider || 'anthropic') === p ? 'selected' : ''}>${p}</option>
         `).join('');
 
+        const reasoningOptions = AVAILABLE_REASONING.map(r => `
+          <option value="${r}" ${(modelData.reasoningEffort || 'low') === r ? 'selected' : ''}>${r}</option>
+        `).join('');
+
         card.innerHTML = `
           <div class="model-card-header">
             <span>Papel: ${role.toUpperCase()}</span>
@@ -579,9 +584,15 @@
             <label>Modelo LLM</label>
             <input type="text" class="form-control model-name-input" data-role="${role}" value="${modelData.defaultModel || ''}" placeholder="ex: claude-3-7-sonnet">
           </div>
-          <div class="form-group">
-            <label>Provedor (Provider)</label>
-            <select class="form-control model-provider-select" data-role="${role}">${providerOptions}</select>
+          <div class="stage-row" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-group">
+              <label>Provedor</label>
+              <select class="form-control model-provider-select" data-role="${role}">${providerOptions}</select>
+            </div>
+            <div class="form-group">
+              <label>Reasoning (Raciocínio)</label>
+              <select class="form-control model-reasoning-select" data-role="${role}">${reasoningOptions}</select>
+            </div>
           </div>
           <div class="form-group">
             <label>API Base URL / Endpoint</label>
@@ -629,6 +640,14 @@
             state.default_models[role].apiKeyEnv = PROVIDER_DEFAULTS[newProvider].apiKeyEnv;
             state.default_models[role].baseUrl = PROVIDER_DEFAULTS[newProvider].baseUrl;
           }
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-reasoning-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].reasoningEffort = e.target.value;
           updateJsonTextarea();
         });
       });
@@ -858,6 +877,7 @@
         if (m) {
           const roleUpper = role.toUpperCase();
           envLines.push(`PWN_MODEL_${roleUpper}=${m.defaultModel || ''}`);
+          if (m.reasoningEffort) envLines.push(`PWN_REASONING_${roleUpper}=${m.reasoningEffort}`);
           if (m.baseUrl) envLines.push(`PWN_API_BASE_URL_${roleUpper}=${m.baseUrl}`);
           if (m.apiKeyEnv && m.apiKey) envLines.push(`${m.apiKeyEnv}=${m.apiKey}`);
           if (m.apiKey && !m.apiKeyEnv) envLines.push(`PWN_API_KEY_${roleUpper}=${m.apiKey}`);
