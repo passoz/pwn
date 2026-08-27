@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { evaluateEscalation, DEFAULT_ROUTING_TABLE } from '../src/core/router.js';
+import { evaluateEscalation, DEFAULT_ROUTING_TABLE, getRoutingTable, saveRoutingConfig } from '../src/core/router.js';
 import { createGitWorktreeSandbox, cleanupGitWorktreeSandbox } from '../src/core/sandbox.js';
 import { enqueueReview, listQueueItems, updateQueueStatus } from '../src/core/queue.js';
 
@@ -34,6 +34,22 @@ test('DEFAULT_ROUTING_TABLE possui modelos configurados para cada papel', () => 
   assert.ok(DEFAULT_ROUTING_TABLE.strong.defaultModel);
   assert.ok(DEFAULT_ROUTING_TABLE.review.defaultModel);
   assert.ok(DEFAULT_ROUTING_TABLE.plan.defaultModel);
+});
+
+test('getRoutingTable e saveRoutingConfig suportam arquivo de configuracao e variaveis de ambiente', () => {
+  const root = fixture();
+  try {
+    saveRoutingConfig({
+      cheap: { defaultModel: 'custom-cheap-model' },
+      strong: { defaultModel: 'custom-strong-model' },
+    }, root);
+
+    const table = getRoutingTable(root);
+    assert.equal(table.cheap.defaultModel, 'custom-cheap-model');
+    assert.equal(table.strong.defaultModel, 'custom-strong-model');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('createGitWorktreeSandbox e cleanupGitWorktreeSandbox gerenciam o isolamento do sandbox', () => {
