@@ -5,15 +5,17 @@
  * filesystem, shell, or network. Every operation is:
  *   1. Checked against the budget
  *   2. Evaluated by the Policy Engine
- *   3. Executed only if ALLOWED
- *   4. Logged to the run context
+ *   3. Resolved and confined to the sandbox directory
+ *   4. Executed only if ALLOWED
+ *   5. Logged to the run context
  *
- * Bypassing the Tool API (e.g. spawning a subprocess that writes files
- * directly) violates the harness contract and will be caught by the
- * Diff Guard, but the goal is PREVENTION, not just detection.
- *
- * DESIGN: The agent runner should inject this Tool API as the sole
- * available interface for filesystem/shell/network operations.
+ * SECURITY GUARANTEES:
+ * - Path traversal (../) is blocked by resolving and checking containment
+ * - Absolute paths outside the sandbox are blocked
+ * - Symlinks are resolved (realpath) and checked for containment
+ * - Shell injection chars in args are detected and rejected
+ * - Shell commands use spawnSync (no shell interpolation)
+ * - Child processes are killed on timeout
  */
 
 import fs from 'node:fs';
@@ -31,6 +33,80 @@ export interface ToolResult<T = unknown> {
   error?: string;
   policyDecision?: PolicyDecision;
   budgetViolation?: BudgetViolation;
+}
+
+// ── Shell Injection Detection ──────────────────────────────────────
+
+const SHELL_INJECTION_PATTERNS = [
+  /;/,
+  /&&/,
+  /\|\|/,
+  /\|/,
+  />/,
+  />>/,
+  /<$/,
+  /\$\(.*\)/,
+  /`.*`/,
+  /\$\{.*\}/,
+];
+
+function detectShellInjection(args: string[]): string | null {
+  for (const arg of args) {
+    for (const pattern of SHELL_INJECTION_PATTERNS) {
+      if (pattern.test(arg)) {
+        return arg;
+      }
+    }
+  }
+  return null;
+}
+
+// ── Path Containment ───────────────────────────────────────────────
+
+/**
+ * Resolve a relative path within the sandbox and verify it stays inside.
+ * Returns the resolved absolute path or throws if the path escapes.
+ *
+ * Security checks:
+ * 1. Resolve relative to cwd (sandbox)
+ * 2. Normalize (collapses ../)
+ * 3. Verify the resolved path is within the sandbox
+ * 4. If the path exists and is a symlink, resolve to realpath and re-check
+ */
+function resolveSandboxPath(cwd: string, filePath: string): { ok: true; fullPath: string } | { ok: false; reason: string } {
+  const resolved = path.resolve(cwd, filePath);
+  const normalizedCwd = path.normalize(cwd);
+
+  // Check containment: resolved path must be within cwd
+  const relative = path.relative(normalizedCwd, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return {
+      ok: false,
+      reason: `Path escape detectado: "${filePath}" resolve para "${resolved}" que está fora do sandbox (${normalizedCwd})`,
+    };
+  }
+
+  // If the file exists, check for symlink escape
+  if (fs.existsSync(resolved)) {
+    try {
+      const real = fs.realpathSync(resolved);
+      const realRelative = path.relative(normalizedCwd, real);
+      if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
+        return {
+          ok: false,
+          reason: `Symlink escape detectado: "${filePath}" resolve para "${real}" que está fora do sandbox`,
+        };
+      }
+    } catch {
+      // realpath failed — file may be a broken symlink, treat as escape
+      return {
+        ok: false,
+        reason: `Symlink quebrado ou não resolvido: "${filePath}"`,
+      };
+    }
+  }
+
+  return { ok: true, fullPath: resolved };
 }
 
 // ── Tool API ───────────────────────────────────────────────────────
@@ -56,7 +132,6 @@ export class ToolAPI {
   // ── Budget & Policy Pre-check ────────────────────────────────────
 
   private preCheck(): { ok: true } | { ok: false; result: ToolResult<never> } {
-    // 1. Budget check
     const budgetViolation = this.budget.checkBudget();
     if (budgetViolation) {
       return {
@@ -86,6 +161,11 @@ export class ToolAPI {
     }
   }
 
+  /** Get the sandbox working directory. */
+  getCwd(): string {
+    return this.cwd;
+  }
+
   // ── Filesystem Tools ─────────────────────────────────────────────
 
   writeFile(filePath: string, content: string): ToolResult<void> {
@@ -104,14 +184,24 @@ export class ToolAPI {
       };
     }
 
-    const fullPath = path.resolve(this.cwd, filePath);
+    // Security: resolve and verify path containment
+    const pathCheck = resolveSandboxPath(this.cwd, filePath);
+    if (!pathCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE: ${pathCheck.reason}`);
+      return {
+        success: false,
+        error: pathCheck.reason,
+      };
+    }
+
+    const fullPath = pathCheck.fullPath;
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(fullPath, content, 'utf8');
     this.budget.recordToolCall();
-    this.budget.recordTokens(Math.ceil(content.length / 4)); // rough token estimate
+    this.budget.recordTokens(Math.ceil(content.length / 4));
     this.logEvent('step', `Wrote ${filePath} (${content.length} bytes)`);
 
     return { success: true };
@@ -133,8 +223,17 @@ export class ToolAPI {
       };
     }
 
-    const fullPath = path.resolve(this.cwd, filePath);
-    const content = fs.readFileSync(fullPath, 'utf8');
+    // Security: resolve and verify path containment
+    const pathCheck = resolveSandboxPath(this.cwd, filePath);
+    if (!pathCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE: ${pathCheck.reason}`);
+      return {
+        success: false,
+        error: pathCheck.reason,
+      };
+    }
+
+    const content = fs.readFileSync(pathCheck.fullPath, 'utf8');
     this.budget.recordToolCall();
     this.logEvent('step', `Read ${filePath} (${content.length} bytes)`);
 
@@ -157,8 +256,17 @@ export class ToolAPI {
       };
     }
 
-    const fullPath = path.resolve(this.cwd, filePath);
-    fs.unlinkSync(fullPath);
+    // Security: resolve and verify path containment
+    const pathCheck = resolveSandboxPath(this.cwd, filePath);
+    if (!pathCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE: ${pathCheck.reason}`);
+      return {
+        success: false,
+        error: pathCheck.reason,
+      };
+    }
+
+    fs.unlinkSync(pathCheck.fullPath);
     this.budget.recordToolCall();
     this.logEvent('step', `Deleted ${filePath}`);
 
@@ -181,10 +289,59 @@ export class ToolAPI {
       };
     }
 
-    const fullPath = path.resolve(this.cwd, dirPath);
-    fs.mkdirSync(fullPath, { recursive: true });
+    // Security: resolve and verify path containment
+    const pathCheck = resolveSandboxPath(this.cwd, dirPath);
+    if (!pathCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE: ${pathCheck.reason}`);
+      return {
+        success: false,
+        error: pathCheck.reason,
+      };
+    }
+
+    fs.mkdirSync(pathCheck.fullPath, { recursive: true });
     this.budget.recordToolCall();
     this.logEvent('step', `Created dir ${dirPath}`);
+
+    return { success: true };
+  }
+
+  /**
+   * Rename or move a file within the sandbox.
+   * Both source and destination must be within write_allow and within the sandbox.
+   */
+  renameFile(oldPath: string, newPath: string): ToolResult<void> {
+    const pre = this.preCheck();
+    if (!pre.ok) return pre.result;
+
+    // Evaluate both source (as read) and destination (as write)
+    const destOp: AgentOperation = { type: 'write_file', path: newPath };
+    const destDecision = this.evaluateOp(destOp);
+    if (!destDecision.allowed) {
+      this.logEvent('policy_check', `DENY rename dest ${newPath}`, destDecision);
+      return {
+        success: false,
+        error: destDecision.reason,
+        policyDecision: destDecision,
+      };
+    }
+
+    // Security: resolve and verify BOTH paths
+    const oldCheck = resolveSandboxPath(this.cwd, oldPath);
+    if (!oldCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE (source): ${oldCheck.reason}`);
+      return { success: false, error: oldCheck.reason };
+    }
+
+    const newCheck = resolveSandboxPath(this.cwd, newPath);
+    if (!newCheck.ok) {
+      this.logEvent('error', `PATH ESCAPE (destination): ${newCheck.reason}`);
+      return { success: false, error: newCheck.reason };
+    }
+
+    fs.renameSync(oldCheck.fullPath, newCheck.fullPath);
+    this.budget.recordToolCall();
+    this.logEvent('step', `Renamed ${oldPath} → ${newPath}`);
 
     return { success: true };
   }
@@ -194,13 +351,25 @@ export class ToolAPI {
   /**
    * Execute a shell command STRUCTURALLY (command + args).
    *
-   * IMPORTANT: The agent MUST use this method. Spawning a shell process
-   * directly (e.g. via child_process) bypasses the Policy Engine and
-   * violates the harness contract.
+   * SECURITY:
+   * - Uses spawnSync (no shell interpolation)
+   * - Detects shell injection chars in args
+   * - Optional timeout with child process termination
+   * - The agent MUST use this method — direct child_process bypasses policy
    */
-  exec(command: string, args: string[] = []): ToolResult<{ stdout: string; stderr: string; status: number }> {
+  exec(command: string, args: string[] = [], timeoutMs?: number): ToolResult<{ stdout: string; stderr: string; status: number }> {
     const pre = this.preCheck();
     if (!pre.ok) return pre.result;
+
+    // Security: detect shell injection attempts in args
+    const injection = detectShellInjection(args);
+    if (injection) {
+      this.logEvent('error', `SHELL INJECTION detectado no arg: "${injection}"`);
+      return {
+        success: false,
+        error: `Shell injection detectado: argumento contém caracteres proibidos ("${injection}"). Use args estruturais, não strings de shell.`,
+      };
+    }
 
     const op: AgentOperation = { type: 'shell_exec', command, args };
     const decision = this.evaluateOp(op);
@@ -218,9 +387,21 @@ export class ToolAPI {
       cwd: this.cwd,
       encoding: 'utf8',
       env: { ...process.env },
+      timeout: timeoutMs,
+      killSignal: 'SIGKILL',
     };
 
     const proc = spawnSync(command, args, options);
+
+    // If timed out, proc.signal will be set
+    if (proc.signal === 'SIGKILL') {
+      this.logEvent('error', `Process killed by timeout (${timeoutMs}ms): ${command}`);
+      return {
+        success: false,
+        error: `Processo morto por timeout (${timeoutMs}ms): ${command}`,
+      };
+    }
+
     this.budget.recordShellExecution();
     this.logEvent('step', `Executed ${command} ${args.join(' ')} (exit=${proc.status})`);
 
@@ -252,10 +433,6 @@ export class ToolAPI {
       };
     }
 
-    // Network execution is NOT implemented here — the agent framework
-    // should use this as the gateway. Returning success means the
-    // operation is POLICY-APPROVED; the actual HTTP call happens
-    // through the agent's HTTP client, which should check the same policy.
     this.budget.recordToolCall();
     this.logEvent('step', `HTTP ${method} ${url} approved by policy`);
     return { success: true };

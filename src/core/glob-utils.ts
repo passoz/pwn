@@ -29,10 +29,19 @@ function parsePattern(pattern: string): RegExp {
       // ** — matches everything including /
       // Handle /** or **/ patterns
       if (i + 2 < pattern.length && pattern[i + 2] === '/') {
+        // ** followed by / — e.g. src/**/foo or **/foo
         regexStr += '(?:.+/)?';
         i += 3;
       } else if (i === 0 || pattern[i - 1] === '/') {
-        regexStr += '(?:.+/)?';
+        // ** at start or after / with nothing after — e.g. **, src/**
+        // If ** is at the END of the pattern, match everything (including files)
+        if (i + 2 >= pattern.length) {
+          // src/** → match src/anything (files and dirs)
+          regexStr += '.*';
+        } else {
+          // ** in the middle without trailing / — treat as .*
+          regexStr += '.*';
+        }
         i += 2;
       } else {
         regexStr += '.*';

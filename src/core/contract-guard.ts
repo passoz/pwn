@@ -14,7 +14,20 @@ export interface ContractDiffCheckReport {
 }
 
 export function checkFileAgainstScope(filePath: string, writeAllow: string[], writeDeny: string[]): FileDiffCheckResult {
-  const normalizedPath = filePath.replace(/^\.\/+/, '');
+  // Normalize: remove ./ prefix AND collapse ../ to prevent glob bypass
+  // e.g. "src/../secret.txt" → "secret.txt" (which won't match "src/**")
+  let normalizedPath = filePath.replace(/^\.\//, '');
+  // Collapse path segments — path.normalize but keep forward slashes
+  const parts = normalizedPath.split('/');
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === '..') {
+      resolved.pop();
+    } else if (part !== '.' && part !== '') {
+      resolved.push(part);
+    }
+  }
+  normalizedPath = resolved.join('/');
 
   // 1. Check write_deny first (deny list always overrides allow)
   for (const denyPattern of writeDeny) {

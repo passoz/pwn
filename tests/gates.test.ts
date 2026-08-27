@@ -143,7 +143,7 @@ test('validateSemanticTraceability detecta critério de aceite não observável'
       requirements: [{
         id: 'REQ-001',
         title: 'Feature X',
-        acceptance_criteria: ['Deve ser bom'], // "bom" não é observável
+        acceptance_criteria: ['A interface sera agradavel'], // sem "deve/must/shall/etc"
       }],
     }, null, 2));
     writeFileSync(paths.prd, JSON.stringify({
@@ -151,7 +151,8 @@ test('validateSemanticTraceability detecta critério de aceite não observável'
     }, null, 2));
 
     const findings = validateSemanticTraceability(paths.workDir, '0007');
-    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-PRD-AC')));
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-PRD-AC')),
+      'deve gerar finding para critério não-observável');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

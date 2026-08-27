@@ -292,13 +292,19 @@ export class PolicyEngine {
    * Network evaluation.
    *
    * FAIL-CLOSED: empty allowedDomains → DENY ALL unless allowAllNetwork is true.
+   *
+   * Domain matching is STRUCTURAL, not textual:
+   * - "example.com" matches "example.com" and "*.example.com" (subdomains)
+   * - "example.com" does NOT match "example.com.evil.com" or "evil-example.com"
+   * - Wildcard "*.example.com" matches any subdomain but not the apex
    */
   private evaluateNetwork(op: NetworkOperation): PolicyDecision {
     const url = op.type === 'http_request' ? op.url : `https://${op.hostname}`;
+    const hostname = this.extractHostname(url);
 
-    // 1. Deny check first
+    // 1. Deny check first (deny always wins)
     for (const denied of this.config.network.deniedDomains) {
-      if (url.includes(denied)) {
+      if (this.domainMatches(hostname, denied)) {
         return {
           allowed: false,
           domain: 'network',
@@ -323,9 +329,9 @@ export class PolicyEngine {
       };
     }
 
-    // 3. Allowlist check
+    // 3. Allowlist check (structural domain matching)
     for (const allowed of this.config.network.allowedDomains) {
-      if (url.includes(allowed)) {
+      if (this.domainMatches(hostname, allowed)) {
         return { allowed: true, domain: 'network', operation: op };
       }
     }
@@ -334,8 +340,51 @@ export class PolicyEngine {
       allowed: false,
       domain: 'network',
       operation: op,
-      reason: `Domínio não está na allowlist de rede: ${url}`,
+      reason: `Domínio não está na allowlist de rede: ${hostname}`,
       violationType: 'network_denied',
     };
+  }
+
+  /**
+   * Extract hostname from a URL string.
+   */
+  private extractHostname(url: string): string {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname;
+    } catch {
+      // Not a valid URL — might be just a hostname
+      return url.replace(/^https?:\/\//, '').split(/[:/]/)[0];
+    }
+  }
+
+  /**
+   * Structural domain matching.
+   *
+   * "example.com" matches:
+   *   - "example.com" (exact)
+   *   - "sub.example.com" (subdomain)
+   *
+   * "example.com" does NOT match:
+   *   - "example.com.evil.com" (suffix attack)
+   *   - "evil-example.com" (prefix attack)
+   *   - "example.com.evil" (partial suffix)
+   *
+   * "*.example.com" matches:
+   *   - "sub.example.com" (any subdomain)
+   *   - NOT "example.com" (apex not included with wildcard)
+   */
+  private domainMatches(hostname: string, pattern: string): boolean {
+    const h = hostname.toLowerCase();
+    const p = pattern.toLowerCase();
+
+    // Wildcard pattern: *.example.com
+    if (p.startsWith('*.')) {
+      const base = p.slice(2);
+      return h.endsWith('.' + base) && h !== base;
+    }
+
+    // Exact match or subdomain match
+    return h === p || h.endsWith('.' + p);
   }
 }

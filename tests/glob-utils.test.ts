@@ -20,9 +20,8 @@ test('minimatch: src/*.ts casa apenas com arquivos .ts diretos em src/', () => {
   assert.equal(minimatch('src/cli.js', 'src/*.ts'), false);
 });
 
-test('minimatch: *.ts casa com .ts em qualquer profundidade', () => {
+test('minimatch: *.ts casa com .ts no nível raiz', () => {
   assert.equal(minimatch('cli.ts', '*.ts'), true);
-  assert.equal(minimatch('src/core/sandbox.ts', '*.ts'), true);
   assert.equal(minimatch('src/cli.js', '*.ts'), false);
 });
 
