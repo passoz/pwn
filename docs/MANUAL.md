@@ -1,0 +1,339 @@
+# 📖 Manual Completo do Piwerness (`pwn`)
+
+> **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
+> *Versão do Harness: 1.0 (Bun / TypeScript)*
+
+---
+
+## 📑 Sumário
+
+1. [Introdução & Filosofia](#1-introdução--filosofia)
+2. [Arquitetura Normativa em JSON (DEC-029)](#2-arquitetura-normativa-em-json-dec-029)
+3. [Contract Engine v4 & As 7 Dimensões Contratuais](#3-contract-engine-v4--as-7-dimensões-contratuais)
+4. [Níveis de Risco (L0–L4) e Estratégias de Validação](#4-níveis-de-risco-l0l4-e-estratégias-de-validação)
+5. [Guarda Mecânica de Escrita (Diff Guard)](#5-guarda-mecânica-de-escrita-diff-guard)
+6. [Portões Determinísticos (Gates)](#6-portões-determinísticos-gates)
+7. [Roteamento Econômico por Papéis & Escalação](#7-roteamento-econômico-por-papéis--escalação)
+8. [Sandboxes em Git Worktree](#8-sandboxes-em-git-worktree)
+9. [Fila Assíncrona de Revisão Humana (AFK)](#9-fila-assíncrona-de-revisão-humana-afk)
+10. [Materializador Multialvo (Pi, OpenCode, omp)](#10-materializador-multialvo-pi-opencode-omp)
+11. [Editor Visual Standalone (`pwn-gui`)](#11-editor-visual-standalone-pwn-gui)
+12. [Telemetria de Métricas & Teach Skills](#12-telemetria-de-métricas--teach-skills)
+13. [Referência de Comandos do CLI](#13-referência-de-comandos-do-cli)
+14. [Tutorial Passo a Passo: Criando um Work Greenfield](#14-tutorial-passo-a-passo-criando-um-work-greenfield)
+
+---
+
+## 1. Introdução & Filosofia
+
+O **Piwerness** (`pwn`) foi projetado para resolver o maior problema de agentes autônomos de desenvolvimento de software: **a degradação silenciosa e o desvio de escopo (scope drift)**.
+
+Diferente de assistentes convencionais baseados unicamente em instruções genéricas em Markdown, o Piwerness opera sob o princípio de **Governança por Contratos Nativos**. Toda decisão de arquitetura, tarefa atômica e modificação no código-fonte deve ser respaldada por um contrato auditável e verificada deterministicamente por código TypeScript nativo.
+
+### Princípios Fundamentais:
+1. **Contratos antes da Execução:** Nenhum código é modificado sem um contrato congelado V4.
+2. **Determinismo em Gates:** Transições de estágio de produto/engenharia não dependem da opinião do LLM; dependem da checagem mecânica dos artefatos.
+3. **Escrita Restrita (Allowlist-First):** O executor de IA só pode alterar arquivos listados na `write_allow` do contrato.
+4. **Isolamento Total:** Execuções ocorrem em Git Worktrees descartáveis.
+5. **Roteamento Proporcional ao Risco:** Tarefas simples usam modelos locais/econômicos (`cheap`); tarefas complexas ou com falhas sobem para modelos de alto raciocínio (`strong`).
+
+---
+
+## 2. Arquitetura Normativa em JSON (DEC-029)
+
+Conforme estabelecido pela **DEC-029**, todos os documentos que regem o comportamento do harness e o fluxo do projeto são **arquivos JSON estritamente validados contra JSON Schemas** localizados em `schemas/`:
+
+| Artefato | Localização Padrão | Schema Corresponde | Função |
+|---|---|---|---|
+| **Pipeline** | `packs/core/pipeline-core.json` | `schemas/pipeline.schema.json` | Define estágios do fluxo e gates exigidos |
+| **Especificação do Sistema** | `.specs/system.json` | `schemas/system.schema.json` | Grava atores, capacidades e regras do sistema |
+| **Plano de Tarefas** | `todo.json` | `schemas/tasks.schema.json` | Armazena o plano de execução e progresso |
+| **Decisão de Produto (PRD)** | `.piwerness/work/<id>/prd.json` | `schemas/prd.schema.json` | Declara requisitos aceitos e não alvos |
+| **Evidências de Auditoria** | `.piwerness/work/<id>/evidence.json` | `schemas/evidence.schema.json` | Registra logs e provas de execução |
+
+### Validação dos Documentos:
+Você pode validar a integridade de todos os documentos normativos do repositório a qualquer momento com:
+```bash
+bun bin/pwn.js validate
+```
+
+---
+
+## 3. Contract Engine v4 & As 7 Dimensões Contratuais
+
+Cada tarefa executada pelo Piwerness possui um **Task Contract V4**. O contrato estrutura 7 dimensões essenciais para garantir que a IA execute exatamente o que foi solicitado:
+
+1. **Behavioral Contract (`behavioral_contract`):**
+   - Cenários em formato Given/When/Then.
+   - Declara o comportamento esperado e casos de borda.
+2. **Change Contract (`change_contract`):**
+   - Define a estratégia de validação (`tdd-strict`, `contract-first`, `regression-guarded`, `visual-contract`).
+   - Define o tipo de mudança (`additive`, `refactor`, `breaking`, `fix`).
+3. **Architecture Contract (`architecture_contract`):**
+   - Componentes afetados, dependências permitidas e proibidas.
+   - Padrões arquiteturais obrigatórios.
+4. **Acceptance Contract (`acceptance_contract`):**
+   - Comandos de validação (ex: `bun test`).
+   - Critérios de aceite quantitativos e qualitativos.
+5. **Scope Contract (`scope_contract`):**
+   - `write_allow`: Padrões Glob de arquivos permitidos para edição (ex: `src/**`, `tests/**`).
+   - `write_deny`: Padrões Glob de arquivos proibidos (ex: `.git/**`, `package.json`).
+   - `out_of_scope`: Descrição textual do que não deve ser tocado.
+6. **Budget Contract (`budget_contract`):**
+   - Limite de tentativas (`max_attempts`, padrão: 3).
+   - Limite de duração em minutos (`max_duration_minutes`).
+   - Teto orçamentário em USD (`max_cost_usd`).
+7. **Escalation Contract (`escalation_contract`):**
+   - Ação em caso de violação de escrita (`on_write_violation`: `block_and_escalate`).
+   - Ação em caso de estouro de orçamento (`on_budget_exceeded`: `escalate_to_strong_agent`).
+   - Ação em caso de falha de tentativas (`on_attempt_failed`: `retry_with_strong`).
+
+### Gerando a Cápsula de Contexto:
+Para visualizar o resumo formatado do contrato V4 congelado para uma tarefa:
+```bash
+bun bin/pwn.js task capsule T-001 0001
+```
+
+---
+
+## 4. Níveis de Risco (L0–L4) e Estratégias de Validação
+
+O Piwerness classifica as tarefas em 5 níveis formais de risco:
+
+- **L0 (Trivial):** Ajustes de documentação, comentários ou typos. Validação por lint/parse.
+- **L1 (Low Risk):** Adição de funções puras ou novas habilidades com cobertura de testes unitários isolados.
+- **L2 (Medium Risk):** Alteração de lógica de negócios existente, refatorações internas ou novos subcomandos CLI. Requer suíte de testes de regressão.
+- **L3 (High Risk):** Alterações de API, schemas, interações com sistema de arquivos ou integrações de módulos. Requer aprovação estrita em gates de Spec/Plan.
+- **L4 (Critical Risk):** Alteração de invariantes de segurança, migrações de dados, ações destrutivas ou mudanças na raiz do harness. **Exige suspensão imediata e aprovação na Fila Humana AFK (`queue/review/`)**.
+
+---
+
+## 5. Guarda Mecânica de Escrita (Diff Guard)
+
+O **Diff Guard** (`src/core/contract-guard.ts`) é o mecanismo de segurança que intercepta as alterações feitas pelo executor.
+
+### Funcionamento:
+1. Após a execução de uma tarefa, o Diff Guard lê os arquivos modificados (`git diff --name-only`).
+2. Para cada arquivo modificado:
+   - Verifica se o caminho corresponde a algum padrão em `write_deny`. Se sim ➔ **Violação Crítica (`write_deny`)**.
+   - Verifica se o caminho corresponde a algum padrão em `write_allow`. Se não ➔ **Violação (`not_in_write_allow`)**.
+3. Em caso de violação:
+   - A execução é imediatamente **bloqueada**.
+   - O estado do arquivo é revertido no sandbox.
+   - O incidente é registrado nas métricas e a tarefa é enviada para a fila de escalação/revisão.
+
+---
+
+## 6. Portões Determinísticos (Gates)
+
+Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` que validam se um Work possui todos os artefatos necessários antes de avançar para a próxima fase.
+
+### Portões Disponíveis:
+- **`GATE-DISC-REQ`:** Valida se `discovery.json` e `requirements.json` existem no Work e se todos os requisitos possuem critérios de aceite testáveis.
+- **`GATE-REQ-PRD`:** Valida se `prd.json` está preenchido e vincula explicitamente os requisitos aceitos (`accepted_requirements`).
+- **`GATE-PRD-SPEC`:** Valida se a especificação técnica `spec.json` existe e se cada capacidade possui regras de negócio mapeadas (`rules`).
+- **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas.
+- **`GATE-PLAN-CONTRACT`:** Valida se todas as tarefas do plano possuem contratos V4 congelados (`contract_id`).
+
+### Executando um Gate:
+```bash
+bun bin/pwn.js work gate GATE-DISC-REQ --work 0001
+```
+
+Retorno JSON do Gate:
+```json
+{
+  "gate": "GATE-DISC-REQ",
+  "work_id": "0001",
+  "result": "pass",
+  "summary": { "covered": 5, "gaps": 0, "conflicts": 0, "ambiguities": 0 },
+  "findings": []
+}
+```
+
+---
+
+## 7. Roteamento Econômico por Papéis & Escalação
+
+ O Piwerness reduz custos de LLM utilizando um sistema de **Roteamento por Papéis** (`src/core/router.ts`):
+
+- **`cheap` (Agente Local / Econômico):** Utilizado por padrão para execução de código e tarefas atômicas (ex: `qwen3.5:27b`).
+- **`strong` (Agente de Alto Raciocínio):** Utilizado para arquitetura, resolução de conflitos em gates ou quando o agente `cheap` falha (ex: `claude-3-7-sonnet`).
+- **`plan` (Planner):** Papel dedicado à decomposição de specs em tarefas atomizadas.
+- **`review` (Auditor):** Papel dedicado à verificação final de PRD e auditoria de contratos.
+
+### Regras de Escalação Automática:
+Se um agente `cheap` estiver executando uma tarefa e:
+1. Cometer uma **violação de escrita** (Diff Guard) ➔ Escala imediatamente para `strong`.
+2. Violar um **invariante de contrato** ➔ Escala imediatamente para `strong`.
+3. Esgotar o **limite de tentativas** (`max_attempts`) ➔ Escala para `strong`.
+
+---
+
+## 8. Sandboxes em Git Worktree
+
+Para evitar que execuções mal sucedidas de agentes corrompam a árvore de trabalho principal ou deixem arquivos pela metade, o Piwerness utiliza o **Git Worktree Sandbox** (`src/core/sandbox.ts`).
+
+### Ciclo de Vida:
+1. Ao iniciar a execução de uma run (`RUN-xxx`), o Piwerness invoca `createGitWorktreeSandbox('RUN-xxx')`.
+2. Um diretório isolado é criado em `.piwerness/sandboxes/RUN-xxx/` associado a uma branch temporária `pwn-sandbox-RUN-xxx`.
+3. O agente executa todas as edições e rodadas de testes dentro deste diretório isolado.
+4. Se o teste e a validação do contrato passarem com sucesso, o commit é integrado ao branch principal.
+5. Em seguida, `cleanupGitWorktreeSandbox` remove limpo a worktree e a branch temporária.
+
+---
+
+## 9. Fila Assíncrona de Revisão Humana (AFK)
+
+Quando o Piwerness é executado em modo não supervisionado (AFK - *Away From Keyboard*), tarefas de risco **L4** ou tarefas que falharam após escalação são pausadas e enviadas para a **Fila de Revisão Humana** (`src/core/queue.ts`).
+
+- **Diretório da Fila:** `queue/review/<run-id>.json`
+
+### Interagindo com a Fila via CLI:
+
+1. **Listar tarefas em aguardo:**
+   ```bash
+   bun bin/pwn.js queue list
+   ```
+2. **Aprovar uma tarefa suspensa:**
+   ```bash
+   bun bin/pwn.js queue approve RUN-001
+   ```
+3. **Rejeitar uma tarefa suspensa:**
+   ```bash
+   bun bin/pwn.js queue reject RUN-001
+   ```
+
+---
+
+## 10. Materializador Multialvo (Pi, OpenCode, omp)
+
+O Piwerness é agnóstico de runtime de IA. O **Target Materializer** (`src/core/target-materializer.ts`) utiliza uma **Matriz de Capacidades** para transformar as especificações do Piwerness nos formatos nativos de cada ferramenta, sem perda silenciosa:
+
+| Target | Nome | System Prompt | Sub-agentes | Tool Calling | Contratos V4 | Sandboxes | Formato Gerado |
+|---|---|---|---|---|---|---|---|
+| **`pi`** | Pi Agent Harness | ✓ | ✓ | ✓ | ✓ | ✓ | `AGENTS.md` |
+| **`opencode`** | OpenCode Interpreter | ✓ | ✓ | ✓ | ✓ | ✓ | `AGENTS.md`, `opencode.jsonc` |
+| **`omp`** | omp CLI Assistant | ✓ | ✗ | ✗ | ✗ | ✗ | `omp.json` *(com degradação graciosa)* |
+| **`raw`** | Raw Model API | ✓ | ✗ | ✗ | ✗ | ✗ | `prompt.txt` |
+
+### Comandos de Target:
+```bash
+# Exibir matriz de capacidades
+bun bin/pwn.js target list
+
+# Materializar artefatos para OpenCode
+bun bin/pwn.js target materialize --target opencode
+```
+
+---
+
+## 11. Editor Visual Standalone (`pwn-gui`)
+
+O **pwn-gui** é o utilitário web visual do Piwerness para inspeção e edição gráfica de pipelines:
+
+- **Localização:** `tools/pipeline-editor/index.html`
+- **Sem Dependências de Servidor:** Funciona abrindo diretamente no navegador (`file://`).
+
+### Principais Recursos:
+- **Grafo Visual de Estágios:** Visualização de etapas com badges de portões (`🔒 GATE-DISC-REQ`) e papéis de agentes.
+- **Live Code Editor:** Edição dual-pane em tempo real de especificações JSON.
+- **Validação de Schema:** Indicação instantânea de conformidade com `schemas/pipeline.schema.json`.
+- **Exportação:** Botão para carregar exemplo e exportar o pipeline finalizado em `.json`.
+
+---
+
+## 12. Telemetria de Métricas & Teach Skills
+
+### Métricas de Execução (`src/core/metrics.ts`):
+Toda execução registra consumo e desempenho em formato JSONL em `.piwerness/metrics.jsonl`:
+- Tokens de Entrada e Saída
+- Custo estimado em USD
+- Duração em milissegundos
+- Contagem de tentativas e taxa de sucesso
+
+### Sugestões de Otimização de Routing:
+O comando `pwn metrics optimize` analisa o histórico e gera sugestões consultivas (sem alterar arquivos automaticamente):
+```bash
+bun bin/pwn.js metrics optimize
+```
+*Exemplo de saída:*
+> `[Sugestão #1] Papel Atual: strong (claude-3-7-sonnet) -> Recomendado: cheap`  
+> `Motivo: 5 execuções com papel 'strong' tiveram sucesso no 1º turno. Podem ser migradas para 'cheap'.`  
+> `Economia Estimada: 65%`
+
+### Teach Skills (`src/core/learnings.ts`):
+Guarda aprendizados e convenções descobertas durante execuções locais em `.piwerness/learnings.json` (gitignored), permitindo a consolidação contínua de lições de engenharia.
+
+---
+
+## 13. Referência de Comandos do CLI
+
+### `pwn validate [path]`
+Valida documentos normativos JSON contra os JSON Schemas formais.
+
+### `pwn work init <work-id>`
+Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id>/`.
+
+### `pwn work gate <gate-id> --work <work-id>`
+Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`).
+
+### `pwn task capsule <task-id> [work-id]`
+Exibe a cápsula de contexto formatada com limites de escrita, cenários e orçamento da tarefa.
+
+### `pwn queue [list|approve|reject] [run-id]`
+Gerencia a fila de revisão humana assíncrona.
+
+### `pwn target [list|materialize] [--target <name>]`
+Exibe a matriz de capacidades dos runtimes ou materializa artefatos no diretório target.
+
+### `pwn metrics [list|optimize]`
+Exibe estatísticas de consumo de tokens/custo ou gera sugestões de otimização de routing.
+
+### `pwn skill [list|discover|link]`
+Lista, descobre e vincula skills do harness.
+
+### `pwn pack [list|diff]`
+Gerencia packs de domínio instalados (`software-engineering`).
+
+---
+
+## 14. Tutorial Passo a Passo: Criando um Work Greenfield
+
+Abaixo está o fluxo completo para iniciar uma nova funcionalidade no Piwerness:
+
+### Passo 1: Inicializar a Estrutura do Work
+```bash
+bun bin/pwn.js work init 0002
+```
+Isso criará a pasta `.piwerness/work/0002/` com os arquivos iniciais:
+- `discovery.json`
+- `requirements.json`
+- `prd.json`
+- `traceability-matrix.json`
+
+### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
+Edite `.piwerness/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão:
+```bash
+bun bin/pwn.js work gate GATE-DISC-REQ --work 0002
+```
+
+### Passo 3: Consolidar o PRD e Rodar o Segundo Gate
+Vincule os requisitos aceitos em `.piwerness/work/0002/prd.json` e execute:
+```bash
+bun bin/pwn.js work gate GATE-REQ-PRD --work 0002
+```
+
+### Passo 4: Congelar Contratos e Gerar a Cápsula de Tarefa
+Após ter a especificação e o plano aprovados nos portões `GATE-PRD-SPEC` e `GATE-SPEC-PLAN`, gere a cápsula de execução da primeira tarefa:
+```bash
+bun bin/pwn.js task capsule T-001 0002
+```
+
+### Passo 5: Materializar Runtimes e Executar
+Materialize a configuração do seu runtime de preferência (ex: OpenCode ou Pi) e inicie a execução isolada em sandbox:
+```bash
+bun bin/pwn.js target materialize --target opencode
+```
+
+Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard monitorando cada alteração e total rastreabilidade.
