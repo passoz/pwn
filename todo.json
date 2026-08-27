@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 6,
+    "completed": 7,
     "in_progress": 1,
-    "pending": 1,
+    "pending": 0,
     "blocked": 0,
-    "test_coverage_percent": 75
+    "test_coverage_percent": 87
   },
   "tasks": [
     {
@@ -159,7 +159,7 @@
       "id": "T-007",
       "title": "Marco 7 — Editor visual de pipelines (Fase 7)",
       "description": "Construir pwn-gui como utilitário HTML/CSS/JS standalone em file:// para edição visual e validação de pipelines YAML/JSON",
-      "status": "in_progress",
+      "status": "done",
       "priority": "medium",
       "agent": "executor",
       "depends_on": ["T-006"],
@@ -177,7 +177,7 @@
       "id": "T-008",
       "title": "Marco 8 — Métricas, otimização e teach skills (Fase 8)",
       "description": "Implementar sistema de métricas JSONL, pwn metrics optimize para sugestão de routing e teach skills com estado gitignored e learnings.yaml versionado",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "low",
       "agent": "executor",
       "depends_on": ["T-007"],

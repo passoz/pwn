@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piwerness — Visual Pipeline Editor (pwn-gui)</title>
+  <style>
+    :root {
+      --bg-dark: #0B0F19;
+      --panel-bg: #111827;
+      --card-bg: #1F2937;
+      --border-color: #374151;
+      --accent-cyan: #06B6D4;
+      --accent-violet: #8B5CF6;
+      --accent-green: #10B981;
+      --accent-red: #EF4444;
+      --text-main: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background-color: var(--panel-bg);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: white;
+      font-size: 14px;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--accent-violet);
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      background-color: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background-color: var(--border-color);
+      border-color: var(--text-muted);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), #0284C7);
+      border: none;
+      color: white;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      box-shadow: 0 0 14px rgba(6, 182, 212, 0.5);
+    }
+
+    /* Main Grid */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background-color: var(--border-color);
+      overflow: hidden;
+    }
+
+    .panel {
+      background-color: var(--panel-bg);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background-color: rgba(31, 41, 55, 0.5);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      text-transform: none;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-green);
+    }
+
+    .dot.invalid {
+      background-color: var(--accent-red);
+    }
+
+    /* Code Editor Pane */
+    .editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    textarea#json-input {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background-color: #0A0D14;
+      color: #E5E7EB;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px;
+      border: none;
+      resize: none;
+      outline: none;
+    }
+
+    .validation-bar {
+      padding: 10px 16px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--border-color);
+      background-color: rgba(16, 185, 129, 0.1);
+      color: var(--accent-green);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .validation-bar.error {
+      background-color: rgba(239, 68, 68, 0.1);
+      color: var(--accent-red);
+    }
+
+    /* Visual Graph Pane */
+    .graph-view {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.05), transparent 70%);
+    }
+
+    .stage-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .stage-card:hover {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
+    }
+
+    .stage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .stage-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stage-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .gate-badge {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--accent-violet);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .stage-details {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .stage-connect-arrow {
+      text-align: center;
+      color: var(--border-color);
+      font-size: 18px;
+      margin: -6px 0;
+    }
+
+    /* Modal / Utility */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">P</div>
+      <div class="brand-title">Piwerness Pipeline Editor</div>
+      <span class="brand-badge">pwn-gui v1.0</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btn-load-example">⚡ Carregar Exemplo</button>
+      <button class="btn" id="btn-validate">✓ Validar Schema</button>
+      <button class="btn btn-primary" id="btn-export">↓ Exportar JSON</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Pane 1: Editor JSON -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Editor de Especificação (JSON)</span>
+        <div class="status-indicator">
+          <div class="dot" id="status-dot"></div>
+          <span id="status-text">Sintaxe OK</span>
+        </div>
+      </div>
+      <div class="editor-container">
+        <textarea id="json-input" spellcheck="false"></textarea>
+        <div class="validation-bar" id="validation-bar">
+          ✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane 2: Grafo de Estágios -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Visualização do Grafo de Execução</span>
+        <span style="font-family: var(--font-mono); font-size: 11px;" id="stage-count">0 Estágios</span>
+      </div>
+      <div class="graph-view" id="graph-container">
+        <!-- Renderizado dinamicamente pelo JavaScript -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const DEFAULT_PIPELINE = {
+      "$schema": "../../schemas/pipeline.schema.json",
+      "pipeline_version": "4.0",
+      "name": "Pipeline Autônoma Piwerness Standard",
+      "description": "Fluxo nativo de governança contratual e TDD para Piwerness",
+      "stages": [
+        {
+          "id": "STG-01",
+          "name": "Intake & Discovery",
+          "description": "Captura da ideia bruta e grilling inicial para levantar contexto do projeto",
+          "gate": "GATE-DISC-REQ",
+          "agent_role": "cheap"
+        },
+        {
+          "id": "STG-02",
+          "name": "Requisitos & PRD",
+          "description": "Consolidação de requisitos funcionais e não funcionais em PRD normativo",
+          "gate": "GATE-REQ-PRD",
+          "agent_role": "strong"
+        },
+        {
+          "id": "STG-03",
+          "name": "Especificação Técnica (Spec)",
+          "description": "Definição de capacidades, invariantes e modelo conceitual da solução",
+          "gate": "GATE-PRD-SPEC",
+          "agent_role": "strong"
+        },
+        {
+          "id": "STG-04",
+          "name": "Decomposição do Plano & Tarefas",
+          "description": "Quebra da spec em plano atômico de tarefas e congelamento de contratos V4",
+          "gate": "GATE-SPEC-PLAN",
+          "agent_role": "plan"
+        },
+        {
+          "id": "STG-05",
+          "name": "Execução Contratual & TDD",
+          "description": "Execução isolada em sandbox Git worktree com validação estrita de allowlist de escrita",
+          "gate": "GATE-PLAN-CONTRACT",
+          "agent_role": "cheap"
+        },
+        {
+          "id": "STG-06",
+          "name": "Revisão Assíncrona & Audit",
+          "description": "Auditoria de rastreabilidade e revisão de tarefas em fila AFK caso haja escalação",
+          "gate": "GATE-AUDIT",
+          "agent_role": "review"
+        }
+      ]
+    };
+
+    const textarea = document.getElementById('json-input');
+    const graphContainer = document.getElementById('graph-container');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const validationBar = document.getElementById('validation-bar');
+    const stageCount = document.getElementById('stage-count');
+
+    // Preencher editor inicial
+    textarea.value = JSON.stringify(DEFAULT_PIPELINE, null, 2);
+
+    function validateAndRender() {
+      const raw = textarea.value;
+      let parsed;
+
+      try {
+        parsed = JSON.parse(raw);
+        statusDot.className = 'dot';
+        statusText.innerText = 'Sintaxe OK';
+        validationBar.className = 'validation-bar';
+        validationBar.innerText = '✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json';
+      } catch (err) {
+        statusDot.className = 'dot invalid';
+        statusText.innerText = 'Erro de Sintaxe';
+        validationBar.className = 'validation-bar error';
+        validationBar.innerText = '✗ Erro JSON: ' + err.message;
+        return;
+      }
+
+      // Validar estrutura básica contra pipeline schema
+      if (!parsed.stages || !Array.isArray(parsed.stages)) {
+        validationBar.className = 'validation-bar error';
+        validationBar.innerText = '✗ Erro de Schema: Campo "stages" (Array) é obrigatório';
+        return;
+      }
+
+      renderGraph(parsed.stages);
+    }
+
+    function renderGraph(stages) {
+      graphContainer.innerHTML = '';
+      stageCount.innerText = `${stages.length} Estágios`;
+
+      stages.forEach((stg, index) => {
+        const card = document.createElement('div');
+        card.className = 'stage-card';
+
+        card.innerHTML = `
+          <div class="stage-header">
+            <div class="stage-title">
+              <span class="stage-id">${stg.id || 'STG-' + (index + 1)}</span>
+              ${stg.name || 'Estágio sem nome'}
+            </div>
+            ${stg.gate ? `<span class="gate-badge">🔒 ${stg.gate}</span>` : ''}
+          </div>
+          <div class="stage-details">
+            ${stg.description || 'Sem descrição.'}
+            <div style="margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan);">
+              Papel: <strong>${stg.agent_role || 'cheap'}</strong>
+            </div>
+          </div>
+        `;
+
+        graphContainer.appendChild(card);
+
+        if (index < stages.length - 1) {
+          const arrow = document.createElement('div');
+          arrow.className = 'stage-connect-arrow';
+          arrow.innerText = '↓';
+          graphContainer.appendChild(arrow);
+        }
+      });
+    }
+
+    // Events
+    textarea.addEventListener('input', validateAndRender);
+
+    document.getElementById('btn-load-example').addEventListener('click', () => {
+      textarea.value = JSON.stringify(DEFAULT_PIPELINE, null, 2);
+      validateAndRender();
+    });
+
+    document.getElementById('btn-validate').addEventListener('click', validateAndRender);
+
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const blob = new Blob([textarea.value], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pipeline.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Render Inicial
+    validateAndRender();
+  </script>
+</body>
+</html>
