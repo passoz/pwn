@@ -128,3 +128,117 @@ test('validateFullTraceability valida campos preenchidos na matriz', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── Semantic Traceability Tests ────────────────────────────────────────
+
+import { validateSemanticTraceability } from '../src/core/gates.js';
+
+test('validateSemanticTraceability detecta critério de aceite não observável', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0007', root);
+
+    // PRD aceita um requisito, mas o requisito não tem critério observável
+    writeFileSync(paths.requirements, JSON.stringify({
+      requirements: [{
+        id: 'REQ-001',
+        title: 'Feature X',
+        acceptance_criteria: ['Deve ser bom'], // "bom" não é observável
+      }],
+    }, null, 2));
+    writeFileSync(paths.prd, JSON.stringify({
+      accepted_requirements: ['REQ-001'],
+    }, null, 2));
+
+    const findings = validateSemanticTraceability(paths.workDir, '0007');
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-PRD-AC')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validateSemanticTraceability detecta requisito não coberto por capacidade', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0008', root);
+
+    writeFileSync(paths.prd, JSON.stringify({
+      accepted_requirements: ['REQ-001'],
+    }, null, 2));
+    writeFileSync(paths.spec, JSON.stringify({
+      capabilities: [{
+        id: 'CAP-001',
+        title: 'Capacidade Y',
+        covered_requirements: [], // não cobre REQ-001
+      }],
+    }, null, 2));
+
+    const findings = validateSemanticTraceability(paths.workDir, '0008');
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-SPEC-COVER')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validateSemanticTraceability detecta capacidade sem implementação', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0009', root);
+
+    writeFileSync(paths.prd, JSON.stringify({
+      accepted_requirements: ['REQ-001'],
+    }, null, 2));
+    writeFileSync(paths.spec, JSON.stringify({
+      capabilities: [{
+        id: 'CAP-001',
+        title: 'Capacidade Z',
+        covered_requirements: ['REQ-001'],
+        // sem rules, api_endpoints ou data_models
+      }],
+    }, null, 2));
+
+    const findings = validateSemanticTraceability(paths.workDir, '0009');
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-SPEC-IMPL')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validateSemanticTraceability detecta contrato sem scope/budget', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0010', root);
+
+    writeFileSync(path.join(paths.workDir, 'plan.json'), JSON.stringify({
+      tasks: [{
+        id: 'T-001',
+        contract_id: 'CTR-001',
+        complexity: 'high',
+      }],
+    }, null, 2));
+    writeFileSync(path.join(paths.workDir, 'CTR-001.json'), JSON.stringify({
+      risk: { level: 'L1' },
+      scope_contract: { write_allow: [] },
+      // sem budget_contract
+    }, null, 2));
+
+    const findings = validateSemanticTraceability(paths.workDir, '0010');
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-CTR-SCOPE')));
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-CTR-BUDGET')));
+    assert.ok(findings.some(f => f.id.startsWith('FIND-SEM-CTR-RISK')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validateSemanticTraceability detecta evidence ausente', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0011', root);
+
+    const findings = validateSemanticTraceability(paths.workDir, '0011');
+    assert.ok(findings.some(f => f.id === 'FIND-SEM-EVD-001'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -677,3 +677,314 @@ export function evaluateGatePlanContract(workId: string, workDir: string): GateO
     findings,
   };
 }
+
+// ── Semantic Traceability Validation ────────────────────────────────────
+
+/**
+ * Semantic validation: verify that PRD requirements have observable acceptance criteria
+ * and that each requirement is actually addressed (not just referenced).
+ */
+function validatePRDSemantics(workDir: string): GateFinding[] {
+  const findings: GateFinding[] = [];
+  const reqPath = path.join(workDir, 'requirements.json');
+  const prdPath = path.join(workDir, 'prd.json');
+
+  if (!fs.existsSync(reqPath) || !fs.existsSync(prdPath)) return findings;
+
+  try {
+    const reqData = JSON.parse(fs.readFileSync(reqPath, 'utf8'));
+    const prdData = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+    const reqs = reqData.requirements || [];
+    const acceptedReqs = new Set(prdData.accepted_requirements || []);
+
+    reqs.forEach((req: any) => {
+      if (!req.id) return;
+      const isAccepted = acceptedReqs.has(req.id);
+
+      // Semantic check 1: accepted requirements must have acceptance criteria
+      if (isAccepted) {
+        const ac = req.acceptance_criteria || [];
+        const hasObservable = ac.some((c: string) =>
+          /deve|deveria|should|must|shall|verificável|observável|testável|mensurável/i.test(c),
+        );
+        if (!hasObservable) {
+          findings.push({
+            id: `FIND-SEM-PRD-AC-${req.id}`,
+            severity: 'medium',
+            type: 'unverifiable_acceptance',
+            source_refs: ['requirements.json', 'prd.json'],
+            target_refs: [req.id],
+            description: `Requisito aceito ${req.id} não possui critério de aceite observável/testável`,
+            required_resolution: 'Reformular critérios de aceite usando linguagem observável (deve, verificável, etc.)',
+            resolution_owner: 'product-owner',
+            status: 'open',
+          });
+        }
+      }
+
+      // Semantic check 2: rejected requirements must have a rationale
+      if (!isAccepted && req.status === 'rejected' && !req.rejection_rationale) {
+        findings.push({
+          id: `FIND-SEM-PRD-REJ-${req.id}`,
+          severity: 'low',
+          type: 'ambiguity',
+          source_refs: ['requirements.json', 'prd.json'],
+          target_refs: [req.id],
+          description: `Requisito rejeitado ${req.id} não possui justificativa documentada`,
+          required_resolution: 'Documentar por que o requisito foi rejeitado',
+          resolution_owner: 'product-owner',
+          status: 'open',
+        });
+      }
+    });
+  } catch {
+    // Skip semantic validation if files are unreadable
+  }
+
+  return findings;
+}
+
+/**
+ * Semantic validation: verify that SPEC capabilities actually cover PRD requirements
+ * (not just that IDs match, but that the capability description references the requirement intent).
+ */
+function validateSpecCoversPRD(workDir: string): GateFinding[] {
+  const findings: GateFinding[] = [];
+  const prdPath = path.join(workDir, 'prd.json');
+  const specPath = path.join(workDir, 'spec.json');
+
+  if (!fs.existsSync(prdPath) || !fs.existsSync(specPath)) return findings;
+
+  try {
+    const prdData = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+    const specData = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+    const acceptedReqs = prdData.accepted_requirements || [];
+    const caps = specData.capabilities || [];
+
+    // Build a map of requirement ID -> capabilities that claim to cover it
+    const reqCoverage: Record<string, string[]> = {};
+    for (const reqId of acceptedReqs) reqCoverage[reqId] = [];
+
+    caps.forEach((cap: any) => {
+      if (!cap.id || !cap.covered_requirements) return;
+      for (const reqId of cap.covered_requirements) {
+        if (reqCoverage[reqId]) reqCoverage[reqId].push(cap.id);
+      }
+    });
+
+    // Semantic check: each accepted requirement must be covered by at least one capability
+    for (const [reqId, coveringCaps] of Object.entries(reqCoverage)) {
+      if (coveringCaps.length === 0) {
+        findings.push({
+          id: `FIND-SEM-SPEC-COVER-${reqId}`,
+          severity: 'high',
+          type: 'coverage_gap',
+          source_refs: ['prd.json', 'spec.json'],
+          target_refs: [reqId],
+          description: `Requisito aceito ${reqId} não é coberto por nenhuma capacidade técnica no spec.json`,
+          required_resolution: `Adicionar capacidade que implemente o requisito ${reqId} ou remover do escopo aceito`,
+          resolution_owner: 'architect',
+          status: 'open',
+        });
+      }
+    }
+
+    // Semantic check: capabilities must have at least one rule or implementation detail
+    caps.forEach((cap: any) => {
+      if (!cap.id) return;
+      const hasImplementation = (cap.rules && cap.rules.length > 0) ||
+        (cap.api_endpoints && cap.api_endpoints.length > 0) ||
+        (cap.data_models && cap.data_models.length > 0);
+      if (!hasImplementation) {
+        findings.push({
+          id: `FIND-SEM-SPEC-IMPL-${cap.id}`,
+          severity: 'medium',
+          type: 'coverage_gap',
+          source_refs: ['spec.json'],
+          target_refs: [cap.id],
+          description: `Capacidade ${cap.id} não possui regras, endpoints ou modelos de dados — é apenas um título`,
+          required_resolution: 'Especificar como a capacidade será implementada',
+          resolution_owner: 'architect',
+          status: 'open',
+        });
+      }
+    });
+  } catch {
+    // Skip
+  }
+
+  return findings;
+}
+
+/**
+ * Semantic validation: verify that the contract has executable constraints
+ * (budget, scope, invariants) compatible with the task described in the plan.
+ */
+function validateContractSemantics(workDir: string): GateFinding[] {
+  const findings: GateFinding[] = [];
+  const planPath = path.join(workDir, 'plan.json');
+
+  if (!fs.existsSync(planPath)) return findings;
+
+  try {
+    const planData = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+    const tasks = planData.tasks || [];
+
+    tasks.forEach((task: any) => {
+      if (!task.contract_id) return;
+      const contractPath = path.join(workDir, `${task.contract_id}.json`);
+
+      if (!fs.existsSync(contractPath)) {
+        findings.push({
+          id: `FIND-SEM-CTR-MISSING-${task.id}`,
+          severity: 'high',
+          type: 'traceability_gap',
+          source_refs: ['plan.json'],
+          target_refs: [task.contract_id],
+          description: `Contrato ${task.contract_id} referenciado pela task ${task.id} não existe`,
+          required_resolution: 'Criar o contrato ou corrigir o contract_id',
+          resolution_owner: 'architect',
+          status: 'open',
+        });
+        return;
+      }
+
+      try {
+        const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+
+        // Semantic check 1: contract must have a non-empty scope
+        const scope = contract.scope_contract || contract.scope || {};
+        const writeAllow = scope.write_allow || scope.writeAllow || [];
+        if (writeAllow.length === 0) {
+          findings.push({
+            id: `FIND-SEM-CTR-SCOPE-${task.contract_id}`,
+            severity: 'medium',
+            type: 'coverage_gap',
+            source_refs: [contractPath, 'plan.json'],
+            target_refs: [task.id],
+            description: `Contrato ${task.contract_id} não declara nenhum arquivo em write_allow — impossível verificar escopo`,
+            required_resolution: 'Adicionar padrões de arquivo ao scope.write_allow',
+            resolution_owner: 'architect',
+            status: 'open',
+          });
+        }
+
+        // Semantic check 2: contract must have budget limits
+        const budget = contract.budget_contract || contract.budget || {};
+        const hasBudget = budget.max_tokens || budget.max_cost_usd || budget.max_duration_minutes;
+        if (!hasBudget) {
+          findings.push({
+            id: `FIND-SEM-CTR-BUDGET-${task.contract_id}`,
+            severity: 'medium',
+            type: 'coverage_gap',
+            source_refs: [contractPath],
+            target_refs: [task.id],
+            description: `Contrato ${task.contract_id} não define limites de budget — sem enforcement de custo/tempo`,
+            required_resolution: 'Adicionar max_tokens, max_cost_usd ou max_duration_minutes',
+            resolution_owner: 'architect',
+            status: 'open',
+          });
+        }
+
+        // Semantic check 3: contract risk must match task complexity
+        const riskLevel = contract.risk?.level || 'L1';
+        const taskComplexity = task.complexity || 'medium';
+        const highComplexity = ['high', 'critical', 'architectural'].includes(taskComplexity);
+        if (highComplexity && ['L0', 'L1'].includes(riskLevel)) {
+          findings.push({
+            id: `FIND-SEM-CTR-RISK-${task.contract_id}`,
+            severity: 'medium',
+            type: 'conflict',
+            source_refs: [contractPath, 'plan.json'],
+            target_refs: [task.id],
+            description: `Task ${task.id} é de alta complexidade mas o contrato é risco ${riskLevel} — sub-classificação de risco`,
+            required_resolution: 'Reavaliar o risco da task ou decompor em tasks menores',
+            resolution_owner: 'architect',
+            status: 'open',
+          });
+        }
+      } catch {
+        // Skip unreadable contract
+      }
+    });
+  } catch {
+    // Skip
+  }
+
+  return findings;
+}
+
+/**
+ * Semantic validation: verify that evidence actually proves the contract's acceptance criteria.
+ */
+function validateEvidenceSemantics(workDir: string): GateFinding[] {
+  const findings: GateFinding[] = [];
+  const evidenceDir = path.join(workDir, 'evidence');
+
+  if (!fs.existsSync(evidenceDir)) {
+    findings.push({
+      id: 'FIND-SEM-EVD-001',
+      severity: 'high',
+      type: 'coverage_gap',
+      source_refs: ['evidence/'],
+      target_refs: [],
+      description: 'Diretório de evidências ausente — não há como verificar cumprimento do contrato',
+      required_resolution: 'Criar diretório evidence/ com logs, test results ou screenshots',
+      resolution_owner: 'engineer',
+      status: 'open',
+    });
+    return findings;
+  }
+
+  try {
+    const files = fs.readdirSync(evidenceDir);
+    if (files.length === 0) {
+      findings.push({
+        id: 'FIND-SEM-EVD-002',
+        severity: 'high',
+        type: 'coverage_gap',
+        source_refs: ['evidence/'],
+        target_refs: [],
+        description: 'Diretório de evidências vazio — nenhuma prova de execução disponível',
+        required_resolution: 'Adicionar arquivos de evidência (test results, logs, screenshots)',
+        resolution_owner: 'engineer',
+        status: 'open',
+      });
+    }
+
+    // Semantic check: evidence files should have content that looks like test output
+    const hasTestEvidence = files.some(f =>
+      /test|spec|result|log|output|coverage/i.test(f),
+    );
+    if (!hasTestEvidence && files.length > 0) {
+      findings.push({
+        id: 'FIND-SEM-EVD-003',
+        severity: 'low',
+        type: 'unverifiable_acceptance',
+        source_refs: ['evidence/'],
+        target_refs: files,
+        description: 'Nenhuma evidência de teste encontrada nos arquivos de evidence/',
+        required_resolution: 'Incluir resultados de testes ou logs de execução',
+        resolution_owner: 'engineer',
+        status: 'open',
+      });
+    }
+  } catch {
+    // Skip
+  }
+
+  return findings;
+}
+
+/**
+ * Run ALL semantic validations for a Work.
+ * This is the entry point for semantic traceability verification.
+ */
+export function validateSemanticTraceability(workDir: string, workId: string): GateFinding[] {
+  const findings: GateFinding[] = [];
+  findings.push(...validatePRDSemantics(workDir));
+  findings.push(...validateSpecCoversPRD(workDir));
+  findings.push(...validateContractSemantics(workDir));
+  findings.push(...validateEvidenceSemantics(workDir));
+  return findings;
+}

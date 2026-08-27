@@ -43,11 +43,14 @@ ${task.scope_contract.out_of_scope.map(o => `  ! ${o}`).join('\n')}
 ${task.acceptance_contract.commands.map(cmd => `  $ ${cmd}`).join('\n')}
 
 --------------------------------------------------------------------------------
-4. BUDGET & ESCALATION RULES
---------------------------------------------------------------------------------
-Max Attempts:    ${task.budget_contract.max_attempts}
-Max Duration:    ${task.budget_contract.max_duration_minutes ?? 'N/A'} mins
-Max USD:         $${task.budget_contract.max_cost_usd ?? 'N/A'}
+|4. BUDGET & ESCALATION RULES
+|--------------------------------------------------------------------------------
+|Max Agent Attempts:   ${task.budget_contract.max_agent_attempts}
+|Max LLM Calls:        ${task.budget_contract.max_llm_calls ?? 'N/A'}
+|Max Tool Calls:       ${task.budget_contract.max_tool_calls ?? 'N/A'}
+|Max Shell Executions: ${task.budget_contract.max_shell_executions ?? 'N/A'}
+|Max Duration:         ${task.budget_contract.max_duration_minutes ?? 'N/A'} mins
+|Max USD:              $${task.budget_contract.max_cost_usd ?? 'N/A'}
 
 On Write Violation: ${task.escalation_contract.on_write_violation}
 On Budget Exceeded:  ${task.escalation_contract.on_budget_exceeded}

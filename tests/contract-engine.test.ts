@@ -22,12 +22,18 @@ test('createDefaultContractV4 escala budget por risk level', () => {
   const l0 = createDefaultContractV4('T-001', '0001', 'Low Risk', 'L0');
   assert.equal(l0.budget_contract.max_tokens, 10_000);
   assert.equal(l0.budget_contract.max_cost_usd, 0.10);
-  assert.equal(l0.budget_contract.max_attempts, 3);
+  assert.equal(l0.budget_contract.max_agent_attempts, 2);
+  assert.equal(l0.budget_contract.max_llm_calls, 10);
+  assert.equal(l0.budget_contract.max_tool_calls, 20);
+  assert.equal(l0.budget_contract.max_shell_executions, 5);
 
   const l4 = createDefaultContractV4('T-002', '0001', 'High Risk', 'L4');
   assert.equal(l4.budget_contract.max_tokens, 200_000);
   assert.equal(l4.budget_contract.max_cost_usd, 5.00);
-  assert.equal(l4.budget_contract.max_attempts, 2);
+  assert.equal(l4.budget_contract.max_agent_attempts, 3);
+  assert.equal(l4.budget_contract.max_llm_calls, 30);
+  assert.equal(l4.budget_contract.max_tool_calls, 50);
+  assert.equal(l4.budget_contract.max_shell_executions, 10);
   assert.equal(l4.escalation_contract.on_budget_exceeded, 'human_review');
 });
 
@@ -87,34 +93,82 @@ test('generateContextCapsule formata os limites e cenários da cápsula', () => 
 
 // ── BudgetController tests ─────────────────────────────────────────
 
-test('BudgetController rastreia tokens, custo e tentativas', () => {
+test('BudgetController rastreia tokens, custo e unidades distintas', () => {
   const contract = createDefaultContractV4('T-001', '0001', 'Budget Test', 'L1');
   const budget = new BudgetController(contract);
 
   budget.recordTokens(1000);
   budget.recordCost(0.01);
-  budget.recordAttempt();
+  budget.recordAgentAttempt();
+  budget.recordLLMCall();
+  budget.recordToolCall();
+  budget.recordShellExecution();
 
   const usage = budget.getUsage();
   assert.equal(usage.tokens, 1000);
   assert.equal(usage.costUsd, 0.01);
-  assert.equal(usage.attempts, 1);
+  assert.equal(usage.agentAttempts, 1);
+  assert.equal(usage.llmCalls, 1);
+  assert.equal(usage.toolCalls, 1);
+  assert.equal(usage.shellExecutions, 1);
   assert.ok(usage.durationMs >= 0);
 });
 
-test('BudgetController detecta violação de tentativas', () => {
+test('BudgetController detecta violação de agent attempts', () => {
   const contract = createDefaultContractV4('T-001', '0001', 'Budget Test', 'L1');
   const budget = new BudgetController(contract);
 
-  // L1 default max_attempts = 3
-  budget.recordAttempt();
-  budget.recordAttempt();
+  // L1 default max_agent_attempts = 3
+  budget.recordAgentAttempt();
+  budget.recordAgentAttempt();
   assert.equal(budget.checkBudget(), null); // 2/3 OK
 
-  budget.recordAttempt();
+  budget.recordAgentAttempt();
   const violation = budget.checkBudget();
   assert.ok(violation !== null);
-  assert.equal(violation!.reason, 'max_attempts');
+  assert.equal(violation!.reason, 'max_agent_attempts');
+});
+
+test('BudgetController detecta violação de LLM calls', () => {
+  const contract = createDefaultContractV4('T-001', '0001', 'Budget Test', 'L0');
+  const budget = new BudgetController(contract);
+
+  // L0 default max_llm_calls = 10
+  for (let i = 0; i < 9; i++) budget.recordLLMCall();
+  assert.equal(budget.checkBudget(), null);
+
+  budget.recordLLMCall();
+  const violation = budget.checkBudget();
+  assert.ok(violation !== null);
+  assert.equal(violation!.reason, 'max_llm_calls');
+});
+
+test('BudgetController detecta violação de tool calls', () => {
+  const contract = createDefaultContractV4('T-001', '0001', 'Budget Test', 'L0');
+  const budget = new BudgetController(contract);
+
+  // L0 default max_tool_calls = 20
+  for (let i = 0; i < 19; i++) budget.recordToolCall();
+  assert.equal(budget.checkBudget(), null);
+
+  budget.recordToolCall();
+  const violation = budget.checkBudget();
+  assert.ok(violation !== null);
+  assert.equal(violation!.reason, 'max_tool_calls');
+});
+
+test('BudgetController detecta violação de shell executions', () => {
+  const contract = createDefaultContractV4('T-001', '0001', 'Budget Test', 'L0');
+  const budget = new BudgetController(contract);
+
+  // L0 default max_shell_executions = 5
+  for (let i = 0; i < 4; i++) budget.recordShellExecution();
+  assert.equal(budget.checkBudget(), null);
+
+  budget.recordShellExecution();
+  const violation = budget.checkBudget();
+  assert.ok(violation !== null);
+  assert.equal(violation!.reason, 'max_shell_executions');
 });
 
 test('BudgetController detecta violação de tokens', () => {

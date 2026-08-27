@@ -5,6 +5,7 @@ import { TaskContractV4, BudgetController, BudgetViolation } from './contract-en
 import { PolicyEngine, AgentOperation, PolicyDecision } from './policy-engine.js';
 import { SandboxSession, SandboxError, createGitWorktreeSandbox, cleanupGitWorktreeSandbox } from './sandbox.js';
 import { checkDiffAgainstContract, ContractDiffCheckReport } from './contract-guard.js';
+import { ToolAPI } from './tool-api.js';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ export interface RunContext {
   policy: PolicyEngine;
   events: RunEvent[];
   status: RunStatus;
+  /** Mandatory Tool API — the ONLY gateway for agent operations. */
+  tools: ToolAPI;
 }
 
 // ── Legacy: pack script runner ─────────────────────────────────────
@@ -76,10 +79,14 @@ function emitEvent(ctx: RunContext, type: RunEvent['type'], message: string, det
 }
 
 /**
- * Initialize a full run context: contract → policy → sandbox → budget.
+ * Initialize a full run context: contract → policy → sandbox → budget → tools.
  *
  * This is the entry point for contract-governed execution.
  * Throws SandboxError if the sandbox cannot be created (no fallback to rootDir).
+ *
+ * The returned RunContext contains `tools` — a ToolAPI instance that is the
+ * ONLY authorized gateway for the agent to interact with filesystem, shell,
+ * or network. Any operation bypassing `tools` violates the harness contract.
  */
 export function initRunContext(
   contract: TaskContractV4,
@@ -97,6 +104,7 @@ export function initRunContext(
     policy,
     events: [],
     status: 'pending',
+    tools: null as unknown as ToolAPI, // will be set after sandbox creation
   };
 
   emitEvent(ctx, 'start', `Run ${runId} inicializado para task ${contract.task_id} (risk: ${contract.risk.level})`);
@@ -114,6 +122,16 @@ export function initRunContext(
     }
     throw err;
   }
+
+  // 2. Bind the mandatory Tool API to the sandbox directory
+  const cwd = ctx.sandbox?.worktreePath ?? ctx.rootDir;
+  ctx.tools = new ToolAPI({
+    policy: ctx.policy,
+    budget: ctx.budget,
+    cwd,
+    runCtx: ctx,
+  });
+  emitEvent(ctx, 'step', `Tool API vinculada ao sandbox: ${cwd}`);
 
   ctx.status = 'running';
   return ctx;
@@ -147,48 +165,30 @@ export function checkBudget(ctx: RunContext): BudgetViolation | null {
 }
 
 /**
- * Run a shell command inside the sandbox.
- * Checks budget before execution, records attempt after.
+ * Run a shell command inside the sandbox USING the mandatory Tool API.
+ *
+ * DEPRECATED DIRECT USE: Agents should call ctx.tools.exec() directly.
+ * This wrapper exists for backward compatibility and pack script execution.
  */
 export function runInSandbox(ctx: RunContext, command: string, args: string[] = []): RunResult {
-  // Pre-check budget
-  const budgetViolation = checkBudget(ctx);
-  if (budgetViolation) {
+  // Use the Tool API — the ONLY authorized execution gateway
+  const result = ctx.tools.exec(command, args);
+
+  if (!result.success) {
+    const errorMsg = result.budgetViolation
+      ? `BUDGET EXCEEDED: ${result.budgetViolation.message}`
+      : `POLICY VIOLATION: ${result.error}`;
     return {
       status: 1,
       stdout: '',
-      stderr: `BUDGET EXCEEDED: ${budgetViolation.message}`,
+      stderr: errorMsg,
     };
   }
-
-  // Pre-check policy
-  const policyDecision = evaluateOperation(ctx, {
-    type: 'shell_exec',
-    command,
-    args,
-  });
-  if (!policyDecision.allowed) {
-    return {
-      status: 1,
-      stdout: '',
-      stderr: `POLICY VIOLATION: ${policyDecision.reason}`,
-    };
-  }
-
-  const cwd = ctx.sandbox?.worktreePath ?? ctx.rootDir;
-  const options: SpawnSyncOptions = {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env },
-  };
-
-  const proc = spawnSync(command, args, options);
-  ctx.budget.recordAttempt();
 
   return {
-    status: proc.status ?? 1,
-    stdout: proc.stdout as string || '',
-    stderr: proc.stderr as string || '',
+    status: result.data?.status ?? 0,
+    stdout: result.data?.stdout ?? '',
+    stderr: result.data?.stderr ?? '',
   };
 }
 

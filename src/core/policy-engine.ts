@@ -6,6 +6,11 @@
  *
  * This is the key architectural piece recommended by the technical audit:
  *   Contract → Policy Engine → ALLOW/DENY → filesystem / shell / network
+ *
+ * DESIGN PRINCIPLE: FAIL-CLOSED
+ * - Allowlists empty → DENY ALL (must be explicitly configured)
+ * - Unknown operations → DENY by default
+ * - To permit everything deliberately, use allowAllShell / allowAllNetwork flags
  */
 
 import { checkFileAgainstScope, FileDiffCheckResult } from './contract-guard.js';
@@ -21,9 +26,13 @@ export type FileSystemOperation =
   | { type: 'delete_file'; path: string }
   | { type: 'create_dir'; path: string };
 
+/**
+ * ShellOperation with STRUCTURAL matching.
+ * The command is the binary/executable, args are positional parameters.
+ * No shell string parsing — prevents bypass via &&, ;, |, >, $(...)
+ */
 export type ShellOperation =
-  | { type: 'shell_exec'; command: string }
-  | { type: 'shell_exec'; command: string; args: string[] };
+  | { type: 'shell_exec'; command: string; args?: string[] };
 
 export type NetworkOperation =
   | { type: 'http_request'; method: string; url: string }
@@ -48,18 +57,37 @@ export type PolicyDecision = {
 
 // ── Policy Rules ───────────────────────────────────────────────────
 
+/**
+ * Structural command rule: matches { command, args }.
+ *
+ * Rules are evaluated in order:
+ * 1. Exact command match (command === rule.command)
+ * 2. Arg prefix match (args start with rule.args)
+ *
+ * Example: { command: 'git', args: ['status'] } matches 'git status'
+ *          { command: 'git', args: [] } matches any git command
+ */
+export interface CommandRule {
+  command: string;
+  args?: string[];  // if undefined/empty, matches any args for this command
+}
+
 export interface ShellPolicy {
-  /** Allowed command prefixes (e.g. ['bun test', 'git status']) */
-  allowedCommands: string[];
-  /** Blocked command prefixes (deny overrides allow) */
-  deniedCommands: string[];
+  /** Allowed commands (structural). Empty → DENY ALL unless allowAllShell is true. */
+  allowedCommands: CommandRule[];
+  /** Blocked commands (structural). Deny always wins. */
+  deniedCommands: CommandRule[];
+  /** Explicitly allow ALL shell commands (use with caution). Overrides empty allowlist. */
+  allowAllShell?: boolean;
 }
 
 export interface NetworkPolicy {
-  /** Allowed URL prefixes / domains. Empty = all denied. */
+  /** Allowed URL prefixes / domains. Empty → DENY ALL unless allowAllNetwork is true. */
   allowedDomains: string[];
   /** Blocked URL prefixes / domains (deny overrides allow). */
   deniedDomains: string[];
+  /** Explicitly allow ALL network access (use with caution). Overrides empty allowlist. */
+  allowAllNetwork?: boolean;
 }
 
 export interface PolicyConfig {
@@ -75,12 +103,19 @@ export interface PolicyConfig {
 
 export const DEFAULT_SHELL_POLICY: ShellPolicy = {
   allowedCommands: [],
-  deniedCommands: ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:'],
+  deniedCommands: [
+    { command: 'rm', args: ['-rf', '/'] },
+    { command: 'mkfs' },
+    { command: 'dd' },
+    { command: ':' },
+  ],
+  allowAllShell: false,
 };
 
 export const DEFAULT_NETWORK_POLICY: NetworkPolicy = {
   allowedDomains: [],
   deniedDomains: [],
+  allowAllNetwork: false,
 };
 
 // ── Policy Engine ──────────────────────────────────────────────────
@@ -185,30 +220,45 @@ export class PolicyEngine {
     return this.evaluateFileWrite(op);
   }
 
+  /**
+   * Structural shell matching: command + args, not string prefix.
+   *
+   * FAIL-CLOSED: empty allowedCommands → DENY ALL unless allowAllShell is true.
+   */
   private evaluateShell(op: ShellOperation): PolicyDecision {
-    const fullCommand = 'args' in op ? `${op.command} ${(op.args ?? []).join(' ')}` : op.command;
+    const cmd = op.command;
+    const args = op.args ?? [];
 
-    // Deny check first
+    // 1. Deny check first (deny always wins)
     for (const denied of this.config.shell.deniedCommands) {
-      if (fullCommand.startsWith(denied) || fullCommand.includes(denied)) {
+      if (this.matchesCommandRule(cmd, args, denied)) {
         return {
           allowed: false,
           domain: 'shell',
           operation: op,
-          reason: `Comando bloqueado pela política: ${denied}`,
+          reason: `Comando bloqueado pela política: ${denied.command}${denied.args ? ' ' + denied.args.join(' ') : ''}`,
           violationType: 'shell_denied',
         };
       }
     }
 
-    // If allowlist is empty, allow everything not explicitly denied
+    // 2. Fail-closed: empty allowlist → DENY ALL
     if (this.config.shell.allowedCommands.length === 0) {
-      return { allowed: true, domain: 'shell', operation: op };
+      if (this.config.shell.allowAllShell) {
+        return { allowed: true, domain: 'shell', operation: op };
+      }
+      return {
+        allowed: false,
+        domain: 'shell',
+        operation: op,
+        reason: `Comando shell negado — allowlist vazia (fail-closed). Use allowAllShell=true para permitir deliberadamente.`,
+        violationType: 'shell_denied',
+      };
     }
 
-    // Allowlist check
+    // 3. Allowlist check (structural)
     for (const allowed of this.config.shell.allowedCommands) {
-      if (fullCommand.startsWith(allowed)) {
+      if (this.matchesCommandRule(cmd, args, allowed)) {
         return { allowed: true, domain: 'shell', operation: op };
       }
     }
@@ -217,15 +267,36 @@ export class PolicyEngine {
       allowed: false,
       domain: 'shell',
       operation: op,
-      reason: `Comando não está na allowlist de shells: ${fullCommand}`,
+      reason: `Comando ${cmd}${args.length > 0 ? ' ' + args.join(' ') : ''} não está na allowlist de shells`,
       violationType: 'shell_denied',
     };
   }
 
+  /**
+   * Structural command matching.
+   * Rule matches if:
+   *   1. command exactly matches
+   *   2. rule.args is undefined/empty OR args start with rule.args prefix
+   */
+  private matchesCommandRule(command: string, args: string[], rule: CommandRule): boolean {
+    if (command !== rule.command) return false;
+    if (!rule.args || rule.args.length === 0) return true;
+    if (args.length < rule.args.length) return false;
+    for (let i = 0; i < rule.args.length; i++) {
+      if (args[i] !== rule.args[i]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Network evaluation.
+   *
+   * FAIL-CLOSED: empty allowedDomains → DENY ALL unless allowAllNetwork is true.
+   */
   private evaluateNetwork(op: NetworkOperation): PolicyDecision {
     const url = op.type === 'http_request' ? op.url : `https://${op.hostname}`;
 
-    // Deny check
+    // 1. Deny check first
     for (const denied of this.config.network.deniedDomains) {
       if (url.includes(denied)) {
         return {
@@ -238,12 +309,21 @@ export class PolicyEngine {
       }
     }
 
-    // If allowlist is empty, allow everything not explicitly denied
+    // 2. Fail-closed: empty allowlist → DENY ALL
     if (this.config.network.allowedDomains.length === 0) {
-      return { allowed: true, domain: 'network', operation: op };
+      if (this.config.network.allowAllNetwork) {
+        return { allowed: true, domain: 'network', operation: op };
+      }
+      return {
+        allowed: false,
+        domain: 'network',
+        operation: op,
+        reason: `Acesso à rede negado — allowlist vazia (fail-closed). Use allowAllNetwork=true para permitir deliberadamente.`,
+        violationType: 'network_denied',
+      };
     }
 
-    // Allowlist check
+    // 3. Allowlist check
     for (const allowed of this.config.network.allowedDomains) {
       if (url.includes(allowed)) {
         return { allowed: true, domain: 'network', operation: op };
