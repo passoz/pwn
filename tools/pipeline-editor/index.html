@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Piwerness — Visual Pipeline & Model Editor (pwn-gui)</title>
+  <title>Piwerness Pipeline & Studio Dashboard (pwn-gui v3.0)</title>
   <style>
     :root {
       --bg-dark: #0B0F19;
       --panel-bg: #111827;
       --card-bg: #1F2937;
-      --border-color: #374151;
+      --card-bg-hover: #374151;
+      --border-color: #2D3748;
       --accent-cyan: #06B6D4;
       --accent-violet: #8B5CF6;
       --accent-green: #10B981;
@@ -37,14 +38,15 @@
       overflow: hidden;
     }
 
-    /* Header */
+    /* Top Navigation Header */
     header {
       background-color: var(--panel-bg);
       border-bottom: 1px solid var(--border-color);
-      padding: 12px 24px;
+      padding: 10px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
     }
 
     .brand {
@@ -54,23 +56,26 @@
     }
 
     .brand-logo {
-      width: 28px;
-      height: 28px;
+      width: 32px;
+      height: 32px;
       background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
-      border-radius: 6px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
       color: white;
-      font-size: 14px;
+      font-size: 16px;
       box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
     }
 
     .brand-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .brand-badge {
@@ -78,23 +83,62 @@
       font-size: 11px;
       background: rgba(139, 92, 246, 0.2);
       color: var(--accent-violet);
-      padding: 3px 8px;
+      padding: 2px 8px;
       border-radius: 12px;
       border: 1px solid rgba(139, 92, 246, 0.3);
     }
 
+    /* Multi-Tab Navigation Controls */
+    .tab-nav {
+      display: flex;
+      align-items: center;
+      background-color: #0A0D14;
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(139, 92, 246, 0.2));
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+    }
+
     .header-actions {
       display: flex;
-      gap: 10px;
+      align-items: center;
+      gap: 8px;
     }
 
     .btn {
       background-color: var(--card-bg);
       color: var(--text-main);
       border: 1px solid var(--border-color);
-      padding: 8px 14px;
+      padding: 7px 12px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
@@ -105,19 +149,12 @@
 
     .btn:hover {
       background-color: var(--border-color);
-      border-color: var(--text-muted);
     }
 
     .btn-primary {
       background: linear-gradient(135deg, var(--accent-cyan), #0284C7);
       border: none;
       color: white;
-      box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
-    }
-
-    .btn-primary:hover {
-      opacity: 0.9;
-      box-shadow: 0 0 14px rgba(6, 182, 212, 0.5);
     }
 
     .btn-success {
@@ -137,14 +174,33 @@
       color: white;
     }
 
-    /* Main Grid */
+    /* Main Container & Tab Views */
     main {
       flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .tab-view {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .tab-view.active {
+      display: flex;
+    }
+
+    /* Split Screen Layout (Left Editor + Right Visual Content) */
+    .split-layout {
       display: grid;
       grid-template-columns: 420px 1fr;
+      width: 100%;
+      height: 100%;
       gap: 1px;
       background-color: var(--border-color);
-      overflow: hidden;
     }
 
     .panel {
@@ -162,33 +218,13 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 12px;
+      font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      text-transform: none;
-    }
-
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--accent-green);
-    }
-
-    .dot.invalid {
-      background-color: var(--accent-red);
-    }
-
-    /* Code Editor Pane */
     .editor-container {
       flex: 1;
       display: flex;
@@ -196,7 +232,7 @@
       position: relative;
     }
 
-    textarea#json-input {
+    textarea.json-input-area {
       flex: 1;
       width: 100%;
       height: 100%;
@@ -228,7 +264,6 @@
       color: var(--accent-red);
     }
 
-    /* Interactive Graph & Config Pane */
     .view-content {
       flex: 1;
       padding: 24px;
@@ -251,18 +286,18 @@
       margin-bottom: 12px;
     }
 
-    /* Model Routing Form Card */
+    /* Cards & Forms */
     .models-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
     }
 
     .model-card {
       background-color: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 8px;
-      padding: 14px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -315,7 +350,6 @@
       border-color: var(--accent-cyan);
     }
 
-    /* Editable Stage Cards */
     .stage-card {
       background-color: var(--card-bg);
       border: 1px solid var(--border-color);
@@ -324,7 +358,6 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      position: relative;
       transition: all 0.2s ease;
     }
 
@@ -351,7 +384,174 @@
       color: var(--text-muted);
       font-size: 18px;
       margin: -12px 0;
-      user-select: none;
+    }
+
+    /* Tab 3: Tasks Execution Dashboard */
+    .dashboard-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px;
+      overflow-y: auto;
+      background-color: var(--panel-bg);
+    }
+
+    .stats-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .stat-card .label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .stat-card .value {
+      font-size: 22px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+    }
+
+    .stat-card .subtext {
+      font-size: 11px;
+      color: var(--accent-green);
+    }
+
+    .progress-bar-outer {
+      width: 100%;
+      height: 8px;
+      background-color: #0A0D14;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .progress-bar-inner {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background-color: var(--card-bg);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .task-item-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: border-color 0.2s ease;
+    }
+
+    .task-item-card:hover {
+      border-color: var(--accent-cyan);
+    }
+
+    .task-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .task-id {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .task-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .status-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-badge.done, .status-badge.completed {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge.in_progress {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .status-badge.pending {
+      background: rgba(156, 163, 175, 0.15);
+      color: var(--text-muted);
+      border: 1px solid rgba(156, 163, 175, 0.3);
+    }
+
+    .status-badge.failed {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--accent-red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .ac-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background-color: #0A0D14;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .ac-item {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .hidden { display: none !important; }
@@ -359,144 +559,264 @@
 </head>
 <body>
 
+  <!-- Top Header Bar -->
   <header>
     <div class="brand">
       <div class="brand-logo">P</div>
-      <div class="brand-title">Piwerness Pipeline & Model Editor</div>
-      <span class="brand-badge">pwn-gui v2.0 (Edição Interativa)</span>
+      <div class="brand-title">
+        <span>Piwerness Studio</span>
+        <span class="brand-badge">pwn-gui v3.0</span>
+      </div>
     </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" id="nav-btn-routing" data-tab="tab-routing">
+        <span>⚙️ 1. Roteamento de Modelos</span>
+      </button>
+      <button class="tab-btn" id="nav-btn-pipeline" data-tab="tab-pipeline">
+        <span>🔄 2. Pipeline & Portões</span>
+      </button>
+      <button class="tab-btn" id="nav-btn-tasks" data-tab="tab-tasks">
+        <span>📊 3. Progresso de Tarefas</span>
+      </button>
+    </nav>
+
+    <!-- Context Actions -->
     <div class="header-actions">
-      <button class="btn" id="btn-load-example">⚡ Carregar Exemplo</button>
-      <button class="btn" id="btn-add-stage">➕ Adicionar Estágio</button>
-      <button class="btn btn-primary" id="btn-export-pipeline">↓ Exportar pipeline.json</button>
-      <button class="btn btn-success" id="btn-export-routing">↓ Exportar routing.json</button>
-      <button class="btn" id="btn-export-env">↓ Exportar .env.example</button>
+      <button class="btn" id="btn-load-example">⚡ Exemplo Canônico</button>
+      <button class="btn btn-primary" id="btn-export-current">↓ Exportar Artefato</button>
     </div>
   </header>
 
+  <!-- Main Multi-Tab View Shell -->
   <main>
-    <!-- Pane 1: Editor JSON Interativo em Tempo Real -->
-    <div class="panel">
-      <div class="panel-header">
-        <span>Editor de Código (JSON)</span>
-        <div class="status-indicator">
-          <div class="dot" id="status-dot"></div>
-          <span id="status-text">Sintaxe OK</span>
+
+    <!-- ABA 1: Roteamento & Configurações de Modelos (LLMs) -->
+    <div class="tab-view active" id="tab-routing">
+      <div class="split-layout">
+        <!-- Esquerda: JSON Code Editor -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>Configuração JSON (routing.json)</span>
+            <div class="status-indicator" style="display: flex; align-items: center; gap: 6px;">
+              <span id="routing-status-text">Sintaxe OK</span>
+            </div>
+          </div>
+          <div class="editor-container">
+            <textarea id="json-input" class="json-input-area" spellcheck="false"></textarea>
+            <div class="validation-bar" id="routing-validation-bar">
+              ✓ Roteamento VÁLIDO para .piwerness/routing.json
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="editor-container">
-        <textarea id="json-input" spellcheck="false"></textarea>
-        <div class="validation-bar" id="validation-bar">
-          ✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json
+
+        <!-- Direita: Formulários Interativos de Modelos & Endpoints -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>⚙️ Roteamento de Modelos Padrão (Routing Table) & Endpoints</span>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-success" style="padding: 3px 8px; font-size: 11px;" id="btn-export-routing">↓ Exportar routing.json</button>
+              <button class="btn" style="padding: 3px 8px; font-size: 11px;" id="btn-export-env">↓ Exportar .env.example</button>
+            </div>
+          </div>
+          <div class="view-content">
+            <section>
+              <div class="section-title">
+                <span>Roteamento de Modelos por Papel do Agente</span>
+                <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">Provedores, API Keys e Raciocínio</span>
+              </div>
+              <div class="models-grid" id="models-grid">
+                <!-- Renderizado dinamicamente pelo JS -->
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Pane 2: Editor Gráfico de Estágios e Modelos Roteados -->
-    <div class="panel">
-      <div class="panel-header">
-        <span>Edição Visual & Roteamento de Modelos</span>
-        <span style="font-family: var(--font-mono); font-size: 11px;" id="stage-count">0 Estágios</span>
-      </div>
-      <div class="view-content">
+    <!-- ABA 2: Pipeline & Portões (Stages) -->
+    <div class="tab-view" id="tab-pipeline">
+      <div class="split-layout">
+        <!-- Esquerda: JSON Code Editor da Pipeline -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>Estrutura Normativa (pipeline.json)</span>
+            <div class="status-indicator" style="display: flex; align-items: center; gap: 6px;">
+              <span id="pipeline-status-text">Sintaxe OK</span>
+            </div>
+          </div>
+          <div class="editor-container">
+            <textarea id="pipeline-json-input" class="json-input-area" spellcheck="false"></textarea>
+            <div class="validation-bar" id="pipeline-validation-bar">
+              ✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json
+            </div>
+          </div>
+        </div>
 
-        <!-- Seção 1: Configuração de Modelos Padrão (Routing Table) -->
-        <section>
-          <div class="section-title">
-            <span>⚙️ Roteamento de Modelos Padrão (Routing Table)</span>
-            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">Configuração por Papéis</span>
+        <!-- Direita: Cartões de Estágios e Portões -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>🔄 Estágios e Portões Determinísticos</span>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="font-family: var(--font-mono); font-size: 11px;" id="stage-count">0 Estágios</span>
+              <button class="btn btn-primary" style="padding: 3px 8px; font-size: 11px;" id="btn-add-stage">➕ Novo Estágio</button>
+              <button class="btn btn-success" style="padding: 3px 8px; font-size: 11px;" id="btn-export-pipeline">↓ Exportar pipeline.json</button>
+            </div>
           </div>
-          <div class="models-grid" id="models-grid">
-            <!-- Renderizado dinamicamente pelo JS -->
+          <div class="view-content">
+            <section>
+              <div class="section-title">
+                <span>Sequência Executiva dos Estágios</span>
+                <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" id="btn-add-stage-inline">➕ Adicionar Estágio</button>
+              </div>
+              <div id="stages-container" style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- Renderizado dinamicamente pelo JS -->
+              </div>
+            </section>
           </div>
-        </section>
-
-        <!-- Seção 2: Estágios Sequenciais da Pipeline -->
-        <section>
-          <div class="section-title">
-            <span>🔄 Estágios e Portões da Pipeline</span>
-            <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" id="btn-add-stage-inline">➕ Novo Estágio</button>
-          </div>
-          <div id="stages-container" style="display: flex; flex-direction: column; gap: 16px;">
-            <!-- Renderizado dinamicamente pelo JS -->
-          </div>
-        </section>
-
+        </div>
       </div>
     </div>
+
+    <!-- ABA 3: Progresso de Tarefas (Tasks Execution Dashboard) -->
+    <div class="tab-view" id="tab-tasks">
+      <div class="dashboard-container">
+        <!-- Top Metrics Cards -->
+        <div class="stats-strip">
+          <div class="stat-card">
+            <span class="label">Work ID</span>
+            <span class="value" id="task-stat-workid">0001</span>
+            <span class="subtext" id="task-stat-spec">Ref: spec.json</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Progresso Total</span>
+            <span class="value" id="task-stat-percent">100%</span>
+            <div class="progress-bar-outer">
+              <div class="progress-bar-inner" id="task-progress-fill" style="width: 100%;"></div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="label">Tarefas Concluídas</span>
+            <span class="value" id="task-stat-completed">8 / 8</span>
+            <span class="subtext">Todas validadas</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Status da Execução</span>
+            <span class="value" style="color: var(--accent-green);" id="task-stat-status">EM ANDAMENTO</span>
+            <span class="subtext">0 Bloqueadas / 0 Erros</span>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="filter-bar">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="font-size: 13px; font-weight: 700; color: var(--text-muted);">Filtrar por Status:</span>
+            <select class="form-control" id="task-status-filter" style="padding: 4px 8px; font-size: 12px;">
+              <option value="all">Todas as Tarefas</option>
+              <option value="done">Concluídas (done)</option>
+              <option value="in_progress">Em Progresso (in_progress)</option>
+              <option value="pending">Pendentes (pending)</option>
+              <option value="failed">Falhas (failed)</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" class="form-control" id="task-search-input" placeholder="Buscar por ID ou título..." style="padding: 4px 10px; font-size: 12px; width: 220px;">
+            <button class="btn btn-primary" id="btn-load-todo">⚡ Carregar todo.json Atual</button>
+          </div>
+        </div>
+
+        <!-- Task Items List -->
+        <div class="task-list" id="task-items-container">
+          <!-- Renderizado dinamicamente pelo JS -->
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <script>
+    // --- ESTADO INICIAL & DEFAULTS ---
+    const DEFAULT_ROUTING = {
+      "cheap": { "defaultModel": "qwen3.5:27b", "provider": "ollama", "baseUrl": "http://localhost:11434/v1", "apiKeyEnv": "OLLAMA_API_KEY", "apiKey": "", "maxTokens": 4000, "temperature": 0.2, "reasoningEffort": "low" },
+      "strong": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 16000, "temperature": 0.1, "reasoningEffort": "high" },
+      "plan": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 12000, "temperature": 0.2, "reasoningEffort": "medium" },
+      "review": { "defaultModel": "claude-3-5-haiku", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 8000, "temperature": 0.1, "reasoningEffort": "low" }
+    };
+
     const DEFAULT_PIPELINE = {
       "$schema": "../../schemas/pipeline.schema.json",
       "pipeline_version": "4.0",
       "name": "Pipeline Autônoma Piwerness Standard",
       "description": "Fluxo nativo de governança contratual, TDD e roteamento de modelos por papéis",
-      "default_models": {
-        "cheap": { "defaultModel": "qwen3.5:27b", "provider": "ollama", "baseUrl": "http://localhost:11434/v1", "apiKeyEnv": "OLLAMA_API_KEY", "apiKey": "", "maxTokens": 4000, "temperature": 0.2, "reasoningEffort": "low" },
-        "strong": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 16000, "temperature": 0.1, "reasoningEffort": "high" },
-        "plan": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 12000, "temperature": 0.2, "reasoningEffort": "medium" },
-        "review": { "defaultModel": "claude-3-5-haiku", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 8000, "temperature": 0.1, "reasoningEffort": "low" }
-      },
+      "default_models": DEFAULT_ROUTING,
       "stages": [
+        { "id": "STG-01", "name": "Intake & Discovery", "description": "Captura da ideia bruta e grilling inicial para levantar contexto do projeto", "gate": "GATE-DISC-REQ", "agent_role": "cheap" },
+        { "id": "STG-02", "name": "Requisitos & PRD", "description": "Consolidação de requisitos funcionais e não funcionais em PRD normativo", "gate": "GATE-REQ-PRD", "agent_role": "strong" },
+        { "id": "STG-03", "name": "Especificação Técnica (Spec)", "description": "Definição de capacidades, invariantes e modelo conceitual da solução", "gate": "GATE-PRD-SPEC", "agent_role": "strong" },
+        { "id": "STG-04", "name": "Decomposição do Plano & Tarefas", "description": "Quebra da spec em plano atômico de tarefas e congelamento de contratos V4", "gate": "GATE-SPEC-PLAN", "agent_role": "plan" },
+        { "id": "STG-05", "name": "Execução Contratual & TDD", "description": "Execução isolada em sandbox Git worktree com validação estrita de allowlist de escrita", "gate": "GATE-PLAN-CONTRACT", "agent_role": "cheap" },
+        { "id": "STG-06", "name": "Revisão Assíncrona & Audit", "description": "Auditoria de rastreabilidade e revisão de tarefas em fila AFK caso haja escalação", "gate": "GATE-AUDIT", "agent_role": "review" }
+      ]
+    };
+
+    const DEFAULT_TASKS_DATA = {
+      "work_id": "0001",
+      "status": "in_progress",
+      "coverage": { "total_tasks": 8, "completed": 8, "test_coverage_percent": 100 },
+      "tasks": [
         {
-          "id": "STG-01",
-          "name": "Intake & Discovery",
-          "description": "Captura da ideia bruta e grilling inicial para levantar contexto do projeto",
-          "gate": "GATE-DISC-REQ",
-          "agent_role": "cheap"
+          "id": "T-001",
+          "title": "Marco 1 — Port fiel do ai-engineering-skills",
+          "description": "Portar o repositório ai-engineering-skills para packs/software-engineering/ com proveniência e integridade",
+          "status": "done",
+          "priority": "critical",
+          "agent": "cheap",
+          "ac": [
+            { "id": "AC-001", "statement": "Registrar commit e inventário em packs/software-engineering/PORTED_FROM.md" },
+            { "id": "AC-002", "statement": "Copiar skills, workflows, scripts, testes, docs e adapters" }
+          ]
         },
         {
-          "id": "STG-02",
-          "name": "Requisitos & PRD",
-          "description": "Consolidação de requisitos funcionais e não funcionais em PRD normativo",
-          "gate": "GATE-REQ-PRD",
-          "agent_role": "strong"
+          "id": "T-002",
+          "title": "Marco 2 — Adaptação e Materialização de Targets",
+          "description": "Implementar gerador de alvos (Pi, OpenCode, OMP) com detecção graciosa",
+          "status": "done",
+          "priority": "high",
+          "agent": "strong",
+          "ac": [
+            { "id": "AC-001", "statement": "Criar geradores específicos para pi, opencode e omp em src/targets/" }
+          ]
         },
         {
-          "id": "STG-03",
-          "name": "Especificação Técnica (Spec)",
-          "description": "Definição de capacidades, invariantes e modelo conceitual da solução",
-          "gate": "GATE-PRD-SPEC",
-          "agent_role": "strong"
+          "id": "T-003",
+          "title": "Marco 3 — Roteamento de Modelos por Papéis",
+          "description": "Suportar arquivo .piwerness/routing.json e overrides por variáveis de ambiente",
+          "status": "done",
+          "priority": "high",
+          "agent": "plan",
+          "ac": [
+            { "id": "AC-001", "statement": "Adicionar função getRoutingTable() e saveRoutingConfig() em router.ts" }
+          ]
         },
         {
-          "id": "STG-04",
-          "name": "Decomposição do Plano & Tarefas",
-          "description": "Quebra da spec em plano atômico de tarefas e congelamento de contratos V4",
-          "gate": "GATE-SPEC-PLAN",
-          "agent_role": "plan"
-        },
-        {
-          "id": "STG-05",
-          "name": "Execução Contratual & TDD",
-          "description": "Execução isolada em sandbox Git worktree com validação estrita de allowlist de escrita",
-          "gate": "GATE-PLAN-CONTRACT",
-          "agent_role": "cheap"
-        },
-        {
-          "id": "STG-06",
-          "name": "Revisão Assíncrona & Audit",
-          "description": "Auditoria de rastreabilidade e revisão de tarefas em fila AFK caso haja escalação",
-          "gate": "GATE-AUDIT",
-          "agent_role": "review"
+          "id": "T-004",
+          "title": "Marco 4 — Editor Visual Interativo pwn-gui",
+          "description": "Interface visual para edição bidirecional de pipelines, roteamento de modelos e monitoramento de tarefas",
+          "status": "done",
+          "priority": "critical",
+          "agent": "strong",
+          "ac": [
+            { "id": "AC-001", "statement": "Implementar pwn-gui em 3 abas focadas no mesmo HTML estático" }
+          ]
         }
       ]
     };
 
-    const AVAILABLE_GATES = [
-      "",
-      "GATE-DISC-REQ",
-      "GATE-REQ-PRD",
-      "GATE-PRD-SPEC",
-      "GATE-SPEC-PLAN",
-      "GATE-PLAN-CONTRACT",
-      "GATE-AUDIT"
-    ];
-
     const AVAILABLE_ROLES = ["cheap", "strong", "plan", "review"];
     const AVAILABLE_PROVIDERS = ["anthropic", "openai", "ollama", "openrouter", "vllm", "custom"];
     const AVAILABLE_REASONING = ["off", "low", "medium", "high"];
+    const AVAILABLE_GATES = ["", "GATE-DISC-REQ", "GATE-REQ-PRD", "GATE-PRD-SPEC", "GATE-SPEC-PLAN", "GATE-PLAN-CONTRACT", "GATE-AUDIT"];
 
     const PROVIDER_DEFAULTS = {
       anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiKeyEnv: 'ANTHROPIC_API_KEY', defaultModel: 'claude-3-7-sonnet' },
@@ -507,72 +827,62 @@
       custom: { baseUrl: 'http://localhost:8080/v1', apiKeyEnv: 'CUSTOM_API_KEY', defaultModel: 'custom-model' }
     };
 
-    const textarea = document.getElementById('json-input');
-    const stagesContainer = document.getElementById('stages-container');
+    // Global App State
+    let routingState = JSON.parse(JSON.stringify(DEFAULT_ROUTING));
+    let pipelineState = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
+    let tasksState = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA));
+    let currentTab = 'tab-routing';
+
+    // --- TAB SWITCHING NAVIGATION ---
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetTab = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+
+        btn.classList.add('active');
+        document.getElementById(targetTab).classList.add('active');
+        currentTab = targetTab;
+      });
+    });
+
+    // --- ABA 1: ROTEAMENTO ---
+    const jsonInputRouting = document.getElementById('json-input');
     const modelsGrid = document.getElementById('models-grid');
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const validationBar = document.getElementById('validation-bar');
-    const stageCount = document.getElementById('stage-count');
 
-    let isUpdatingFromForm = false;
-    let state = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
+    jsonInputRouting.value = JSON.stringify(routingState, null, 2);
 
-    textarea.value = JSON.stringify(state, null, 2);
-
-    function updateJsonTextarea() {
-      isUpdatingFromForm = true;
-      textarea.value = JSON.stringify(state, null, 2);
-      validateAndUpdateVisuals(false);
-      isUpdatingFromForm = false;
-    }
-
-    function validateAndUpdateVisuals(shouldParseTextarea = true) {
-      if (shouldParseTextarea && !isUpdatingFromForm) {
-        try {
-          state = JSON.parse(textarea.value);
-          statusDot.className = 'dot';
-          statusText.innerText = 'Sintaxe OK';
-          validationBar.className = 'validation-bar';
-          validationBar.innerText = '✓ Pipeline VÁLIDA contra schemas/pipeline.schema.json';
-        } catch (err) {
-          statusDot.className = 'dot invalid';
-          statusText.innerText = 'Erro de Sintaxe';
-          validationBar.className = 'validation-bar error';
-          validationBar.innerText = '✗ Erro JSON: ' + err.message;
-          return;
-        }
-      }
-
-      if (!state.stages || !Array.isArray(state.stages)) {
-        validationBar.className = 'validation-bar error';
-        validationBar.innerText = '✗ Erro de Schema: Campo "stages" (Array) é obrigatório';
-        return;
-      }
-
-      if (!state.default_models) {
-        state.default_models = JSON.parse(JSON.stringify(DEFAULT_PIPELINE.default_models));
-      }
-
+    function updateRoutingJsonTextarea() {
+      jsonInputRouting.value = JSON.stringify(routingState, null, 2);
+      pipelineState.default_models = routingState;
+      document.getElementById('pipeline-json-input').value = JSON.stringify(pipelineState, null, 2);
       renderModelForms();
-      renderStageForms();
     }
 
-    // Renderizar formulários dos modelos de IA e Endpoints de API
+    jsonInputRouting.addEventListener('input', () => {
+      try {
+        routingState = JSON.parse(jsonInputRouting.value);
+        pipelineState.default_models = routingState;
+        renderModelForms();
+        document.getElementById('routing-status-text').innerText = 'Sintaxe OK';
+      } catch (e) {
+        document.getElementById('routing-status-text').innerText = 'Erro no JSON';
+      }
+    });
+
     function renderModelForms() {
       modelsGrid.innerHTML = '';
-
       AVAILABLE_ROLES.forEach(role => {
-        const modelData = state.default_models[role] || { defaultModel: '', maxTokens: 4000, temperature: 0.1 };
+        const m = routingState[role] || { defaultModel: '', maxTokens: 4000, temperature: 0.1 };
         const card = document.createElement('div');
         card.className = 'model-card';
 
         const providerOptions = AVAILABLE_PROVIDERS.map(p => `
-          <option value="${p}" ${(modelData.provider || 'anthropic') === p ? 'selected' : ''}>${p}</option>
+          <option value="${p}" ${(m.provider || 'anthropic') === p ? 'selected' : ''}>${p}</option>
         `).join('');
 
         const reasoningOptions = AVAILABLE_REASONING.map(r => `
-          <option value="${r}" ${(modelData.reasoningEffort || 'low') === r ? 'selected' : ''}>${r}</option>
+          <option value="${r}" ${(m.reasoningEffort || 'low') === r ? 'selected' : ''}>${r}</option>
         `).join('');
 
         card.innerHTML = `
@@ -582,7 +892,7 @@
           </div>
           <div class="form-group">
             <label>Modelo LLM</label>
-            <input type="text" class="form-control model-name-input" data-role="${role}" value="${modelData.defaultModel || ''}" placeholder="ex: claude-3-7-sonnet">
+            <input type="text" class="form-control model-name-input" data-role="${role}" value="${m.defaultModel || ''}">
           </div>
           <div class="stage-row" style="grid-template-columns: 1fr 1fr;">
             <div class="form-group">
@@ -590,30 +900,30 @@
               <select class="form-control model-provider-select" data-role="${role}">${providerOptions}</select>
             </div>
             <div class="form-group">
-              <label>Reasoning (Raciocínio)</label>
+              <label>Reasoning</label>
               <select class="form-control model-reasoning-select" data-role="${role}">${reasoningOptions}</select>
             </div>
           </div>
           <div class="form-group">
-            <label>API Base URL / Endpoint</label>
-            <input type="text" class="form-control model-baseurl-input" data-role="${role}" value="${modelData.baseUrl || ''}" placeholder="ex: https://api.anthropic.com/v1">
+            <label>API Base URL</label>
+            <input type="text" class="form-control model-baseurl-input" data-role="${role}" value="${m.baseUrl || ''}">
           </div>
           <div class="form-group">
-            <label>Variável ENV da API Key</label>
-            <input type="text" class="form-control model-apikeyenv-input" data-role="${role}" value="${modelData.apiKeyEnv || ''}" placeholder="ex: ANTHROPIC_API_KEY">
+            <label>Variável ENV Key</label>
+            <input type="text" class="form-control model-apikeyenv-input" data-role="${role}" value="${m.apiKeyEnv || ''}">
           </div>
           <div class="form-group">
-            <label>API Key (Direta / Segredo)</label>
-            <input type="password" class="form-control model-apikey-input" data-role="${role}" value="${modelData.apiKey || ''}" placeholder="sk-...">
+            <label>API Key Direta</label>
+            <input type="password" class="form-control model-apikey-input" data-role="${role}" value="${m.apiKey || ''}">
           </div>
           <div class="stage-row" style="grid-template-columns: 1fr 1fr;">
             <div class="form-group">
               <label>Max Tokens</label>
-              <input type="number" class="form-control model-tokens-input" data-role="${role}" value="${modelData.maxTokens || 4000}">
+              <input type="number" class="form-control model-tokens-input" data-role="${role}" value="${m.maxTokens || 4000}">
             </div>
             <div class="form-group">
               <label>Temperature</label>
-              <input type="number" step="0.05" min="0" max="1" class="form-control model-temp-input" data-role="${role}" value="${modelData.temperature ?? 0.1}">
+              <input type="number" step="0.05" min="0" max="1" class="form-control model-temp-input" data-role="${role}" value="${m.temperature ?? 0.1}">
             </div>
           </div>
         `;
@@ -621,94 +931,103 @@
         modelsGrid.appendChild(card);
       });
 
-      // Bind events nos inputs de modelo
+      // Events
       modelsGrid.querySelectorAll('.model-name-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].defaultModel = e.target.value;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].defaultModel = e.target.value;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-provider-select').forEach(select => {
         select.addEventListener('change', (e) => {
           const role = e.target.dataset.role;
-          const newProvider = e.target.value;
-          state.default_models[role].provider = newProvider;
-          
-          if (PROVIDER_DEFAULTS[newProvider]) {
-            state.default_models[role].apiKeyEnv = PROVIDER_DEFAULTS[newProvider].apiKeyEnv;
-            state.default_models[role].baseUrl = PROVIDER_DEFAULTS[newProvider].baseUrl;
+          const p = e.target.value;
+          routingState[role].provider = p;
+          if (PROVIDER_DEFAULTS[p]) {
+            routingState[role].apiKeyEnv = PROVIDER_DEFAULTS[p].apiKeyEnv;
+            routingState[role].baseUrl = PROVIDER_DEFAULTS[p].baseUrl;
           }
-          updateJsonTextarea();
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-reasoning-select').forEach(select => {
         select.addEventListener('change', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].reasoningEffort = e.target.value;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].reasoningEffort = e.target.value;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-baseurl-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].baseUrl = e.target.value;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].baseUrl = e.target.value;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-apikeyenv-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].apiKeyEnv = e.target.value;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].apiKeyEnv = e.target.value;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-apikey-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].apiKey = e.target.value;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].apiKey = e.target.value;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-tokens-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].maxTokens = parseInt(e.target.value, 10) || 4000;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].maxTokens = parseInt(e.target.value, 10) || 4000;
+          updateRoutingJsonTextarea();
         });
       });
 
       modelsGrid.querySelectorAll('.model-temp-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const role = e.target.dataset.role;
-          state.default_models[role].temperature = parseFloat(e.target.value) || 0.1;
-          updateJsonTextarea();
+          routingState[e.target.dataset.role].temperature = parseFloat(e.target.value) || 0.1;
+          updateRoutingJsonTextarea();
         });
       });
     }
 
-    // Renderizar cartões interativos de estágios da Pipeline
+    // --- ABA 2: PIPELINE & STAGES ---
+    const jsonInputPipeline = document.getElementById('pipeline-json-input');
+    const stagesContainer = document.getElementById('stages-container');
+    const stageCount = document.getElementById('stage-count');
+
+    jsonInputPipeline.value = JSON.stringify(pipelineState, null, 2);
+
+    function updatePipelineJsonTextarea() {
+      jsonInputPipeline.value = JSON.stringify(pipelineState, null, 2);
+      renderStageForms();
+    }
+
+    jsonInputPipeline.addEventListener('input', () => {
+      try {
+        pipelineState = JSON.parse(jsonInputPipeline.value);
+        if (pipelineState.default_models) routingState = pipelineState.default_models;
+        renderStageForms();
+        document.getElementById('pipeline-status-text').innerText = 'Sintaxe OK';
+      } catch (e) {
+        document.getElementById('pipeline-status-text').innerText = 'Erro no JSON';
+      }
+    });
+
     function renderStageForms() {
       stagesContainer.innerHTML = '';
-      stageCount.innerText = `${state.stages.length} Estágios`;
+      stageCount.innerText = `${pipelineState.stages.length} Estágios`;
 
-      state.stages.forEach((stg, index) => {
+      pipelineState.stages.forEach((stg, index) => {
         const card = document.createElement('div');
         card.className = 'stage-card';
 
-        const gateOptionsHTML = AVAILABLE_GATES.map(g => `
-          <option value="${g}" ${stg.gate === g ? 'selected' : ''}>${g || '(Nenhum Gate)'}</option>
-        `).join('');
-
-        const roleOptionsHTML = AVAILABLE_ROLES.map(r => `
-          <option value="${r}" ${stg.agent_role === r ? 'selected' : ''}>${r}</option>
-        `).join('');
+        const gateOptionsHTML = AVAILABLE_GATES.map(g => `<option value="${g}" ${stg.gate === g ? 'selected' : ''}>${g || '(Nenhum Gate)'}</option>`).join('');
+        const roleOptionsHTML = AVAILABLE_ROLES.map(r => `<option value="${r}" ${stg.agent_role === r ? 'selected' : ''}>${r}</option>`).join('');
 
         card.innerHTML = `
           <div class="stage-row">
@@ -734,15 +1053,14 @@
             <input type="text" class="form-control stage-desc-input" data-index="${index}" value="${stg.description || ''}">
           </div>
           <div class="stage-actions">
-            <button class="btn btn-danger btn-delete-stage" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">🗑️ Excluir</button>
-            ${index > 0 ? `<button class="btn btn-move-up" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">⬆️ Mover P/ Cima</button>` : ''}
-            ${index < state.stages.length - 1 ? `<button class="btn btn-move-down" data-index="${index}" style="padding: 4px 8px; font-size: 11px;">⬇️ Mover P/ Baixo</button>` : ''}
+            <button class="btn btn-danger btn-delete-stage" data-index="${index}" style="padding: 3px 8px; font-size: 11px;">🗑️ Excluir</button>
+            ${index > 0 ? `<button class="btn btn-move-up" data-index="${index}" style="padding: 3px 8px; font-size: 11px;">⬆️ Cima</button>` : ''}
+            ${index < pipelineState.stages.length - 1 ? `<button class="btn btn-move-down" data-index="${index}" style="padding: 3px 8px; font-size: 11px;">⬇️ Baixo</button>` : ''}
           </div>
         `;
 
         stagesContainer.appendChild(card);
-
-        if (index < state.stages.length - 1) {
+        if (index < pipelineState.stages.length - 1) {
           const arrow = document.createElement('div');
           arrow.className = 'stage-connect-arrow';
           arrow.innerText = '↓';
@@ -750,52 +1068,46 @@
         }
       });
 
-      // Bind events de edição de estágio
+      // Events
       stagesContainer.querySelectorAll('.stage-id-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages[idx].id = e.target.value;
-          updateJsonTextarea();
+          pipelineState.stages[parseInt(e.target.dataset.index, 10)].id = e.target.value;
+          updatePipelineJsonTextarea();
         });
       });
 
       stagesContainer.querySelectorAll('.stage-name-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages[idx].name = e.target.value;
-          updateJsonTextarea();
+          pipelineState.stages[parseInt(e.target.dataset.index, 10)].name = e.target.value;
+          updatePipelineJsonTextarea();
         });
       });
 
       stagesContainer.querySelectorAll('.stage-gate-select').forEach(select => {
         select.addEventListener('change', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages[idx].gate = e.target.value || undefined;
-          updateJsonTextarea();
+          pipelineState.stages[parseInt(e.target.dataset.index, 10)].gate = e.target.value || undefined;
+          updatePipelineJsonTextarea();
         });
       });
 
       stagesContainer.querySelectorAll('.stage-role-select').forEach(select => {
         select.addEventListener('change', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages[idx].agent_role = e.target.value;
-          updateJsonTextarea();
+          pipelineState.stages[parseInt(e.target.dataset.index, 10)].agent_role = e.target.value;
+          updatePipelineJsonTextarea();
         });
       });
 
       stagesContainer.querySelectorAll('.stage-desc-input').forEach(input => {
         input.addEventListener('input', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages[idx].description = e.target.value;
-          updateJsonTextarea();
+          pipelineState.stages[parseInt(e.target.dataset.index, 10)].description = e.target.value;
+          updatePipelineJsonTextarea();
         });
       });
 
       stagesContainer.querySelectorAll('.btn-delete-stage').forEach(btn => {
         btn.addEventListener('click', (e) => {
-          const idx = parseInt(e.target.dataset.index, 10);
-          state.stages.splice(idx, 1);
-          updateJsonTextarea();
+          pipelineState.stages.splice(parseInt(e.target.dataset.index, 10), 1);
+          updatePipelineJsonTextarea();
         });
       });
 
@@ -803,10 +1115,10 @@
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index, 10);
           if (idx > 0) {
-            const temp = state.stages[idx];
-            state.stages[idx] = state.stages[idx - 1];
-            state.stages[idx - 1] = temp;
-            updateJsonTextarea();
+            const temp = pipelineState.stages[idx];
+            pipelineState.stages[idx] = pipelineState.stages[idx - 1];
+            pipelineState.stages[idx - 1] = temp;
+            updatePipelineJsonTextarea();
           }
         });
       });
@@ -814,87 +1126,160 @@
       stagesContainer.querySelectorAll('.btn-move-down').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const idx = parseInt(e.target.dataset.index, 10);
-          if (idx < state.stages.length - 1) {
-            const temp = state.stages[idx];
-            state.stages[idx] = state.stages[idx + 1];
-            state.stages[idx + 1] = temp;
-            updateJsonTextarea();
+          if (idx < pipelineState.stages.length - 1) {
+            const temp = pipelineState.stages[idx];
+            pipelineState.stages[idx] = pipelineState.stages[idx + 1];
+            pipelineState.stages[idx + 1] = temp;
+            updatePipelineJsonTextarea();
           }
         });
       });
     }
 
     function addStage() {
-      const nextId = `STG-0${state.stages.length + 1}`;
-      state.stages.push({
+      const nextId = `STG-0${pipelineState.stages.length + 1}`;
+      pipelineState.stages.push({
         id: nextId,
-        name: `Novo Estágio ${state.stages.length + 1}`,
-        description: 'Descrição da tarefa do estágio',
+        name: `Novo Estágio ${pipelineState.stages.length + 1}`,
+        description: 'Descrição das etapas executivas do estágio',
         gate: 'GATE-DISC-REQ',
         agent_role: 'cheap'
       });
-      updateJsonTextarea();
+      updatePipelineJsonTextarea();
     }
-
-    // Events
-    textarea.addEventListener('input', () => validateAndUpdateVisuals(true));
-
-    document.getElementById('btn-load-example').addEventListener('click', () => {
-      state = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
-      updateJsonTextarea();
-    });
 
     document.getElementById('btn-add-stage').addEventListener('click', addStage);
     document.getElementById('btn-add-stage-inline').addEventListener('click', addStage);
 
-    document.getElementById('btn-export-pipeline').addEventListener('click', () => {
-      const blob = new Blob([textarea.value], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'pipeline.json';
-      a.click();
-      URL.revokeObjectURL(url);
+    // --- ABA 3: TASKS MONITOR DASHBOARD ---
+    const taskContainer = document.getElementById('task-items-container');
+    const filterStatus = document.getElementById('task-status-filter');
+    const searchInput = document.getElementById('task-search-input');
+
+    function renderTasksDashboard() {
+      const tasks = tasksState.tasks || [];
+      const total = tasks.length;
+      const completed = tasks.filter(t => t.status === 'done' || t.status === 'completed').length;
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      document.getElementById('task-stat-workid').innerText = tasksState.work_id || '0001';
+      document.getElementById('task-stat-percent').innerText = `${percent}%`;
+      document.getElementById('task-progress-fill').style.width = `${percent}%`;
+      document.getElementById('task-stat-completed').innerText = `${completed} / ${total}`;
+
+      const statusTextElem = document.getElementById('task-stat-status');
+      if (percent === 100) {
+        statusTextElem.innerText = 'CONCLUÍDO';
+        statusTextElem.style.color = 'var(--accent-green)';
+      } else {
+        statusTextElem.innerText = 'EM ANDAMENTO';
+        statusTextElem.style.color = 'var(--accent-amber)';
+      }
+
+      taskContainer.innerHTML = '';
+      const filterVal = filterStatus.value;
+      const searchVal = searchInput.value.toLowerCase();
+
+      tasks.forEach(task => {
+        const isMatchStatus = filterVal === 'all' || task.status === filterVal;
+        const isMatchSearch = !searchVal || task.id.toLowerCase().includes(searchVal) || task.title.toLowerCase().includes(searchVal);
+
+        if (isMatchStatus && isMatchSearch) {
+          const card = document.createElement('div');
+          card.className = 'task-item-card';
+
+          const acItemsHTML = (task.ac || []).map(ac => `
+            <div class="ac-item">
+              <span style="color: var(--accent-green);">✓</span>
+              <span><strong>[${ac.id}]</strong> ${ac.statement}</span>
+            </div>
+          `).join('');
+
+          card.innerHTML = `
+            <div class="task-header">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="task-id">${task.id}</span>
+                <span class="task-title">${task.title}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="role-badge">${task.agent || 'cheap'}</span>
+                <span class="status-badge ${task.status}">${task.status.toUpperCase()}</span>
+              </div>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted);">${task.description || ''}</p>
+            ${acItemsHTML ? `<div class="ac-list">${acItemsHTML}</div>` : ''}
+          `;
+
+          taskContainer.appendChild(card);
+        }
+      });
+    }
+
+    filterStatus.addEventListener('change', renderTasksDashboard);
+    searchInput.addEventListener('input', renderTasksDashboard);
+
+    // --- EXPORT & AUXILIARY ACTIONS ---
+    document.getElementById('btn-load-example').addEventListener('click', () => {
+      routingState = JSON.parse(JSON.stringify(DEFAULT_ROUTING));
+      pipelineState = JSON.parse(JSON.stringify(DEFAULT_PIPELINE));
+      tasksState = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA));
+      updateRoutingJsonTextarea();
+      updatePipelineJsonTextarea();
+      renderTasksDashboard();
     });
 
     document.getElementById('btn-export-routing').addEventListener('click', () => {
-      const routingData = state.default_models || DEFAULT_PIPELINE.default_models;
-      const blob = new Blob([JSON.stringify(routingData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      const blob = new Blob([JSON.stringify(routingState, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = 'routing.json';
       a.click();
-      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-export-pipeline').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(pipelineState, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pipeline.json';
+      a.click();
     });
 
     document.getElementById('btn-export-env').addEventListener('click', () => {
-      const routingData = state.default_models || DEFAULT_PIPELINE.default_models;
-      let envLines = ['# Variáveis de ambiente de modelos e endpoints Piwerness'];
-      
-      AVAILABLE_ROLES.forEach(role => {
-        const m = routingData[role];
+      let envLines = ['# Variáveis de Ambiente de Roteamento Piwerness'];
+      AVAILABLE_ROLES.forEach(r => {
+        const m = routingState[r];
         if (m) {
-          const roleUpper = role.toUpperCase();
-          envLines.push(`PWN_MODEL_${roleUpper}=${m.defaultModel || ''}`);
-          if (m.reasoningEffort) envLines.push(`PWN_REASONING_${roleUpper}=${m.reasoningEffort}`);
-          if (m.baseUrl) envLines.push(`PWN_API_BASE_URL_${roleUpper}=${m.baseUrl}`);
+          const rUpper = r.toUpperCase();
+          envLines.push(`PWN_MODEL_${rUpper}=${m.defaultModel || ''}`);
+          if (m.reasoningEffort) envLines.push(`PWN_REASONING_${rUpper}=${m.reasoningEffort}`);
+          if (m.baseUrl) envLines.push(`PWN_API_BASE_URL_${rUpper}=${m.baseUrl}`);
           if (m.apiKeyEnv && m.apiKey) envLines.push(`${m.apiKeyEnv}=${m.apiKey}`);
-          if (m.apiKey && !m.apiKeyEnv) envLines.push(`PWN_API_KEY_${roleUpper}=${m.apiKey}`);
+          if (m.apiKey && !m.apiKeyEnv) envLines.push(`PWN_API_KEY_${rUpper}=${m.apiKey}`);
         }
       });
-
       const blob = new Blob([envLines.join('\n')], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = '.env.example';
       a.click();
-      URL.revokeObjectURL(url);
     });
 
-    // Render Inicial
-    validateAndUpdateVisuals(true);
+    document.getElementById('btn-export-current').addEventListener('click', () => {
+      if (currentTab === 'tab-routing') document.getElementById('btn-export-routing').click();
+      else if (currentTab === 'tab-pipeline') document.getElementById('btn-export-pipeline').click();
+      else {
+        const blob = new Blob([JSON.stringify(tasksState, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'todo.json';
+        a.click();
+      }
+    });
+
+    // INITIAL RENDER
+    renderModelForms();
+    renderStageForms();
+    renderTasksDashboard();
   </script>
 </body>
 </html>
