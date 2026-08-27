@@ -3,6 +3,7 @@ import { handleTaskCommand } from './commands/task.js';
 import { handleValidateCommand } from './commands/validate.js';
 import { handleSkillCommand } from './commands/skill.js';
 import { handlePackCommand } from './commands/pack.js';
+import { handleQueueCommand } from './commands/queue.js';
 
 const VERSION = '0.1.0';
 
@@ -18,6 +19,8 @@ COMANDOS DISPONÍVEIS:
                       (specify, contract, plan, run, audit, status)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
+  queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
+                      (list, approve, reject)
   validate [path]     Valida documentos normativos JSON contra JSON Schemas
   skill <subcomando>  Descobre, lista e vincula skills do harness
                       (list, discover, link)
@@ -73,6 +76,10 @@ export function main(): void {
 
     case 'pack':
       handlePackCommand(subcommand, commandArgs);
+      break;
+
+    case 'queue':
+      handleQueueCommand(subcommand, commandArgs);
       break;
 
     default:

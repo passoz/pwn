@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 4,
+    "completed": 5,
     "in_progress": 1,
-    "pending": 3,
+    "pending": 2,
     "blocked": 0,
-    "test_coverage_percent": 50
+    "test_coverage_percent": 62
   },
   "tasks": [
     {
@@ -123,7 +123,7 @@
       "id": "T-005",
       "title": "Marco 5 — Executor econômico e escalação (Fase 5)",
       "description": "Implementar roteamento declarativo por papel (cheap/strong/review/plan), git worktrees por run, budget de tokens/custo e fila assíncrona queue/review/",
-      "status": "in_progress",
+      "status": "done",
       "priority": "high",
       "agent": "executor",
       "depends_on": ["T-004"],
@@ -141,7 +141,7 @@
       "id": "T-006",
       "title": "Marco 6 — OpenCode, omp e sub-agents (Fase 6)",
       "description": "Criar adapters headless para OpenCode e omp com capability matrix, preservando contratos sem perda silenciosa",
-      "status": "pending",
+      "status": "in_progress",
       "priority": "medium",
       "agent": "executor",
       "depends_on": ["T-005"],
