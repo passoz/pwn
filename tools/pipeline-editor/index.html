@@ -370,6 +370,7 @@
       <button class="btn" id="btn-add-stage">➕ Adicionar Estágio</button>
       <button class="btn btn-primary" id="btn-export-pipeline">↓ Exportar pipeline.json</button>
       <button class="btn btn-success" id="btn-export-routing">↓ Exportar routing.json</button>
+      <button class="btn" id="btn-export-env">↓ Exportar .env.example</button>
     </div>
   </header>
 
@@ -432,10 +433,10 @@
       "name": "Pipeline Autônoma Piwerness Standard",
       "description": "Fluxo nativo de governança contratual, TDD e roteamento de modelos por papéis",
       "default_models": {
-        "cheap": { "defaultModel": "qwen3.5:27b", "maxTokens": 4000, "temperature": 0.2 },
-        "strong": { "defaultModel": "claude-3-7-sonnet", "maxTokens": 16000, "temperature": 0.1 },
-        "plan": { "defaultModel": "claude-3-7-sonnet", "maxTokens": 12000, "temperature": 0.2 },
-        "review": { "defaultModel": "claude-3-5-haiku", "maxTokens": 8000, "temperature": 0.1 }
+        "cheap": { "defaultModel": "qwen3.5:27b", "provider": "ollama", "baseUrl": "http://localhost:11434/v1", "apiKeyEnv": "OLLAMA_API_KEY", "apiKey": "", "maxTokens": 4000, "temperature": 0.2 },
+        "strong": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 16000, "temperature": 0.1 },
+        "plan": { "defaultModel": "claude-3-7-sonnet", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 12000, "temperature": 0.2 },
+        "review": { "defaultModel": "claude-3-5-haiku", "provider": "anthropic", "baseUrl": "https://api.anthropic.com/v1", "apiKeyEnv": "ANTHROPIC_API_KEY", "apiKey": "", "maxTokens": 8000, "temperature": 0.1 }
       },
       "stages": [
         {
@@ -493,7 +494,7 @@
       "GATE-AUDIT"
     ];
 
-    const AVAILABLE_ROLES = ["cheap", "strong", "plan", "review"];
+    const AVAILABLE_PROVIDERS = ["anthropic", "openai", "ollama", "openrouter", "vllm", "custom"];
 
     const textarea = document.getElementById('json-input');
     const stagesContainer = document.getElementById('stages-container');
@@ -546,7 +547,7 @@
       renderStageForms();
     }
 
-    // Renderizar formulários dos modelos de IA
+    // Renderizar formulários dos modelos de IA e Endpoints de API
     function renderModelForms() {
       modelsGrid.innerHTML = '';
 
@@ -554,6 +555,10 @@
         const modelData = state.default_models[role] || { defaultModel: '', maxTokens: 4000, temperature: 0.1 };
         const card = document.createElement('div');
         card.className = 'model-card';
+
+        const providerOptions = AVAILABLE_PROVIDERS.map(p => `
+          <option value="${p}" ${(modelData.provider || 'anthropic') === p ? 'selected' : ''}>${p}</option>
+        `).join('');
 
         card.innerHTML = `
           <div class="model-card-header">
@@ -565,12 +570,30 @@
             <input type="text" class="form-control model-name-input" data-role="${role}" value="${modelData.defaultModel || ''}" placeholder="ex: claude-3-7-sonnet">
           </div>
           <div class="form-group">
-            <label>Max Tokens</label>
-            <input type="number" class="form-control model-tokens-input" data-role="${role}" value="${modelData.maxTokens || 4000}">
+            <label>Provedor (Provider)</label>
+            <select class="form-control model-provider-select" data-role="${role}">${providerOptions}</select>
           </div>
           <div class="form-group">
-            <label>Temperature</label>
-            <input type="number" step="0.05" min="0" max="1" class="form-control model-temp-input" data-role="${role}" value="${modelData.temperature ?? 0.1}">
+            <label>API Base URL / Endpoint</label>
+            <input type="text" class="form-control model-baseurl-input" data-role="${role}" value="${modelData.baseUrl || ''}" placeholder="ex: https://api.anthropic.com/v1">
+          </div>
+          <div class="form-group">
+            <label>Variável ENV da API Key</label>
+            <input type="text" class="form-control model-apikeyenv-input" data-role="${role}" value="${modelData.apiKeyEnv || ''}" placeholder="ex: ANTHROPIC_API_KEY">
+          </div>
+          <div class="form-group">
+            <label>API Key (Direta / Segredo)</label>
+            <input type="password" class="form-control model-apikey-input" data-role="${role}" value="${modelData.apiKey || ''}" placeholder="sk-...">
+          </div>
+          <div class="stage-row" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-group">
+              <label>Max Tokens</label>
+              <input type="number" class="form-control model-tokens-input" data-role="${role}" value="${modelData.maxTokens || 4000}">
+            </div>
+            <div class="form-group">
+              <label>Temperature</label>
+              <input type="number" step="0.05" min="0" max="1" class="form-control model-temp-input" data-role="${role}" value="${modelData.temperature ?? 0.1}">
+            </div>
           </div>
         `;
 
@@ -582,6 +605,38 @@
         input.addEventListener('input', (e) => {
           const role = e.target.dataset.role;
           state.default_models[role].defaultModel = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-provider-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].provider = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-baseurl-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].baseUrl = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-apikeyenv-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].apiKeyEnv = e.target.value;
+          updateJsonTextarea();
+        });
+      });
+
+      modelsGrid.querySelectorAll('.model-apikey-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const role = e.target.dataset.role;
+          state.default_models[role].apiKey = e.target.value;
           updateJsonTextarea();
         });
       });
@@ -774,6 +829,30 @@
       const a = document.createElement('a');
       a.href = url;
       a.download = 'routing.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-export-env').addEventListener('click', () => {
+      const routingData = state.default_models || DEFAULT_PIPELINE.default_models;
+      let envLines = ['# Variáveis de ambiente de modelos e endpoints Piwerness'];
+      
+      AVAILABLE_ROLES.forEach(role => {
+        const m = routingData[role];
+        if (m) {
+          const roleUpper = role.toUpperCase();
+          envLines.push(`PWN_MODEL_${roleUpper}=${m.defaultModel || ''}`);
+          if (m.baseUrl) envLines.push(`PWN_API_BASE_URL_${roleUpper}=${m.baseUrl}`);
+          if (m.apiKeyEnv && m.apiKey) envLines.push(`${m.apiKeyEnv}=${m.apiKey}`);
+          if (m.apiKey && !m.apiKeyEnv) envLines.push(`PWN_API_KEY_${roleUpper}=${m.apiKey}`);
+        }
+      });
+
+      const blob = new Blob([envLines.join('\n')], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '.env.example';
       a.click();
       URL.revokeObjectURL(url);
     });

@@ -8,6 +8,10 @@ export interface ModelRoutingConfig {
   defaultModel: string;
   maxTokens: number;
   temperature: number;
+  baseUrl?: string;
+  provider?: string;
+  apiKeyEnv?: string;
+  apiKey?: string;
 }
 
 export const DEFAULT_ROUTING_TABLE: Record<AgentRole, ModelRoutingConfig> = {
@@ -51,6 +55,10 @@ export function getRoutingTable(rootDir: string = process.cwd()): Record<AgentRo
           if (fileData[role].defaultModel) table[role].defaultModel = fileData[role].defaultModel;
           if (fileData[role].maxTokens) table[role].maxTokens = fileData[role].maxTokens;
           if (fileData[role].temperature !== undefined) table[role].temperature = fileData[role].temperature;
+          if (fileData[role].baseUrl !== undefined) table[role].baseUrl = fileData[role].baseUrl;
+          if (fileData[role].provider !== undefined) table[role].provider = fileData[role].provider;
+          if (fileData[role].apiKeyEnv !== undefined) table[role].apiKeyEnv = fileData[role].apiKeyEnv;
+          if (fileData[role].apiKey !== undefined) table[role].apiKey = fileData[role].apiKey;
         }
       }
     } catch {
@@ -63,6 +71,16 @@ export function getRoutingTable(rootDir: string = process.cwd()): Record<AgentRo
   if (process.env.PWN_MODEL_STRONG) table.strong.defaultModel = process.env.PWN_MODEL_STRONG;
   if (process.env.PWN_MODEL_REVIEW) table.review.defaultModel = process.env.PWN_MODEL_REVIEW;
   if (process.env.PWN_MODEL_PLAN) table.plan.defaultModel = process.env.PWN_MODEL_PLAN;
+
+  if (process.env.PWN_API_BASE_URL_CHEAP) table.cheap.baseUrl = process.env.PWN_API_BASE_URL_CHEAP;
+  if (process.env.PWN_API_BASE_URL_STRONG) table.strong.baseUrl = process.env.PWN_API_BASE_URL_STRONG;
+  if (process.env.PWN_API_BASE_URL_REVIEW) table.review.baseUrl = process.env.PWN_API_BASE_URL_REVIEW;
+  if (process.env.PWN_API_BASE_URL_PLAN) table.plan.baseUrl = process.env.PWN_API_BASE_URL_PLAN;
+
+  if (process.env.PWN_API_KEY_CHEAP) table.cheap.apiKey = process.env.PWN_API_KEY_CHEAP;
+  if (process.env.PWN_API_KEY_STRONG) table.strong.apiKey = process.env.PWN_API_KEY_STRONG;
+  if (process.env.PWN_API_KEY_REVIEW) table.review.apiKey = process.env.PWN_API_KEY_REVIEW;
+  if (process.env.PWN_API_KEY_PLAN) table.plan.apiKey = process.env.PWN_API_KEY_PLAN;
 
   return table;
 }
