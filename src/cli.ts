@@ -5,6 +5,7 @@ import { handleSkillCommand } from './commands/skill.js';
 import { handlePackCommand } from './commands/pack.js';
 import { handleQueueCommand } from './commands/queue.js';
 import { handleTargetCommand } from './commands/target.js';
+import { handleMetricsCommand } from './commands/metrics.js';
 
 const VERSION = '0.1.0';
 
@@ -22,6 +23,8 @@ COMANDOS DISPONÍVEIS:
                       (run, capsule)
   target <subcomando> Gerencia runtimes e materialização de targets
                       (list, materialize)
+  metrics <subcomando>Exibe métricas de execução e recomendações de otimização
+                      (list, optimize)
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   validate [path]     Valida documentos normativos JSON contra JSON Schemas
@@ -87,6 +90,10 @@ export function main(): void {
 
     case 'target':
       handleTargetCommand(subcommand, commandArgs);
+      break;
+
+    case 'metrics':
+      handleMetricsCommand(subcommand, commandArgs);
       break;
 
     default:

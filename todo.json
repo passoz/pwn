@@ -13,11 +13,11 @@
   },
   "coverage": {
     "total_tasks": 8,
-    "completed": 7,
-    "in_progress": 1,
+    "completed": 8,
+    "in_progress": 0,
     "pending": 0,
     "blocked": 0,
-    "test_coverage_percent": 87
+    "test_coverage_percent": 100
   },
   "tasks": [
     {
@@ -177,7 +177,7 @@
       "id": "T-008",
       "title": "Marco 8 — Métricas, otimização e teach skills (Fase 8)",
       "description": "Implementar sistema de métricas JSONL, pwn metrics optimize para sugestão de routing e teach skills com estado gitignored e learnings.yaml versionado",
-      "status": "in_progress",
+      "status": "done",
       "priority": "low",
       "agent": "executor",
       "depends_on": ["T-007"],
