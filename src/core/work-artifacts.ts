@@ -16,6 +16,55 @@ export interface WorkArtifactsPaths {
   traceabilityMatrix: string;
 }
 
+export function getExistingWorkIds(rootDir: string = process.cwd()): string[] {
+  const baseDir = path.resolve(rootDir, '.piwerness/work');
+  if (!fs.existsSync(baseDir)) {
+    return [];
+  }
+  return fs.readdirSync(baseDir).filter(name => {
+    try {
+      const full = path.join(baseDir, name);
+      return fs.statSync(full).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function getLatestWorkId(rootDir: string = process.cwd()): string {
+  const ids = getExistingWorkIds(rootDir);
+  if (ids.length === 0) {
+    return '0001';
+  }
+  let maxNum = 0;
+  for (const id of ids) {
+    const num = parseInt(id, 10);
+    if (!isNaN(num) && num > maxNum) {
+      maxNum = num;
+    }
+  }
+  if (maxNum === 0) {
+    return ids[ids.length - 1];
+  }
+  return String(maxNum).padStart(4, '0');
+}
+
+export function getNextWorkId(rootDir: string = process.cwd()): string {
+  const ids = getExistingWorkIds(rootDir);
+  if (ids.length === 0) {
+    return '0001';
+  }
+  let maxNum = 0;
+  for (const id of ids) {
+    const num = parseInt(id, 10);
+    if (!isNaN(num) && num > maxNum) {
+      maxNum = num;
+    }
+  }
+  const nextNum = maxNum + 1;
+  return String(nextNum).padStart(4, '0');
+}
+
 export function getWorkArtifactsPaths(workId: string, rootDir: string = process.cwd()): WorkArtifactsPaths {
   const workDir = path.resolve(rootDir, '.piwerness/work', workId);
 
@@ -35,8 +84,9 @@ export function getWorkArtifactsPaths(workId: string, rootDir: string = process.
   };
 }
 
-export function initWorkDirectory(workId: string, rootDir: string = process.cwd()): WorkArtifactsPaths {
-  const paths = getWorkArtifactsPaths(workId, rootDir);
+export function initWorkDirectory(workId?: string, rootDir: string = process.cwd()): WorkArtifactsPaths {
+  const resolvedWorkId = (!workId || workId === 'auto') ? getNextWorkId(rootDir) : workId;
+  const paths = getWorkArtifactsPaths(resolvedWorkId, rootDir);
 
   if (!fs.existsSync(paths.workDir)) {
     fs.mkdirSync(paths.workDir, { recursive: true });
@@ -45,7 +95,7 @@ export function initWorkDirectory(workId: string, rootDir: string = process.cwd(
   // Create template files if they don't exist
   if (!fs.existsSync(paths.intake)) {
     fs.writeFileSync(paths.intake, JSON.stringify({
-      work_id: workId,
+      work_id: resolvedWorkId,
       created_at: new Date().toISOString(),
       objective: "Objetivo do pedido bruto",
       requester: "operator",
@@ -55,7 +105,7 @@ export function initWorkDirectory(workId: string, rootDir: string = process.cwd(
 
   if (!fs.existsSync(paths.discovery)) {
     fs.writeFileSync(paths.discovery, JSON.stringify({
-      work_id: workId,
+      work_id: resolvedWorkId,
       problem: "Descrição do problema",
       actors: ["ACT-001"],
       objectives: ["Objetivo principal"],
@@ -65,7 +115,7 @@ export function initWorkDirectory(workId: string, rootDir: string = process.cwd(
 
   if (!fs.existsSync(paths.requirements)) {
     fs.writeFileSync(paths.requirements, JSON.stringify({
-      work_id: workId,
+      work_id: resolvedWorkId,
       requirements: [
         {
           id: "FR-001",
@@ -80,9 +130,9 @@ export function initWorkDirectory(workId: string, rootDir: string = process.cwd(
   if (!fs.existsSync(paths.prd)) {
     fs.writeFileSync(paths.prd, JSON.stringify({
       $schema: "../../schemas/prd.schema.json",
-      work_id: workId,
+      work_id: resolvedWorkId,
       meta: { version: "1.0", created_at: new Date().toISOString() },
-      title: `PRD do Work ${workId}`,
+      title: `PRD do Work ${resolvedWorkId}`,
       status: "draft",
       problem: "Problema resolvido pelo PRD",
       actors: ["ACT-001"],
@@ -93,7 +143,7 @@ export function initWorkDirectory(workId: string, rootDir: string = process.cwd(
 
   if (!fs.existsSync(paths.traceabilityMatrix)) {
     fs.writeFileSync(paths.traceabilityMatrix, JSON.stringify({
-      work_id: workId,
+      work_id: resolvedWorkId,
       matrix: [
         {
           origin: "DISC-001",

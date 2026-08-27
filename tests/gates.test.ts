@@ -3,12 +3,30 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { initWorkDirectory, getWorkArtifactsPaths } from '../src/core/work-artifacts.js';
+import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../src/core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec } from '../src/core/gates.js';
 
 function fixture() {
   return mkdtempSync(path.join(tmpdir(), 'pwn-gates-test-'));
 }
+
+test('getNextWorkId e getLatestWorkId calculam IDs incrementais automaticamente', () => {
+  const root = fixture();
+  try {
+    const firstId = getNextWorkId(root);
+    assert.equal(firstId, '0001');
+
+    initWorkDirectory('0001', root);
+    assert.equal(getLatestWorkId(root), '0001');
+    assert.equal(getNextWorkId(root), '0002');
+
+    initWorkDirectory('0002', root);
+    assert.equal(getLatestWorkId(root), '0002');
+    assert.equal(getNextWorkId(root), '0003');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('initWorkDirectory cria a estrutura completa sob .piwerness/work/<work-id>/', () => {
   const root = fixture();

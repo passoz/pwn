@@ -15,21 +15,33 @@
 set -e
 
 WORK_TITLE="${1:-Novo Projeto Greenfield Piwerness}"
-WORK_ID="${2:-0004}"
+PROVIDED_WORK_ID="$2"
 PWN_BIN="bun bin/pwn.js"
 
 echo "================================================================================"
-echo "🚀 [PIWERNESS GREENFIELD PIPELINE] Work ID: $WORK_ID"
+echo "🚀 [PIWERNESS GREENFIELD PIPELINE]"
 echo "💡 Ideia / Título: $WORK_TITLE"
 echo "================================================================================"
 echo ""
 
 # ------------------------------------------------------------------------------
-# ETAPA 1: Inicializar Estrutura de Artefatos do Work
+# ETAPA 1: Inicializar Estrutura de Artefatos do Work (Auto-Incremento Inteligente)
 # ------------------------------------------------------------------------------
-echo "🔹 [ETAPA 1/7] Inicializando estrutura de governança do Work $WORK_ID..."
-$PWN_BIN work init "$WORK_ID"
+if [ -n "$PROVIDED_WORK_ID" ]; then
+  INIT_OUTPUT=$($PWN_BIN work init "$PROVIDED_WORK_ID")
+else
+  INIT_OUTPUT=$($PWN_BIN work init)
+fi
 
+echo "$INIT_OUTPUT"
+
+# Extrair Work ID resolvido da saída do comando init
+WORK_ID=$(echo "$INIT_OUTPUT" | grep -oP 'Work \K[0-9]{4}' | head -n 1)
+if [ -z "$WORK_ID" ]; then
+  WORK_ID="0001"
+fi
+
+echo "✓ Work ID resolvido: $WORK_ID"
 WORK_DIR=".piwerness/work/$WORK_ID"
 echo ""
 

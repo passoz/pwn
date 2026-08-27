@@ -14,12 +14,12 @@
 set -e
 
 LEGACY_SPEC_PATH="$1"
-WORK_ID="${2:-0002}"
+PROVIDED_WORK_ID="$2"
 PWN_BIN="bun bin/pwn.js"
 
 if [ -z "$LEGACY_SPEC_PATH" ]; then
   echo "❌ Erro: Por favor informe o caminho para o arquivo spec.md legado."
-  echo "Uso: $0 <caminho-para-spec.md> [work-id]"
+  echo "Uso: $0 <caminho-para-spec.md> [work-id-opcional]"
   exit 1
 fi
 
@@ -29,17 +29,29 @@ if [ ! -f "$LEGACY_SPEC_PATH" ]; then
 fi
 
 echo "================================================================================"
-echo "🚀 [PIWERNESS PRE-IMPLEMENTATION PIPELINE] Work ID: $WORK_ID"
+echo "🚀 [PIWERNESS PRE-IMPLEMENTATION PIPELINE]"
 echo "📄 Legado Origem: $LEGACY_SPEC_PATH"
 echo "================================================================================"
 echo ""
 
 # ------------------------------------------------------------------------------
-# ETAPA 1: Inicializar Estrutura de Artefatos do Work
+# ETAPA 1: Inicializar Estrutura de Artefatos do Work (Auto-Incremento Inteligente)
 # ------------------------------------------------------------------------------
-echo "🔹 [ETAPA 1/7] Inicializando estrutura de governança do Work $WORK_ID..."
-$PWN_BIN work init "$WORK_ID"
+if [ -n "$PROVIDED_WORK_ID" ]; then
+  INIT_OUTPUT=$($PWN_BIN work init "$PROVIDED_WORK_ID")
+else
+  INIT_OUTPUT=$($PWN_BIN work init)
+fi
 
+echo "$INIT_OUTPUT"
+
+# Extrair Work ID resolvido da saída do comando init
+WORK_ID=$(echo "$INIT_OUTPUT" | grep -oP 'Work \K[0-9]{4}' | head -n 1)
+if [ -z "$WORK_ID" ]; then
+  WORK_ID="0001"
+fi
+
+echo "✓ Work ID resolvido: $WORK_ID"
 WORK_DIR=".piwerness/work/$WORK_ID"
 cp "$LEGACY_SPEC_PATH" "$WORK_DIR/legacy-spec.md"
 echo "✓ spec.md legada copiada para $WORK_DIR/legacy-spec.md"

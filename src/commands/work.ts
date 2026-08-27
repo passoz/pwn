@@ -1,5 +1,5 @@
 import { runPackScript } from '../core/runner.js';
-import { initWorkDirectory, getWorkArtifactsPaths } from '../core/work-artifacts.js';
+import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract } from '../core/gates.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,9 +8,11 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
   switch (subcommand) {
     case 'init':
       {
-        const workId = args[0] || '0001';
-        console.log(`=== [pwn work init] Inicializando estrutura de artefatos para Work ${workId} ===`);
-        const paths = initWorkDirectory(workId);
+        const requestedId = args[0] && !args[0].startsWith('--') ? args[0] : getNextWorkId();
+        const paths = initWorkDirectory(requestedId);
+        const resolvedId = path.basename(paths.workDir);
+
+        console.log(`=== [pwn work init] Inicializando estrutura de artefatos para Work ${resolvedId} ===`);
         console.log(`✓ Estrutura criada em: ${paths.workDir}`);
         console.log('Artefatos gerados: intake.json, discovery.json, requirements.json, prd.json, traceability-matrix.json');
         process.exit(0);
@@ -21,7 +23,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       {
         const gateId = args[0] || 'GATE-DISC-REQ';
         const workIdIdx = args.indexOf('--work');
-        const workId = (workIdIdx !== -1 && args[workIdIdx + 1]) ? args[workIdIdx + 1] : '0001';
+        const workId = (workIdIdx !== -1 && args[workIdIdx + 1]) ? args[workIdIdx + 1] : getLatestWorkId();
 
         console.log(`=== [pwn work gate] Executando Gate ${gateId} para Work ${workId} ===`);
         const paths = getWorkArtifactsPaths(workId);

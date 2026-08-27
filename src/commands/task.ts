@@ -1,6 +1,7 @@
 import { runPackScript } from '../core/runner.js';
 import { createDefaultContractV4 } from '../core/contract-engine.js';
-import { generateContextCapsule } from '../core/capsule.ts';
+import { generateContextCapsule } from '../core/capsule.js';
+import { getLatestWorkId } from '../core/work-artifacts.js';
 
 export function handleTaskCommand(subcommand: string, args: string[]): void {
   switch (subcommand) {
@@ -17,7 +18,7 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
     case 'capsule':
       {
         const taskId = args[0] || 'T-001';
-        const workId = args[1] || '0001';
+        const workId = args[1] || getLatestWorkId();
         console.log(`=== [pwn task capsule] Gerando Context Capsule mínimo para ${taskId} ===\n`);
 
         const defaultContract = createDefaultContractV4(taskId, workId, `Implementação da Task ${taskId}`, 'L1');
