@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TARGET_CAPABILITY_MATRIX } from '../core/target-materializer.js';
+import { MaterializationResult, TARGET_CAPABILITY_MATRIX, TargetContractContext, renderScopeSection } from '../core/target-materializer.js';
 
-export function materializePiTarget(outDir: string): MaterializationResult {
+export function materializePiTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
   const caps = TARGET_CAPABILITY_MATRIX.pi;
   const generatedFiles: string[] = [];
   const notes: string[] = [];
@@ -20,6 +20,7 @@ export function materializePiTarget(outDir: string): MaterializationResult {
 - **Precedência**: Seguir AGENTS.md e especificações normativas JSON.
 - **Segurança**: Respeitar allowlist de escrita de arquivos.
 - **Validação**: Executar testes automatizados via \`bun test\`.
+${context ? renderScopeSection(context) : ''}
 `;
 
   const agentsPath = path.join(outDir, 'AGENTS.md');

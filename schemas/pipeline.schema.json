@@ -7,6 +7,7 @@
   "required": ["meta", "parameters", "contract", "stages"],
   "additionalProperties": false,
   "properties": {
+    "$schema": { "type": "string" },
     "meta": {
       "type": "object",
       "required": ["name", "version", "description"],
@@ -87,24 +88,24 @@
       "properties": {
         "work_id": {
           "type": "string",
-          "pattern": "^\\d{4}$",
-          "description": "ID do Work (0001, 0002, ...)"
+          "pattern": "^(\\d{4}|\\$\\{[a-z_]+\\})$",
+          "description": "ID do Work (0001, 0002, ...) ou placeholder de template"
         },
         "scenario": {
           "type": "string",
-          "enum": ["greenfield", "brownfield"],
-          "description": "Cenário do projeto"
+          "pattern": "^(greenfield|brownfield|\\$\\{[a-z_]+\\})$",
+          "description": "Cenário do projeto ou placeholder de template"
         },
         "depth": {
           "type": "string",
-          "enum": ["light", "normal", "deep", "exhaustive"],
-          "description": "Profundidade do grilling e rigor"
+          "pattern": "^(light|normal|deep|exhaustive|\\$\\{[a-z_]+\\})$",
+          "description": "Profundidade do grilling e rigor, ou placeholder de template"
         },
         "scope": {
           "type": "string",
-          "enum": ["full", "partial"],
+          "pattern": "^(full|partial|\\$\\{[a-z_]+\\})$",
           "default": "full",
-          "description": "Escopo do TODO"
+          "description": "Escopo do TODO ou placeholder de template"
         },
         "dimensions": {
           "type": "object",

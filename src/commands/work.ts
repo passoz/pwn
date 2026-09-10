@@ -1,8 +1,16 @@
 import { runPackScript } from '../core/runner.js';
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
+import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
+import { runOrchestrated } from '../core/run-orchestrator.js';
 import fs from 'node:fs';
 import path from 'node:path';
+
+function flagValue(args: string[], name: string): string | null {
+  const index = args.indexOf(name);
+  if (index === -1 || index + 1 >= args.length || args[index + 1].startsWith('--')) return null;
+  return args[index + 1];
+}
 
 export function handleWorkCommand(subcommand: string, args: string[]): void {
   switch (subcommand) {
@@ -78,7 +86,45 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     case 'plan':
       console.log('=== [pwn work plan] Planejando / Validando Grafo de Tarefas ===');
       {
-        const result = runPackScript('validate_tasks.js', args);
+        const hasForce = args.includes('--force');
+        const workIdIdx = args.indexOf('--work');
+        const flagWorkId = (workIdIdx !== -1 && args[workIdIdx + 1] && !args[workIdIdx + 1].startsWith('--'))
+          ? args[workIdIdx + 1]
+          : null;
+        const positional = args.filter((a) => !a.startsWith('--') && a !== flagWorkId);
+        const pathArg = positional[0] ?? null;
+        const filenameMatch = pathArg ? path.basename(pathArg).match(/^(\d{4})-tasks\.md$/) : null;
+
+        const workId = flagWorkId ?? (filenameMatch ? filenameMatch[1] : getLatestWorkId());
+        const plan = loadPlan(workId);
+
+        if (plan) {
+          const rendered = renderTasksMarkdown(plan);
+          const target = pathArg ?? tasksMarkdownPath(workId);
+
+          if (!fs.existsSync(target)) {
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, rendered, 'utf8');
+            console.log(`✓ Plano gerado a partir de plan.json em: ${target}`);
+          } else if (hasForce) {
+            fs.writeFileSync(target, rendered, 'utf8');
+            console.log(`✓ Plano regenerado (--force) em: ${target}`);
+          } else if (!planMatchesMarkdown(plan, fs.readFileSync(target, 'utf8'))) {
+            console.warn('⚠  DRIFT: o markdown diverge de plan.json (edição manual ou fora de sincronia).');
+            console.warn(`   Regenere com: pwn work plan --work ${workId} --force`);
+          }
+
+          const result = runPackScript('validate_tasks.js', [target]);
+          if (result.stdout) console.log(result.stdout);
+          if (result.stderr) console.error(result.stderr);
+          process.exit(result.status);
+        }
+
+        if (!pathArg) {
+          console.error(`Nenhum plan.json encontrado para o Work ${workId}. Rode 'pwn work init' e crie .piwerness/work/${workId}/plan.json, ou informe um caminho de plano markdown.`);
+          process.exit(1);
+        }
+        const result = runPackScript('validate_tasks.js', [pathArg]);
         if (result.stdout) console.log(result.stdout);
         if (result.stderr) console.error(result.stderr);
         process.exit(result.status);
@@ -89,25 +135,12 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('=== [pwn work run] Executando Work via Pipeline ===');
       {
         const hasNoGate = args.includes('--no-gate');
-        const workIdIdx = args.indexOf('--work');
-        const workId = (workIdIdx !== -1 && args[workIdIdx + 1] && !args[workIdIdx + 1].startsWith('--'))
-          ? args[workIdIdx + 1]
-          : getLatestWorkId();
-        const taskIdIdx = args.indexOf('--task');
-        const taskId = (taskIdIdx !== -1 && args[taskIdIdx + 1] && !args[taskIdIdx + 1].startsWith('--'))
-          ? args[taskIdIdx + 1]
-          : null;
-
-        // Remove flags de controle antes de delegar ao executor.
-        const execArgs: string[] = [];
-        for (let i = 0; i < args.length; i++) {
-          if (args[i] === '--no-gate') continue;
-          if ((args[i] === '--work' || args[i] === '--task') && i + 1 < args.length && !args[i + 1].startsWith('--')) {
-            i++;
-            continue;
-          }
-          execArgs.push(args[i]);
-        }
+        const noIsolation = args.includes('--no-isolation');
+        const workId = flagValue(args, '--work') ?? getLatestWorkId();
+        const taskId = flagValue(args, '--task');
+        const timeoutSeconds = Number(flagValue(args, '--timeout-seconds') ?? '600');
+        const separator = args.indexOf('--');
+        const command = separator === -1 ? [] : args.slice(separator + 1);
 
         // ── Pré-condição obrigatória: cadeia determinística de 5 gates ──
         if (!hasNoGate) {
@@ -137,15 +170,39 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
             console.log(`✓ ${gateId}: ${gate.result}`);
           }
           if (blocked) process.exit(1);
+
+          // ── Guarda de drift: plan.json é a fonte única; o markdown derivado não pode divergir ──
+          const runPlan = loadPlan(workId);
+          if (runPlan) {
+            const mdPath = tasksMarkdownPath(workId);
+            if (fs.existsSync(mdPath) && !planMatchesMarkdown(runPlan, fs.readFileSync(mdPath, 'utf8'))) {
+              console.error(`\n[DRIFT BLOCKED] .todo/${workId}-tasks.md diverge de plan.json. Regenere com 'pwn work plan --work ${workId} --force' ou resolva a divergência.`);
+              process.exit(1);
+            }
+          }
+
           console.log('✓ Todos os gates determinísticos aprovados — Work elegível para execução.');
         } else {
           console.warn('⚠  Gates bypassados (--no-gate): execução sem validação da cadeia determinística.');
         }
 
-        // ── Execução ──
-        const result = runPackScript('unattended_exec.js', execArgs);
+        if (noIsolation) {
+          console.warn('⚠  Sandbox desabilitado (--no-isolation): execução no diretório de trabalho, sem diff guard.');
+        }
+
+        if (command.length === 0) {
+          console.error('Nenhum comando informado. Uso: pwn work run --work NNNN --timeout-seconds N -- <comando>');
+          process.exit(1);
+        }
+
+        // ── Execução sob contrato (sandbox + diff guard + budget + métricas) ──
+        const result = runOrchestrated({ workId, taskId: taskId ?? undefined, command, timeoutSeconds, isolated: !noIsolation });
         if (result.stdout) console.log(result.stdout);
         if (result.stderr) console.error(result.stderr);
+        if (result.diffViolations.length > 0) {
+          console.error('\n[DIFF VIOLATION] Arquivos fora do escopo do contrato:');
+          result.diffViolations.forEach((v) => console.error(`  - ${v}`));
+        }
         if (taskId && result.status !== 0) {
           console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
         }

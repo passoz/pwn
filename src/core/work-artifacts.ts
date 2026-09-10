@@ -129,14 +129,20 @@ export function initWorkDirectory(workId?: string, rootDir: string = process.cwd
 
   if (!fs.existsSync(paths.prd)) {
     fs.writeFileSync(paths.prd, JSON.stringify({
-      $schema: "../../schemas/prd.schema.json",
-      work_id: resolvedWorkId,
-      meta: { version: "1.0", created_at: new Date().toISOString() },
+      $schema: "https://piwerness.dev/schemas/prd.schema.json",
+      id: `PRD-${resolvedWorkId}`,
+      meta: { version: "1.0", created_at: new Date().toISOString(), author: "operator" },
       title: `PRD do Work ${resolvedWorkId}`,
       status: "draft",
-      problem: "Problema resolvido pelo PRD",
-      actors: ["ACT-001"],
-      scope: { inside: ["Escopo incluído"], outside: ["Não-objetivos"] },
+      scenario: "greenfield",
+      problem: { statement: "Problema resolvido pelo PRD — descreva o problema em detalhe" },
+      solution: { statement: "Solucao proposta — descreva a abordagem" },
+      decisions: [{ id: "DEC-001", statement: "Decisao inicial do produto", status: "proposed" }],
+      requirements: [
+        { id: "FR-001", type: "functional", statement: "Primeiro requisito funcional" }
+      ],
+      stakeholders: [{ name: "operator", role: "ACT-001" }],
+      scope: { in_scope: ["Escopo incluido"], out_of_scope: ["Nao-objetivos"] },
       accepted_requirements: ["FR-001"]
     }, null, 2));
   }

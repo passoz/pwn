@@ -37,12 +37,40 @@ export function handleSkillCommand(subcommand: string, args: string[]): void {
 
     case 'link':
       console.log('=== [pwn skill link] Vinculando Skill ===');
-      if (args.length < 1) {
-        console.error('Uso: pwn skill link <nome-da-skill> [caminho]');
-        process.exit(1);
+      {
+        const name = args[0];
+        if (!name) {
+          console.error('Uso: pwn skill link <nome-da-skill> [caminho]');
+          process.exit(1);
+        }
+
+        const packSkillsDir = path.resolve(process.cwd(), 'packs/software-engineering/skills');
+        const source = args[1] ? path.resolve(args[1]) : path.join(packSkillsDir, name);
+        if (!fs.existsSync(source)) {
+          console.error(`Skill '${name}' não encontrada em ${source}`);
+          process.exit(1);
+        }
+
+        const destDir = path.resolve(process.env.HOME ?? '', '.agents/skills');
+        fs.mkdirSync(destDir, { recursive: true });
+        const dest = path.join(destDir, name);
+
+        let exists = false;
+        try {
+          fs.lstatSync(dest);
+          exists = true;
+        } catch {
+          exists = false;
+        }
+        if (exists) {
+          console.error(`Destino já existe: ${dest} (remova para religar)`);
+          process.exit(1);
+        }
+
+        fs.symlinkSync(source, dest, 'dir');
+        console.log(`✓ Skill '${name}' vinculada em ${dest} -> ${source}`);
+        process.exit(0);
       }
-      console.log(`Skill '${args[0]}' vinculada com sucesso.`);
-      process.exit(0);
       break;
 
     default:

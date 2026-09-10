@@ -1,7 +1,8 @@
-import { TARGET_CAPABILITY_MATRIX, TargetRuntime } from '../core/target-materializer.js';
+import { TARGET_CAPABILITY_MATRIX, TargetRuntime, collectContractContext, TargetContractContext } from '../core/target-materializer.js';
 import { materializePiTarget } from '../targets/pi.js';
 import { materializeOpenCodeTarget } from '../targets/opencode.js';
 import { materializeOmpTarget } from '../targets/omp.js';
+import { loadWorkContracts } from '../core/task-contract.js';
 import path from 'node:path';
 
 export function handleTargetCommand(subcommand: string, args: string[]): void {
@@ -26,18 +27,33 @@ export function handleTargetCommand(subcommand: string, args: string[]): void {
         const targetIdx = args.indexOf('--target');
         const targetName = (targetIdx !== -1 && args[targetIdx + 1]) ? args[targetIdx + 1] as TargetRuntime : 'pi';
 
+        const workIdx = args.indexOf('--work');
+        const workId = (workIdx !== -1 && args[workIdx + 1] && !args[workIdx + 1].startsWith('--')) ? args[workIdx + 1] : null;
+
         const outIdx = args.indexOf('--out');
         const outDir = (outIdx !== -1 && args[outIdx + 1]) ? args[outIdx + 1] : path.resolve(process.cwd(), `.piwerness/targets/${targetName}`);
 
         console.log(`=== [pwn target materialize] Materializando artefatos para ${targetName.toUpperCase()} ===`);
 
+        // Deriva o escopo do contrato V4 congelado quando --work é informado.
+        let context: TargetContractContext | undefined;
+        if (workId) {
+          try {
+            context = collectContractContext(loadWorkContracts(workId));
+            console.log(`✓ Escopo derivado de ${context.taskCount} contrato(s) do Work ${workId} (risco ${context.riskLevel}).`);
+          } catch (err) {
+            console.error(`✗ Não foi possível carregar contratos do Work ${workId}: ${(err as Error).message}`);
+            process.exit(1);
+          }
+        }
+
         let result;
         if (targetName === 'pi') {
-          result = materializePiTarget(outDir);
+          result = materializePiTarget(outDir, context);
         } else if (targetName === 'opencode') {
-          result = materializeOpenCodeTarget(outDir);
+          result = materializeOpenCodeTarget(outDir, context);
         } else if (targetName === 'omp') {
-          result = materializeOmpTarget(outDir);
+          result = materializeOmpTarget(outDir, context);
         } else {
           console.error(`Target desconhecido ou não suportado para materialização automática: ${targetName}`);
           process.exit(1);

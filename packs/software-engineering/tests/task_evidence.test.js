@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-const script = path.resolve("scripts/task_evidence.js");
+const script = path.resolve(import.meta.dirname, "../scripts/task_evidence.js");
 
 function run(cwd, ...args) {
   return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" });

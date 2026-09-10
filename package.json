@@ -7,11 +7,15 @@
   "bin": {
     "pwn": "./bin/pwn.js"
   },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "packageManager": "bun@1.4.0",
   "scripts": {
-    "start": "node src/cli.ts",
-    "test": "node --test tests/**/*.test.ts",
-    "validate": "node src/cli.ts validate",
-    "check": "node validate.js"
+    "start": "bun src/cli.ts",
+    "test": "bun test",
+    "validate": "bun src/cli.ts validate",
+    "check": "bun test && bun src/cli.ts self-check"
   },
   "keywords": [
     "agent-harness",
@@ -21,5 +25,8 @@
     "ai-engineering"
   ],
   "author": "Google DeepMind Advanced Agentic Coding",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.20.0"
+  }
 }

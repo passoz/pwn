@@ -42,11 +42,25 @@ O **Piwerness** (`pwn`) é uma plataforma de engenharia de software autônoma e 
 git clone https://github.com/seu-usuario/piwerness.git
 cd piwerness
 
-# Executar a validação de todos os documentos normativos do repositório
-bun bin/pwn.js validate
+# Runtime obrigatório: Bun (>= 1.4). Node não é suportado.
+bun --version
 
-# Executar a suíte de testes (27/27 PASS)
+# Validar os documentos normativos do próprio framework
+bun bin/pwn.js self-check
+
+# Executar a suíte de testes (224/224 PASS)
 bun test
+```
+
+> **Runtime único:** o `pwn` é Bun-first. `node bin/pwn.js` falha com mensagem clara
+> apontando para `bun`. Os scripts npm (`bun run check`, `bun run validate`) usam Bun.
+
+### Instalar o harness num projeto-alvo
+
+```bash
+# Em qualquer projeto que usará o pwn (fora do repositório do framework):
+bun /caminho/para/piwerness/bin/pwn.js init            # instala em .piwerness/harness/scripts
+bun /caminho/para/piwerness/bin/pwn.js pack diff        # verifica drift entre harness e framework
 ```
 
 ---
@@ -58,8 +72,10 @@ bun test
 bun bin/pwn.js --help
 bun bin/pwn.js --version
 
-# Validação de Schemas JSON Normativos
-bun bin/pwn.js validate [caminho]
+# Validação de Documentos Normativos
+bun bin/pwn.js validate --work 0001            # Valida prd.json/plan.json do Work com JSON Schema (ajv)
+bun bin/pwn.js self-check                      # Valida os documentos do próprio framework
+bun bin/pwn.js init [--dir caminho]            # Instala o harness no projeto-alvo
 
 # Gestão de Works e Portões (Gates) — Auto-incremento inteligente de Work IDs
 bun bin/pwn.js work init                       # Auto-atribui o próximo Work ID (ex: 0001, 0002)
@@ -67,15 +83,15 @@ bun bin/pwn.js work init 0001                  # Inicializa um Work ID específi
 bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
 
-# Execução e Auditoria (fail-closed por padrão)
-bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates aprovada (DISC-REQ → REQ-PRD → PRD-SPEC → SPEC-PLAN → PLAN-CONTRACT)
-bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test  # Único escape; decisão explícita de humano
-bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify; sem a ação inválida --audit)
+# Execução e Auditoria (fail-closed por padrão + enforcement em runtime)
+bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates + executa em sandbox com diff guard
+bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test    # Pula gates; enforcement continua
+bun bin/pwn.js work run --no-isolation --work 0001 -- bun test          # Pula sandbox; política continua (escape auditado)
+bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify)
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." -- bun test   # Registra RED via CLI
 
-# Cápsula de Contexto de Tarefas (Contrato v4)
-bun bin/pwn.js task capsule T-001              # Usa o último Work ID ativo automaticamente
-bun bin/pwn.js task capsule T-001 0001
+# Cápsula de Contexto de Tarefas (contrato V4 congelado)
+bun bin/pwn.js task capsule 1.1 0001           # Lê o CTR congelado (não gera default genérico)
 
 # Fila de Revisão Humana Assíncrona (AFK)
 bun bin/pwn.js queue list

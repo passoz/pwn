@@ -85,3 +85,47 @@ export function validateTargetSupport(target: TargetRuntime, requiredCapabilitie
     missing,
   };
 }
+
+// ── Contract-derived materialization ───────────────────────────────
+
+export interface TargetContractContext {
+  writeAllow: string[];
+  writeDeny: string[];
+  acceptanceCommands: string[];
+  riskLevel: string;
+  taskCount: number;
+}
+
+const RISK_ORDER = ['L0', 'L1', 'L2', 'L3', 'L4'];
+
+export function collectContractContext(contracts: Array<{
+  scope_contract: { write_allow: string[]; write_deny: string[] };
+  acceptance_contract: { commands: string[] };
+  risk: { level: string };
+}>): TargetContractContext {
+  const levels = contracts.map((c) => c.risk.level);
+  const highest = levels.reduce((acc, level) => (RISK_ORDER.indexOf(level) > RISK_ORDER.indexOf(acc) ? level : acc), 'L0');
+  return {
+    writeAllow: [...new Set(contracts.flatMap((c) => c.scope_contract.write_allow))],
+    writeDeny: [...new Set(contracts.flatMap((c) => c.scope_contract.write_deny))],
+    acceptanceCommands: [...new Set(contracts.flatMap((c) => c.acceptance_contract.commands))],
+    riskLevel: highest,
+    taskCount: contracts.length,
+  };
+}
+
+export function renderScopeSection(context: TargetContractContext): string {
+  if (context.taskCount === 0) return '';
+  const lines = [
+    '',
+    '## Escopo do contrato (V4 congelado)',
+    'WRITE ALLOW:',
+    ...context.writeAllow.map((w) => `  + ${w}`),
+    'WRITE DENY:',
+    ...context.writeDeny.map((d) => `  - ${d}`),
+    'VALIDATION COMMANDS:',
+    ...context.acceptanceCommands.map((c) => `  $ ${c}`),
+    `RISK LEVEL: ${context.riskLevel}`,
+  ];
+  return lines.join('\n');
+}

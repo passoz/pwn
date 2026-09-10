@@ -1,8 +1,9 @@
 import { spawnSync, SpawnSyncOptions } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { TaskContractV4, BudgetController, BudgetViolation } from './contract-engine.js';
-import { PolicyEngine, AgentOperation, PolicyDecision } from './policy-engine.js';
+import { PolicyEngine, AgentOperation, PolicyDecision, PolicyConfig } from './policy-engine.js';
 import { SandboxSession, SandboxError, createGitWorktreeSandbox, cleanupGitWorktreeSandbox } from './sandbox.js';
 import { checkDiffAgainstContract, ContractDiffCheckReport } from './contract-guard.js';
 import { ToolAPI } from './tool-api.js';
@@ -40,13 +41,25 @@ export interface RunContext {
 // ── Legacy: pack script runner ─────────────────────────────────────
 
 export function runPackScript(scriptName: string, args: string[] = [], cwd: string = process.cwd()): RunResult {
-  const packScriptPath = path.resolve(cwd, 'packs/software-engineering/scripts', scriptName);
+  // Ordem de resolução: harness instalado no projeto → instalação do framework → cwd legado.
+  const harnessDir = path.resolve(cwd, '.piwerness/harness/scripts');
+  const cliRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const frameworkDir = path.resolve(cliRoot, 'packs/software-engineering/scripts');
+  const legacyDir = path.resolve(cwd, 'packs/software-engineering/scripts');
 
-  if (!fs.existsSync(packScriptPath)) {
+  const candidates = [
+    path.join(harnessDir, scriptName),
+    path.join(frameworkDir, scriptName),
+    path.join(legacyDir, scriptName),
+  ];
+
+  const packScriptPath = candidates.find((candidate) => fs.existsSync(candidate));
+
+  if (!packScriptPath) {
     return {
       status: 1,
       stdout: '',
-      stderr: `Script not found in pack: ${packScriptPath}`,
+      stderr: `Script not found in pack: ${scriptName}. Procurei em:\n  - ${harnessDir}\n  - ${frameworkDir}\n  - ${legacyDir}\nInstale o harness com 'pwn init' no projeto-alvo.`,
     };
   }
 
@@ -92,9 +105,10 @@ export function initRunContext(
   contract: TaskContractV4,
   rootDir: string,
   runId: string,
+  policyOverrides?: Partial<PolicyConfig>,
 ): RunContext {
   const budget = new BudgetController(contract);
-  const policy = new PolicyEngine(contract);
+  const policy = new PolicyEngine(contract, policyOverrides);
 
   const ctx: RunContext = {
     contract,

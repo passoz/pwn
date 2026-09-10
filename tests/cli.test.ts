@@ -25,8 +25,8 @@ test('pwn --version exibe a versão', () => {
   assert.match(result.stdout, /pwn v\d+\.\d+\.\d+/);
 });
 
-test('pwn validate valida documentos normativos do repositório com PASS', () => {
-  const result = runPwn(['validate']);
+test('pwn self-check valida documentos normativos do framework com PASS', () => {
+  const result = runPwn(['self-check']);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /VÁLIDO/);
   assert.match(result.stdout, /4\/4 arquivos válidos/);
@@ -45,8 +45,8 @@ test('pwn pack list exibe os packs instalados', () => {
   assert.match(result.stdout, /software-engineering/);
 });
 
-test('pwn task capsule exibe a cápsula de contexto formatada', () => {
+test('pwn task capsule sem task-id exige task-id e contrato congelado', () => {
   const result = runPwn(['task', 'capsule']);
-  assert.equal(result.status, 0);
-  assert.match(result.stdout, /PWN TASK CONTEXT CAPSULE/);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Uso: pwn task capsule/);
 });

@@ -1,5 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
+
+function shortHash(filePath: string): string {
+  try {
+    return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex').slice(0, 12);
+  } catch {
+    return 'absent';
+  }
+}
 
 export type GateResultStatus = 'pass' | 'pass_with_notes' | 'blocked';
 export type FindingSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -20,7 +29,7 @@ export interface GateFinding {
 export interface GateOutput {
   gate: string;
   work_id: string;
-  input_versions: Record<string, number>;
+  input_versions: Record<string, string>;
   result: GateResultStatus;
   summary: {
     covered: number;
@@ -281,7 +290,7 @@ export function evaluateGateDiscReq(workId: string, workDir: string): GateOutput
   return {
     gate: 'GATE-DISC-REQ',
     work_id: workId,
-    input_versions: { discovery: 1, requirements: 1 },
+    input_versions: { discovery: shortHash(discoveryPath), requirements: shortHash(requirementsPath) },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,
@@ -386,7 +395,7 @@ export function evaluateGateReqPrd(workId: string, workDir: string): GateOutput 
   return {
     gate: 'GATE-REQ-PRD',
     work_id: workId,
-    input_versions: { requirements: 1, prd: 1 },
+    input_versions: { requirements: shortHash(reqPath), prd: shortHash(prdPath) },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,
@@ -487,7 +496,7 @@ export function evaluateGatePrdSpec(workId: string, workDir: string): GateOutput
   return {
     gate: 'GATE-PRD-SPEC',
     work_id: workId,
-    input_versions: { prd: 1, technical_decisions: 1, spec: 1 },
+    input_versions: { prd: shortHash(prdPath), technical_decisions: shortHash(path.join(workDir, 'technical-decisions.json')), spec: shortHash(specPath) },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,
@@ -584,7 +593,7 @@ export function evaluateGateSpecPlan(workId: string, workDir: string): GateOutpu
   return {
     gate: 'GATE-SPEC-PLAN',
     work_id: workId,
-    input_versions: { spec: 1, work_governance: 1, plan: 1 },
+    input_versions: { spec: shortHash(specPath), work_governance: shortHash(path.join(workDir, 'work-governance.json')), plan: shortHash(planPath) },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,
@@ -665,7 +674,7 @@ export function evaluateGatePlanContract(workId: string, workDir: string): GateO
   return {
     gate: 'GATE-PLAN-CONTRACT',
     work_id: workId,
-    input_versions: { plan: 1, task_contracts: 1 },
+    input_versions: { plan: shortHash(planPath), task_contracts: shortHash(path.join(workDir, 'traceability-matrix.json')) },
     result: hasCriticalOrHigh ? 'blocked' : (findings.length > 0 ? 'pass_with_notes' : 'pass'),
     summary: {
       covered,

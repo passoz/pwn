@@ -48,15 +48,15 @@ test('work run bloqueia Work cuja cadeia de gates não passou (fail-closed)', as
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('work run executa sob --no-gate explícito quando não há gates aprovados', async () => {
-  // --no-gate pula os gates; o executor (unattended_exec.js do pack) é resolvido
-  // relativo ao cwd, então o teste roda na raiz do repo com Work inexistente (9999).
-  const { status, stdout } = await runCli(
+test('--no-gate não bypassa enforcement: Work sem contratos falha com erro claro', async () => {
+  // --no-gate pula a cadeia de gates, mas a execução continua sob contrato:
+  // sem plan.json/contratos, o orquestrador bloqueia com erro acionável.
+  const { status, stderr } = await runCli(
     ['work', 'run', '--no-gate', '--work', '9999', '--timeout-seconds', '10', '--', 'echo', 'ok'],
     REPO_ROOT,
   );
-  assert.equal(status, 0);
-  assert.match(stdout, /ok/);
+  assert.equal(status, 1);
+  assert.match(stderr, /CONTRACT ERROR|plan\.json não encontrado/);
 });
 
 test('work audit não envia mais a ação inválida --audit ao task_evidence', async () => {

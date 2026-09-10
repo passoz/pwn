@@ -12,7 +12,7 @@ import {
   validateTasksDetailed,
 } from "../scripts/validate_tasks.js";
 
-const SCRIPT = path.resolve("scripts/validate_tasks.js");
+const SCRIPT = path.resolve(import.meta.dirname, "../scripts/validate_tasks.js");
 
 const VALID = `# Tasks: auth
 **Contract version:** ${CURRENT_TASK_CONTRACT_VERSION}

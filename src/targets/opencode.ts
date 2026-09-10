@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TARGET_CAPABILITY_MATRIX } from '../core/target-materializer.js';
+import { MaterializationResult, TARGET_CAPABILITY_MATRIX, TargetContractContext, renderScopeSection } from '../core/target-materializer.js';
 
-export function materializeOpenCodeTarget(outDir: string): MaterializationResult {
+export function materializeOpenCodeTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
   const caps = TARGET_CAPABILITY_MATRIX.opencode;
   const generatedFiles: string[] = [];
   const notes: string[] = [];
@@ -20,6 +20,7 @@ export function materializeOpenCodeTarget(outDir: string): MaterializationResult
 - Respeitar contratos contratuais V4 de tarefas.
 - Modificações Restritas à allowlist declarada.
 - Executar scripts de validação antes de sinalizar conclusão.
+${context ? renderScopeSection(context) : ''}
 `;
 
   const agentsPath = path.join(outDir, 'AGENTS.md');

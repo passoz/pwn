@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TARGET_CAPABILITY_MATRIX } from '../core/target-materializer.js';
+import { MaterializationResult, TARGET_CAPABILITY_MATRIX, TargetContractContext } from '../core/target-materializer.js';
 
-export function materializeOmpTarget(outDir: string): MaterializationResult {
+export function materializeOmpTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
   const caps = TARGET_CAPABILITY_MATRIX.omp;
   const generatedFiles: string[] = [];
   const notes: string[] = [];
@@ -12,11 +12,15 @@ export function materializeOmpTarget(outDir: string): MaterializationResult {
     fs.mkdirSync(outDir, { recursive: true });
   }
 
+  const scopeBlock = context && context.taskCount > 0
+    ? `\nEscopo do contrato V4 — WRITE ALLOW: ${context.writeAllow.join(', ')} | WRITE DENY: ${context.writeDeny.join(', ')}`
+    : '';
+
   // 1. Generate omp.json
   const ompConfig = {
     version: "1.0",
     name: "piwerness-omp",
-    systemPrompt: "Você é um assistente omp operando sob contratos de engenharia do Piwerness.",
+    systemPrompt: `Você é um assistente omp operando sob contratos de engenharia do Piwerness.${scopeBlock}`,
     capabilities: {
       toolCalling: false,
       contractV4: false

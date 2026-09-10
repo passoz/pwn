@@ -137,14 +137,23 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 
 ### Enforcement no caminho de execução (fail-closed):
 
-A cadeia determinística **não é opcional no runtime**: por padrão, `pwn work run` avalia os 5 gates **em ordem** sobre os artefatos do Work antes de executar qualquer comando. Qualquer gate com `result: "blocked"` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`) **bloqueia a execução com exit 1**. A única forma de contornar é a flag explícita `--no-gate`, uma decisão de operador humano para risco aceito, registrada na saída:
+A cadeia determinística **não é opcional no runtime**: por padrão, `pwn work run` avalia os 5 gates **em ordem** sobre os artefatos do Work antes de executar qualquer comando. Qualquer gate com `result: "blocked"` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`) **bloqueia a execução com exit 1**. A única forma de contornar os *gates* é a flag explícita `--no-gate`, uma decisão de operador humano para risco aceito, registrada na saída.
+
+Além dos gates, `pwn work run` executa o comando **sob contrato**: carrega os contratos V4 congelados,
+aplica a política de shell (allowlist dos comandos de aceitação), cria um **Git Worktree sandbox**,
+roda o comando mediado pela Tool API, verifica o **Diff Guard** sobre os arquivos modificados e
+registra telemetria. O escape do sandbox é `--no-isolation` (executa no diretório de trabalho, com
+política ainda ativa); não há escape para a política de shell.
 
 ```bash
-# Default: executa somente se a cadeia DISC-REQ → REQ-PRD → PRD-SPEC → SPEC-PLAN → PLAN-CONTRACT aprovar
+# Default: gates + sandbox + diff guard
 bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
 
-# Escape explícito (decisão humana; nunca use em fluxo autônomo sem supervisão)
+# Pula os gates (governança), mas mantém o enforcement
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+
+# Pula o sandbox (executa no diretório de trabalho), política continua ativa
+bun bin/pwn.js work run --no-isolation --work 0001 --timeout-seconds 600 -- bun test
 ```
 
 ### Executando um Gate:
@@ -297,7 +306,8 @@ Executa o Work sob o executor unattended (`unattended_exec.js`, timeout finito).
 
 - `--work <work-id>`: Work a validar/executar (default: último Work ID ativo).
 - `--task <task-id>`: identifica a task no relatório de falha.
-- `--no-gate`: **única forma de contornar** a cadeia de gates. É uma decisão explícita de humano/operador para risco aceito; o bypass fica visível na saída. Nunca use em fluxo autônomo sem supervisão.
+- `--no-gate`: **contorna a cadeia de gates** (governança documental). O enforcement (sandbox, política, diff guard) continua ativo. Decisão explícita de humano/operador para risco aceito.
+- `--no-isolation`: **contorna o sandbox** (executa no diretório de trabalho). A política de shell continua ativa. Use apenas quando o worktree não se aplica (ex: projeto sem git).
 
 ```bash
 # Executa apenas se a cadeia de 5 gates aprovar

@@ -1,6 +1,7 @@
 import { handleWorkCommand } from './commands/work.js';
 import { handleTaskCommand } from './commands/task.js';
-import { handleValidateCommand } from './commands/validate.js';
+import { handleValidateCommand, handleSelfCheckCommand } from './commands/validate.js';
+import { handleInitCommand } from './commands/init.js';
 import { handleSkillCommand } from './commands/skill.js';
 import { handlePackCommand } from './commands/pack.js';
 import { handleQueueCommand } from './commands/queue.js';
@@ -28,6 +29,9 @@ COMANDOS DISPONÍVEIS:
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   validate [path]     Valida documentos normativos JSON contra JSON Schemas
+                      (--work NNNN valida os documentos do Work no projeto)
+  self-check          Valida os documentos normativos do próprio framework
+  init                Instala o harness (scripts do pack) no projeto-alvo
   skill <subcomando>  Descobre, lista e vincula skills do harness
                       (list, discover, link)
   pack <subcommand>   Gerencia packs de domínio (ex: software-engineering)
@@ -74,6 +78,14 @@ export function main(): void {
 
     case 'validate':
       handleValidateCommand(args.slice(1));
+      break;
+
+    case 'self-check':
+      handleSelfCheckCommand();
+      break;
+
+    case 'init':
+      handleInitCommand(commandArgs);
       break;
 
     case 'skill':

@@ -183,6 +183,12 @@
       }
     },
 
+    "accepted_requirements": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^(FR|QR|EC|SC)-\\d{3}$" },
+      "description": "IDs dos requisitos aceitos para implementacao (vinculo do gate REQ-PRD)"
+    },
+
     "description_file": {
       "type": "string",
       "description": "Caminho para arquivo Markdown com descrição livre (opcional)"
