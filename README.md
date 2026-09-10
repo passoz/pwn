@@ -67,6 +67,12 @@ bun bin/pwn.js work init 0001                  # Inicializa um Work ID específi
 bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
 
+# Execução e Auditoria (fail-closed por padrão)
+bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates aprovada (DISC-REQ → REQ-PRD → PRD-SPEC → SPEC-PLAN → PLAN-CONTRACT)
+bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test  # Único escape; decisão explícita de humano
+bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify; sem a ação inválida --audit)
+bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." -- bun test   # Registra RED via CLI
+
 # Cápsula de Contexto de Tarefas (Contrato v4)
 bun bin/pwn.js task capsule T-001              # Usa o último Work ID ativo automaticamente
 bun bin/pwn.js task capsule T-001 0001

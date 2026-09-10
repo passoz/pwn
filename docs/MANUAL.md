@@ -135,6 +135,18 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 - **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas.
 - **`GATE-PLAN-CONTRACT`:** Valida se todas as tarefas do plano possuem contratos V4 congelados (`contract_id`).
 
+### Enforcement no caminho de execução (fail-closed):
+
+A cadeia determinística **não é opcional no runtime**: por padrão, `pwn work run` avalia os 5 gates **em ordem** sobre os artefatos do Work antes de executar qualquer comando. Qualquer gate com `result: "blocked"` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`) **bloqueia a execução com exit 1**. A única forma de contornar é a flag explícita `--no-gate`, uma decisão de operador humano para risco aceito, registrada na saída:
+
+```bash
+# Default: executa somente se a cadeia DISC-REQ → REQ-PRD → PRD-SPEC → SPEC-PLAN → PLAN-CONTRACT aprovar
+bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
+
+# Escape explícito (decisão humana; nunca use em fluxo autônomo sem supervisão)
+bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+```
+
 ### Executando um Gate:
 ```bash
 bun bin/pwn.js work gate GATE-DISC-REQ --work 0001
@@ -278,6 +290,31 @@ Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id
 ### `pwn work gate <gate-id> [--work <work-id>]`
 Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`). Se `--work` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
+### `pwn work run [--work <work-id>] [--task <task-id>] [--no-gate] -- <comando>...`
+Executa o Work sob o executor unattended (`unattended_exec.js`, timeout finito).
+
+**Enforcement por default (fail-closed):** antes de executar qualquer comando, o `work run` avalia a **cadeia determinística completa de 5 gates** (`GATE-DISC-REQ` → `GATE-REQ-PRD` → `GATE-PRD-SPEC` → `GATE-SPEC-PLAN` → `GATE-PLAN-CONTRACT`) sobre os artefatos de `.piwerness/work/<work-id>/`. Se qualquer gate retornar `blocked` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`), a execução **é bloqueada com exit 1**. Modelos baratos não podem pular essa validação por decisão própria.
+
+- `--work <work-id>`: Work a validar/executar (default: último Work ID ativo).
+- `--task <task-id>`: identifica a task no relatório de falha.
+- `--no-gate`: **única forma de contornar** a cadeia de gates. É uma decisão explícita de humano/operador para risco aceito; o bypass fica visível na saída. Nunca use em fluxo autônomo sem supervisão.
+
+```bash
+# Executa apenas se a cadeia de 5 gates aprovar
+bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
+
+# Execução sem a cadeia de gates (decisão explícita de operador)
+bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+```
+
+### `pwn work audit [verify|check|candidate] [--work <work-id>] [--task <task-id>] ...`
+Audita evidências e aceitação TDD via `task_evidence.js`. Sem ação explícita, assume `verify`. As ações válidas são `baseline`, `red`, `green`, `verify`, `check` e `candidate` (passadas adiante); qualquer outra opção na posição de ação é rejeitada pelo validador com mensagem clara.
+
+```bash
+# Verifica evidência da task 1.1 do Work 0001
+bun bin/pwn.js work audit --work 0001 --task 1.1
+```
+
 ### `pwn task capsule <task-id> [work-id]`
 Exibe a cápsula de contexto formatada com limites de escrita, cenários e orçamento da tarefa. Se `work-id` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
@@ -332,16 +369,27 @@ Vincule os requisitos aceitos em `.piwerness/work/0002/prd.json` e execute:
 bun bin/pwn.js work gate GATE-REQ-PRD
 ```
 
-#### Passo 4: Congelar Contratos e Gerar a Cápsula de Tarefa
-Após ter a especificação e o plano aprovados nos portões `GATE-PRD-SPEC` e `GATE-SPEC-PLAN`, gere a cápsula de execução da primeira tarefa:
+#### Passo 4: Consolidar PRD em Spec e Plano (Gates 3–5)
+Com o PRD aprovado, gere a especificação técnica (`spec.json`) e o plano de tarefas com contratos (`plan.json`), validando cada transição:
+
 ```bash
-bun bin/pwn.js task capsule T-001
+bun bin/pwn.js work gate GATE-PRD-SPEC
+bun bin/pwn.js work gate GATE-SPEC-PLAN
+bun bin/pwn.js work gate GATE-PLAN-CONTRACT
 ```
 
 #### Passo 5: Materializar Runtimes e Executar
-Materialize a configuração do seu runtime de preferência (ex: OpenCode ou Pi) e inicie a execução isolada em sandbox:
+Materialize a configuração do seu runtime de preferência (ex: OpenCode ou Pi):
+
 ```bash
 bun bin/pwn.js target materialize --target opencode
+```
+
+Toda execução via `pwn work run` é **fail-closed**: sem `--no-gate`, o CLI reavalia a cadeia completa dos 5 gates sobre os artefatos e recusa (exit 1) qualquer Work com transição não aprovada ou artefato ausente. O `--no-gate` é o único escape e fica explícito na saída:
+
+```bash
+bun bin/pwn.js work run --work 0002 --timeout-seconds 600 -- bun test          # exige a cadeia aprovada
+bun bin/pwn.js work run --no-gate --work 0002 --timeout-seconds 600 -- bun test # escape explícito (humano)
 ```
 
 Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard monitorando cada alteração e total rastreabilidade.

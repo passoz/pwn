@@ -1,6 +1,6 @@
 import { runPackScript } from '../core/runner.js';
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
-import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract } from '../core/gates.js';
+import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -88,9 +88,68 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     case 'run':
       console.log('=== [pwn work run] Executando Work via Pipeline ===');
       {
-        const result = runPackScript('unattended_exec.js', args);
+        const hasNoGate = args.includes('--no-gate');
+        const workIdIdx = args.indexOf('--work');
+        const workId = (workIdIdx !== -1 && args[workIdIdx + 1] && !args[workIdIdx + 1].startsWith('--'))
+          ? args[workIdIdx + 1]
+          : getLatestWorkId();
+        const taskIdIdx = args.indexOf('--task');
+        const taskId = (taskIdIdx !== -1 && args[taskIdIdx + 1] && !args[taskIdIdx + 1].startsWith('--'))
+          ? args[taskIdIdx + 1]
+          : null;
+
+        // Remove flags de controle antes de delegar ao executor.
+        const execArgs: string[] = [];
+        for (let i = 0; i < args.length; i++) {
+          if (args[i] === '--no-gate') continue;
+          if ((args[i] === '--work' || args[i] === '--task') && i + 1 < args.length && !args[i + 1].startsWith('--')) {
+            i++;
+            continue;
+          }
+          execArgs.push(args[i]);
+        }
+
+        // ── Pré-condição obrigatória: cadeia determinística de 5 gates ──
+        if (!hasNoGate) {
+          const paths = getWorkArtifactsPaths(workId);
+          if (!fs.existsSync(paths.workDir)) {
+            console.error(`\n[GATE BLOCKED] Work ${workId} não existe em ${paths.workDir}. Rode 'pwn work init ${workId}' e complete a cadeia de artefatos antes de 'pwn work run'.`);
+            process.exit(1);
+          }
+
+          const gateChain: Array<[string, () => GateOutput]> = [
+            ['GATE-DISC-REQ', () => evaluateGateDiscReq(workId, paths.workDir)],
+            ['GATE-REQ-PRD', () => evaluateGateReqPrd(workId, paths.workDir)],
+            ['GATE-PRD-SPEC', () => evaluateGatePrdSpec(workId, paths.workDir)],
+            ['GATE-SPEC-PLAN', () => evaluateGateSpecPlan(workId, paths.workDir)],
+            ['GATE-PLAN-CONTRACT', () => evaluateGatePlanContract(workId, paths.workDir)],
+          ];
+
+          let blocked = false;
+          for (const [gateId, evalGate] of gateChain) {
+            const gate = evalGate();
+            console.log(JSON.stringify(gate, null, 2));
+            if (gate.result === 'blocked') {
+              console.error(`\n[GATE BLOCKED] ${gateId} bloqueou o Work ${workId}. Resolva os findings ou use --no-gate somente se o risco for aceito por humano.`);
+              blocked = true;
+              break;
+            }
+            console.log(`✓ ${gateId}: ${gate.result}`);
+          }
+          if (blocked) process.exit(1);
+          console.log('✓ Todos os gates determinísticos aprovados — Work elegível para execução.');
+        } else {
+          console.warn('⚠  Gates bypassados (--no-gate): execução sem validação da cadeia determinística.');
+        }
+
+        // ── Execução ──
+        const result = runPackScript('unattended_exec.js', execArgs);
         if (result.stdout) console.log(result.stdout);
         if (result.stderr) console.error(result.stderr);
+        if (taskId && result.status !== 0) {
+          console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
+        }
+
         process.exit(result.status);
       }
       break;
@@ -98,7 +157,12 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     case 'audit':
       console.log('=== [pwn work audit] Auditando Evidências e Aceitação ===');
       {
-        const result = runPackScript('task_evidence.js', ['--audit', ...args]);
+        const knownActions = ['baseline', 'red', 'green', 'verify', 'check', 'candidate'];
+        // Compat: sem ação explícita, o audit roda a verificação de evidência (verify).
+        const auditArgs = args.length > 0 && knownActions.includes(args[0])
+          ? [...args]
+          : ['verify', ...args];
+        const result = runPackScript('task_evidence.js', auditArgs);
         if (result.stdout) console.log(result.stdout);
         if (result.stderr) console.error(result.stderr);
         process.exit(result.status);
