@@ -1,9 +1,6 @@
 import { handleWorkCommand } from './commands/work.js';
 import { handleTaskCommand } from './commands/task.js';
 import { handleValidateCommand, handleSelfCheckCommand } from './commands/validate.js';
-import { handleInitCommand } from './commands/init.js';
-import { handleSkillCommand } from './commands/skill.js';
-import { handlePackCommand } from './commands/pack.js';
 import { handleQueueCommand } from './commands/queue.js';
 import { handleTargetCommand } from './commands/target.js';
 import { handleMetricsCommand } from './commands/metrics.js';
@@ -19,7 +16,7 @@ USO:
 
 COMANDOS DISPONÍVEIS:
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
-                      (specify, contract, plan, run, audit, status)
+                      (init, gate, specify, contract, plan, run, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
   target <subcomando> Gerencia runtimes e materialização de targets
@@ -28,25 +25,19 @@ COMANDOS DISPONÍVEIS:
                       (list, optimize)
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
-  validate [path]     Valida documentos normativos JSON contra JSON Schemas
-                      (--work NNNN valida os documentos do Work no projeto)
+  validate [--work NNNN]  Valida documentos normativos JSON do projeto contra JSON Schemas
   self-check          Valida os documentos normativos do próprio framework
-  init                Instala o harness (scripts do pack) no projeto-alvo
-  skill <subcomando>  Descobre, lista e vincula skills do harness
-                      (list, discover, link)
-  pack <subcommand>   Gerencia packs de domínio (ex: software-engineering)
-                      (list, diff)
 
 OPÇÕES:
   --help, -h          Exibe esta mensagem de ajuda
   --version, -v       Exibe a versão do pwn
 
 EXEMPLOS:
-  pwn validate
-  pwn work status
-  pwn work plan
-  pwn task capsule
-  pwn skill list
+  pwn self-check
+  pwn validate --work 0001
+  pwn work status 0001
+  pwn work run --work 0001 -- bun test
+  pwn task capsule 1.1 0001
 `);
 }
 
@@ -82,18 +73,6 @@ export function main(): void {
 
     case 'self-check':
       handleSelfCheckCommand();
-      break;
-
-    case 'init':
-      handleInitCommand(commandArgs);
-      break;
-
-    case 'skill':
-      handleSkillCommand(subcommand, commandArgs);
-      break;
-
-    case 'pack':
-      handlePackCommand(subcommand, commandArgs);
       break;
 
     case 'queue':

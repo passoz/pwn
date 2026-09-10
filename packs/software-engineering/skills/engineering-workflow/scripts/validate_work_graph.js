@@ -1,1 +1,0 @@
-../../../scripts/validate_work_graph.js

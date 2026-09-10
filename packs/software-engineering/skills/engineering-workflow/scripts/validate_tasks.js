@@ -1,1 +1,0 @@
-../../../scripts/validate_tasks.js

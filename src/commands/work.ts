@@ -1,9 +1,12 @@
-import { runPackScript } from '../core/runner.js';
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
 import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
 import { syncWorkManifest } from '../core/manifest-sync.js';
+import { main as validatePromptMain } from '../core/validate_prompt.js';
+import { main as validateTasksMain } from '../core/validate_tasks.js';
+import { main as taskEvidenceMain } from '../core/task_evidence.js';
+import { main as projectStatusMain } from '../core/project_status.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -66,23 +69,11 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       break;
     case 'specify':
       console.log('=== [pwn work specify] Especificando mudança / baseline ===');
-      {
-        const result = runPackScript('validate_prompt.js', args);
-        if (result.stdout) console.log(result.stdout);
-        if (result.stderr) console.error(result.stderr);
-        process.exit(result.status);
-      }
-      break;
+      process.exit(validatePromptMain(args));
 
     case 'contract':
       console.log('=== [pwn work contract] Gerenciando contrato de Work ===');
-      {
-        const result = runPackScript('validate_prompt.js', args);
-        if (result.stdout) console.log(result.stdout);
-        if (result.stderr) console.error(result.stderr);
-        process.exit(result.status);
-      }
-      break;
+      process.exit(validatePromptMain(args));
 
     case 'plan':
       console.log('=== [pwn work plan] Planejando / Validando Grafo de Tarefas ===');
@@ -115,20 +106,14 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
             console.warn(`   Regenere com: pwn work plan --work ${workId} --force`);
           }
 
-          const result = runPackScript('validate_tasks.js', [target]);
-          if (result.stdout) console.log(result.stdout);
-          if (result.stderr) console.error(result.stderr);
-          process.exit(result.status);
+          process.exit(validateTasksMain([target]));
         }
 
         if (!pathArg) {
           console.error(`Nenhum plan.json encontrado para o Work ${workId}. Rode 'pwn work init' e crie .piwerness/work/${workId}/plan.json, ou informe um caminho de plano markdown.`);
           process.exit(1);
         }
-        const result = runPackScript('validate_tasks.js', [pathArg]);
-        if (result.stdout) console.log(result.stdout);
-        if (result.stderr) console.error(result.stderr);
-        process.exit(result.status);
+        process.exit(validateTasksMain([pathArg]));
       }
       break;
 
@@ -225,22 +210,13 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         const auditArgs = args.length > 0 && knownActions.includes(args[0])
           ? [...args]
           : ['verify', ...args];
-        const result = runPackScript('task_evidence.js', auditArgs);
-        if (result.stdout) console.log(result.stdout);
-        if (result.stderr) console.error(result.stderr);
-        process.exit(result.status);
+        process.exit(taskEvidenceMain(auditArgs));
       }
       break;
 
     case 'status':
       console.log('=== [pwn work status] Relatório de Status do Work ===');
-      {
-        const result = runPackScript('project_status.js', args);
-        if (result.stdout) console.log(result.stdout);
-        if (result.stderr) console.error(result.stderr);
-        process.exit(result.status);
-      }
-      break;
+      process.exit(projectStatusMain(args));
 
     case 'sync':
       console.log('=== [pwn work sync] Sincronizando estado do manifest .work/NNNN.json ===');

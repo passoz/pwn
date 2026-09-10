@@ -1,7 +1,5 @@
-import { spawnSync, SpawnSyncOptions } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { TaskContractV4, BudgetController, BudgetViolation } from './contract-engine.js';
 import { PolicyEngine, AgentOperation, PolicyDecision, PolicyConfig } from './policy-engine.js';
 import { SandboxSession, SandboxError, createGitWorktreeSandbox, cleanupGitWorktreeSandbox } from './sandbox.js';
@@ -36,48 +34,6 @@ export interface RunContext {
   status: RunStatus;
   /** Mandatory Tool API — the ONLY gateway for agent operations. */
   tools: ToolAPI;
-}
-
-// ── Legacy: pack script runner ─────────────────────────────────────
-
-export function runPackScript(scriptName: string, args: string[] = [], cwd: string = process.cwd()): RunResult {
-  // Ordem de resolução: harness instalado no projeto → instalação do framework → cwd legado.
-  const harnessDir = path.resolve(cwd, '.piwerness/harness/scripts');
-  const cliRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const frameworkDir = path.resolve(cliRoot, 'packs/software-engineering/scripts');
-  const legacyDir = path.resolve(cwd, 'packs/software-engineering/scripts');
-
-  const candidates = [
-    path.join(harnessDir, scriptName),
-    path.join(frameworkDir, scriptName),
-    path.join(legacyDir, scriptName),
-  ];
-
-  const packScriptPath = candidates.find((candidate) => fs.existsSync(candidate));
-
-  if (!packScriptPath) {
-    return {
-      status: 1,
-      stdout: '',
-      stderr: `Script not found in pack: ${scriptName}. Procurei em:\n  - ${harnessDir}\n  - ${frameworkDir}\n  - ${legacyDir}\nInstale o harness com 'pwn init' no projeto-alvo.`,
-    };
-  }
-
-  const options: SpawnSyncOptions = {
-    cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-    },
-  };
-
-  const proc = spawnSync(process.execPath, [packScriptPath, ...args], options);
-
-  return {
-    status: proc.status ?? 1,
-    stdout: proc.stdout as string || '',
-    stderr: proc.stderr as string || '',
-  };
 }
 
 // ── Runtime: contract-governed execution ────────────────────────────

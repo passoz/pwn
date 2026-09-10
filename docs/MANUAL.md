@@ -338,10 +338,10 @@ Exibe a matriz de capacidades dos runtimes ou materializa artefatos no diretóri
 Exibe estatísticas de consumo de tokens/custo ou gera sugestões de otimização de routing.
 
 ### `pwn skill [list|discover|link]`
-Lista, descobre e vincula skills do harness.
+(Removido — skills do port foram descontinuadas com o desacoplamento do ai-engineering-skills.)
 
 ### `pwn pack [list|diff]`
-Gerencia packs de domínio instalados (`software-engineering`).
+(Removido — o único artefato restante em `packs/` é o pipeline normativo `core/pipeline-core.json`, validado por `pwn self-check`.)
 
 ---
 

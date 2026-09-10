@@ -54,14 +54,8 @@ bun test
 
 > **Runtime único:** o `pwn` é Bun-first. `node bin/pwn.js` falha com mensagem clara
 > apontando para `bun`. Os scripts npm (`bun run check`, `bun run validate`) usam Bun.
-
-### Instalar o harness num projeto-alvo
-
-```bash
-# Em qualquer projeto que usará o pwn (fora do repositório do framework):
-bun /caminho/para/piwerness/bin/pwn.js init            # instala em .piwerness/harness/scripts
-bun /caminho/para/piwerness/bin/pwn.js pack diff        # verifica drift entre harness e framework
-```
+> O CLI é autocontido: toda a lógica de governança e auditoria vive em `src/`, sem
+> dependência de packs ou scripts externos.
 
 ---
 
@@ -75,7 +69,6 @@ bun bin/pwn.js --version
 # Validação de Documentos Normativos
 bun bin/pwn.js validate --work 0001            # Valida prd.json/plan.json do Work com JSON Schema (ajv)
 bun bin/pwn.js self-check                      # Valida os documentos do próprio framework
-bun bin/pwn.js init [--dir caminho]            # Instala o harness no projeto-alvo
 
 # Gestão de Works e Portões (Gates) — Auto-incremento inteligente de Work IDs
 bun bin/pwn.js work init                       # Auto-atribui o próximo Work ID (ex: 0001, 0002)
@@ -105,10 +98,6 @@ bun bin/pwn.js target materialize --target opencode
 # Telemetria de Métricas e Otimização de Routing
 bun bin/pwn.js metrics list
 bun bin/pwn.js metrics optimize
-
-# Skills e Packs do Harness
-bun bin/pwn.js skill list
-bun bin/pwn.js pack list
 ```
 
 ## ⚡ Scripts Utilitários de Pré-Implementação
@@ -149,15 +138,14 @@ piwerness/
 ├── bin/                       # Binário do CLI (pwn.js)
 ├── src/
 │   ├── cli.ts                 # Ponto de entrada do CLI
-│   ├── commands/              # Subcomandos (work, task, queue, target, metrics, validate, skill, pack)
-│   ├── core/                  # Motores nativos (gates, contract-engine, router, sandbox, queue, metrics)
+│   ├── commands/              # Subcomandos (work, task, queue, target, metrics, validate)
+│   ├── core/                  # Motores nativos (gates, contract-engine, router, sandbox, queue, metrics, validação e auditoria TDD)
 │   └── targets/               # Adapters de target (pi, opencode, omp)
 ├── packs/
-│   ├── core/                  # Pipeline normativo base (pipeline-core.json)
-│   └── software-engineering/  # Pack oficial portado do ai-engineering-skills (88/88 PASS)
+│   └── core/                  # Pipeline normativo base (pipeline-core.json)
 ├── .specs/
 │   └── system.json            # Especificação do sistema baseline (normativo)
-├── schemas/                   # JSON Schemas formais (pipeline, prd, tasks, evidence, system)
+├── schemas/                   # JSON Schemas formais (draft-07): pipeline, prd, tasks, evidence, system, plan
 ├── tests/                     # Suíte de testes automatizados (Bun)
 ├── tools/
 │   └── pipeline-editor/       # Editor visual standalone (index.html)
@@ -165,8 +153,7 @@ piwerness/
 │   ├── MANUAL.md              # Manual Extenso e Completo da Ferramenta
 │   └── archive/               # Arquivo histórico (SPEC.md e DECISIONS.md)
 ├── spec.json                  # Especificação técnica normativa técnica
-├── todo.json                  # Plano de execução normativo (normativo)
-└── schemas/                   # JSON Schemas formais (draft-07), incl. plan.schema.json
+└── todo.json                  # Plano de execução normativo (normativo)
 ```
 
 ---

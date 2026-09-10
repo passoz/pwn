@@ -1,4 +1,3 @@
-import { runPackScript } from '../core/runner.js';
 import { generateContextCapsule } from '../core/capsule.js';
 import { getLatestWorkId } from '../core/work-artifacts.js';
 import { loadTaskContract } from '../core/task-contract.js';

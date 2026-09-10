@@ -1,1 +1,0 @@
-../../../scripts/work_artifacts.js

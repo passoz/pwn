@@ -2,11 +2,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { renderTasksMarkdown, normalizeMarkers, planMatchesMarkdown, type Plan } from '../src/core/plan-renderer.js';
-
-const validateScript = path.resolve(import.meta.dirname, '../packs/software-engineering/scripts/validate_tasks.js');
+import { validateTasks } from '../src/core/validate_tasks.js';
 
 function samplePlan(): Plan {
   return {
@@ -58,8 +56,8 @@ test('renderTasksMarkdown gera markdown v3 valido para o pack', () => {
     mkdirSync(path.join(dir, '.todo'), { recursive: true });
     const target = path.join(dir, '.todo', '0001-tasks.md');
     writeFileSync(target, markdown, 'utf8');
-    const result = spawnSync(process.execPath, [validateScript, target], { encoding: 'utf8' });
-    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+    const errors = validateTasks(target);
+    assert.deepEqual(errors, [], errors.join('\n'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

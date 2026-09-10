@@ -1,1 +1,0 @@
-../../../scripts/unattended_exec.js

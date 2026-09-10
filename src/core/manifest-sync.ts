@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { runPackScript } from './runner.js';
+import { collectPlanStatus } from './project_status.js';
 
 // Mapeia o estado do panorama (project_status.js) para o vocabulário de estado do manifest v3.
 const PANORAMA_TO_MANIFEST: Record<string, string> = {
@@ -17,11 +17,8 @@ const PANORAMA_TO_MANIFEST: Record<string, string> = {
 };
 
 function panoramaState(workId: string, rootDir: string): string {
-  const result = runPackScript('project_status.js', [workId, '--json'], rootDir);
-  if (result.status !== 0) return 'invalid';
   try {
-    const report = JSON.parse(result.stdout);
-    return report.panorama?.state ?? 'planned';
+    return collectPlanStatus(workId, rootDir).panorama?.state ?? 'planned';
   } catch {
     return 'invalid';
   }
