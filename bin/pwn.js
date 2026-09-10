@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 if (!process.versions.bun) {
   console.error('pwn requer o runtime Bun (https://bun.sh).');

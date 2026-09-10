@@ -166,7 +166,7 @@ piwerness/
 │   └── archive/               # Arquivo histórico (SPEC.md e DECISIONS.md)
 ├── spec.json                  # Especificação técnica normativa técnica
 ├── todo.json                  # Plano de execução normativo (normativo)
-└── validate.js                # Script de validação de esquemas
+└── schemas/                   # JSON Schemas formais (draft-07), incl. plan.schema.json
 ```
 
 ---

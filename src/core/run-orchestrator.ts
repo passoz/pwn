@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import fs from 'node:fs';
 import { initRunContext, finalizeRun, verifyDiff, saveRunEvents, type RunContext } from './runner.js';
 import { createDefaultContractV4, type TaskContractV4, type RiskLevel } from './contract-engine.js';
 import { loadTaskContract, loadWorkContracts } from './task-contract.js';
@@ -67,6 +68,25 @@ function modifiedFiles(sandboxPath: string): string[] {
     .map((line) => (line.length > 3 ? line.slice(3).trim() : ''))
     .map((entry) => entry.split(' -> ')[0].trim())
     .filter(Boolean);
+}
+
+/**
+ * Prepara o worktree sandbox para rodar o comando de aceitação:
+ * - linka node_modules do diretório principal (evita reinstalação);
+ * - copia bunfig.toml quando não versionado.
+ */
+export function prepareSandbox(sandboxPath: string, rootDir: string): void {
+  const nmSource = path.join(rootDir, 'node_modules');
+  const nmTarget = path.join(sandboxPath, 'node_modules');
+  if (fs.existsSync(nmSource) && !fs.existsSync(nmTarget)) {
+    fs.symlinkSync(nmSource, nmTarget, 'dir');
+  }
+
+  const bunfigSource = path.join(rootDir, 'bunfig.toml');
+  const bunfigTarget = path.join(sandboxPath, 'bunfig.toml');
+  if (fs.existsSync(bunfigSource) && !fs.existsSync(bunfigTarget)) {
+    fs.copyFileSync(bunfigSource, bunfigTarget);
+  }
 }
 
 function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: number, rootDir: string, agentRole: 'cheap' | 'strong' | 'review' | 'plan'): void {
@@ -176,6 +196,8 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     console.error('Dica: rode com --no-isolation para executar sem sandbox (decisão explícita do operador).');
     return { status: 1, stdout: '', stderr: (err as Error).message, runId, diffViolations: [], suspended: false };
   }
+
+  prepareSandbox(ctx.sandbox!.worktreePath, rootDir);
 
   const execResult = ctx.tools.exec(options.command[0], options.command.slice(1), options.timeoutSeconds * 1000);
 

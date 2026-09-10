@@ -71,7 +71,7 @@ export function runPackScript(scriptName: string, args: string[] = [], cwd: stri
     },
   };
 
-  const proc = spawnSync('node', [packScriptPath, ...args], options);
+  const proc = spawnSync(process.execPath, [packScriptPath, ...args], options);
 
   return {
     status: proc.status ?? 1,

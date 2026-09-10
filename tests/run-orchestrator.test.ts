@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { runOrchestrated } from '../src/core/run-orchestrator.js';
+import { runOrchestrated, prepareSandbox } from '../src/core/run-orchestrator.js';
 
 function git(cwd: string, ...args: string[]) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -109,6 +109,23 @@ test('runOrchestrated nega comando fora da allowlist da política', () => {
     assert.match(result.stderr, /allowlist|negado|policy/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('prepareSandbox linka node_modules e copia bunfig.toml', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pwn-prep-'));
+  const sandbox = mkdtempSync(path.join(tmpdir(), 'pwn-prep-sb-'));
+  try {
+    mkdirSync(path.join(root, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(path.join(root, 'bunfig.toml'), '[test]\nroot = "tests"\n', 'utf8');
+
+    prepareSandbox(sandbox, root);
+
+    assert.equal(lstatSync(path.join(sandbox, 'node_modules')).isSymbolicLink(), true, 'node_modules deve ser symlink');
+    assert.equal(existsSync(path.join(sandbox, 'bunfig.toml')), true, 'bunfig.toml deve ser copiado');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(sandbox, { recursive: true, force: true });
   }
 });
 

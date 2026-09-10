@@ -32,6 +32,11 @@ export function handleMetricsCommand(subcommand: string, args: string[]): void {
       console.log('=== [pwn metrics optimize] Sugestões Declarativas de Otimização de Routing ===\n');
       {
         const suggestions = generateOptimizationSuggestions();
+        if (suggestions.length === 0) {
+          console.log('Sem histórico de métricas suficiente para recomendar otimização de routing.');
+          console.log('Rode tarefas com "pwn work run" primeiro; as sugestões aparecem quando houver execuções registradas.');
+          process.exit(0);
+        }
         suggestions.forEach((s, idx) => {
           console.log(`[Sugestão #${idx + 1}] Papel Atual: ${s.agentRole} (${s.currentModel}) -> Recomendado: ${s.recommendedRole}`);
           console.log(`  Motivo: ${s.reason}`);

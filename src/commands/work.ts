@@ -3,6 +3,7 @@ import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkI
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
 import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
+import { syncWorkManifest } from '../core/manifest-sync.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -207,6 +208,11 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
         }
 
+        const syncState = syncWorkManifest(workId);
+        if (syncState !== 'manifest-ausente') {
+          console.log(`✓ Manifest .work/${workId}.json → state: ${syncState}`);
+        }
+
         process.exit(result.status);
       }
       break;
@@ -236,6 +242,20 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       }
       break;
 
+    case 'sync':
+      console.log('=== [pwn work sync] Sincronizando estado do manifest .work/NNNN.json ===');
+      {
+        const workId = flagValue(args, '--work') ?? getLatestWorkId();
+        const state = syncWorkManifest(workId);
+        if (state === 'manifest-ausente') {
+          console.error(`Manifest .work/${workId}.json não encontrado. Nada a sincronizar.`);
+          process.exit(1);
+        }
+        console.log(`✓ Manifest .work/${workId}.json → state: ${state}`);
+        process.exit(0);
+      }
+      break;
+
     default:
       console.error(`Subcomando desconhecido para 'pwn work': ${subcommand}`);
       console.log('\nUso:');
@@ -247,6 +267,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('  pwn work run       Executa tarefas do work de forma autônoma');
       console.log('  pwn work audit     Audita aceitação e evidência TDD');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
+      console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');
       process.exit(1);
   }
 }

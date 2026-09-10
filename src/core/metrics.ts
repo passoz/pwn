@@ -62,19 +62,12 @@ export function readMetrics(rootDir: string = process.cwd()): MetricsEntry[] {
 
 export function generateOptimizationSuggestions(rootDir: string = process.cwd()): OptimizationSuggestion[] {
   const entries = readMetrics(rootDir);
-  const suggestions: OptimizationSuggestion[] = [];
 
   if (entries.length === 0) {
-    return [
-      {
-        agentRole: 'strong',
-        currentModel: 'claude-3-7-sonnet',
-        recommendedRole: 'cheap',
-        reason: 'Sem histórico de métricas. Recomenda-se rodar tarefas simples com o papel cheap primeiro.',
-        estimatedSavingsPercent: 70,
-      },
-    ];
+    return [];
   }
+
+  const suggestions: OptimizationSuggestion[] = [];
 
   // Analyze entries for tasks run with 'strong' that passed on attempt 1 without failures
   const strongSuccesses = entries.filter(e => e.agentRole === 'strong' && e.status === 'success' && e.attempts === 1);
