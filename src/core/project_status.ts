@@ -4,22 +4,112 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateTasksDetailed } from "./validate_tasks.js";
+import { validateTasksDetailed, type TaskAnalysis } from "./validate_tasks.js";
 import { listWorks, loadManifest, resolvePlanTarget } from "./work-manifest.js";
 
 const TASK_HEADING = /^### \[([ x!])\] \[(\d+\.\d+)\] (\S.*)$/;
 
-function digest(filePath) {
+interface FileDigest {
+  exists: boolean;
+  sha256: string | null;
+}
+
+interface EvidenceState {
+  stage: string;
+  stale: boolean;
+}
+
+interface StatusTask {
+  id: string;
+  marker: string;
+  title: string;
+  requirement: string;
+  dependsOn: string;
+  evidence: EvidenceState;
+}
+
+type ParsedTask = Omit<StatusTask, "evidence">;
+
+interface GlobalGates {
+  state: string;
+  detail: string;
+}
+
+interface PanoramaCounts {
+  total: number;
+  completed: number;
+  pending: number;
+  blocked: number;
+  stale: number;
+  unverifiedChecked: number;
+  verifiedOpen: number;
+}
+
+interface Panorama {
+  state: string;
+  stoppedAt: string;
+  counts: PanoramaCounts;
+  progress: number;
+  compatibilityWarnings: number;
+}
+
+interface ArtifactState {
+  path: string;
+  state: string;
+  detail: string;
+}
+
+interface ArtifactsStatus {
+  systemSpec: ArtifactState;
+  prompt: ArtifactState;
+  tasks: ArtifactState;
+}
+
+interface ProjectStatus {
+  artifacts: ArtifactsStatus;
+  panorama: Panorama;
+  globalGates: GlobalGates;
+  tasks: StatusTask[];
+  validationErrors: string[];
+  validationWarnings: string[];
+  validationExceptions: string[];
+  contractVersion: number | null;
+  contractVersionSource: string;
+  migratedFromContractVersion: number | null;
+  workId: string | null;
+}
+
+interface PlanStatus extends ProjectStatus {
+  crossWorkBlockers?: Record<string, string[]>;
+}
+
+interface WorkIndexEntry {
+  work_id: string;
+  state: string;
+  plan?: string;
+  plan_exists?: boolean;
+  error?: string;
+  origin?: unknown;
+  panorama: Panorama | null;
+  globalGates?: GlobalGates;
+  contractVersion?: number | null;
+}
+
+interface WorkIndexReport {
+  works: WorkIndexEntry[];
+}
+
+function digest(filePath: string): FileDigest {
   if (!existsSync(filePath) || !statSync(filePath).isFile()) return { exists: false, sha256: null };
   return { exists: true, sha256: createHash("sha256").update(readFileSync(filePath)).digest("hex") };
 }
 
-function snapshotChanged(snapshot) {
+function snapshotChanged(snapshot: unknown): boolean {
   if (!snapshot || typeof snapshot !== "object") return false;
   return Object.entries(snapshot).some(([filePath, expected]) => JSON.stringify(digest(filePath)) !== JSON.stringify(expected));
 }
 
-function fieldValue(lines, start, end, name) {
+function fieldValue(lines: string[], start: number, end: number, name: string): string {
   const prefix = `**${name}:**`;
   for (const line of lines.slice(start + 1, end)) {
     if (line.startsWith(prefix)) return line.slice(prefix.length).trim().replaceAll("`", "");
@@ -27,9 +117,9 @@ function fieldValue(lines, start, end, name) {
   return "—";
 }
 
-function parseTasks(text) {
+function parseTasks(text: string): ParsedTask[] {
   const lines = text.split(/\r?\n/);
-  const found = [];
+  const found: Array<{ index: number; match: RegExpMatchArray }> = [];
   lines.forEach((line, index) => {
     const match = line.match(TASK_HEADING);
     if (match) found.push({ index, match });
@@ -46,7 +136,7 @@ function parseTasks(text) {
   });
 }
 
-function evidenceFor(taskId, todoDirectory, workId) {
+function evidenceFor(taskId: string, todoDirectory: string, workId: string | null): EvidenceState {
   const evidenceRoot = workId ? path.join(todoDirectory, "evidence", workId) : path.join(todoDirectory, "evidence");
   const stateFile = path.join(evidenceRoot, "state", `${taskId}.json`);
   if (!existsSync(stateFile)) return { stage: "not started", stale: false };
@@ -62,13 +152,13 @@ function evidenceFor(taskId, todoDirectory, workId) {
     }
     return { stage: "GREEN", stale };
   } catch (error) {
-    return { stage: `invalid evidence: ${error.message}`, stale: true };
+    return { stage: `invalid evidence: ${(error as Error).message}`, stale: true };
   }
 }
 
-function walkMarkdown(directory) {
+function walkMarkdown(directory: string): string[] {
   if (!existsSync(directory)) return [];
-  const files = [];
+  const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...walkMarkdown(entryPath));
@@ -77,18 +167,18 @@ function walkMarkdown(directory) {
   return files;
 }
 
-function latestPrompt() {
+function latestPrompt(): string | null {
   const files = walkMarkdown(".prompts");
   if (!files.length) return null;
   return files.sort((left, right) => statSync(right).mtimeMs - statSync(left).mtimeMs || left.localeCompare(right))[0];
 }
 
-function firstMatch(text, expression) {
+function firstMatch(text: string, expression: RegExp): string | null {
   return text.match(expression)?.[1] ?? null;
 }
 
-function artifactStatus(tasksPath, validation) {
-  let systemSpec = { path: ".specs/system.md", state: "absent", detail: "run /make-spec" };
+function artifactStatus(tasksPath: string, validation: TaskAnalysis): ArtifactsStatus {
+  let systemSpec: ArtifactState = { path: ".specs/system.md", state: "absent", detail: "run /make-spec" };
   if (existsSync(systemSpec.path)) {
     const text = readFileSync(systemSpec.path, "utf8");
     const status = firstMatch(text, /^\*\*Status:\*\* (.+)$/m) ?? "status unknown";
@@ -97,11 +187,11 @@ function artifactStatus(tasksPath, validation) {
   }
 
   const promptPath = latestPrompt();
-  const prompt = promptPath
+  const prompt: ArtifactState = promptPath
     ? { path: promptPath, state: "present", detail: firstMatch(readFileSync(promptPath, "utf8"), /^\*\*Status:\*\* (.+)$/m) ?? "status unknown" }
     : { path: ".prompts/", state: "absent", detail: "run /make-prompt" };
 
-  let tasks = { path: tasksPath, state: "absent", detail: "run /make-todo" };
+  let tasks: ArtifactState = { path: tasksPath, state: "absent", detail: "run /make-todo" };
   if (existsSync(tasksPath)) {
     const version = validation.contractVersion == null ? "unknown" : `v${validation.contractVersion}`;
     if (validation.errors.length) {
@@ -119,7 +209,7 @@ function artifactStatus(tasksPath, validation) {
   return { systemSpec, prompt, tasks };
 }
 
-function globalGates(text) {
+function globalGates(text: string): GlobalGates {
   const start = text.indexOf("## Global gates");
   if (start === -1) return { state: "MISSING", detail: "missing" };
   const after = text.slice(start + "## Global gates".length);
@@ -137,7 +227,7 @@ function globalGates(text) {
   return { state: "PENDING", detail };
 }
 
-function panorama(tasks, validationErrors, validationWarnings, gates) {
+function panorama(tasks: StatusTask[], validationErrors: string[], validationWarnings: string[], gates: GlobalGates): Panorama {
   const completed = tasks.filter((task) => task.marker === "x").length;
   const pending = tasks.filter((task) => task.marker === " ").length;
   const blocked = tasks.filter((task) => task.marker === "!").length;
@@ -146,7 +236,7 @@ function panorama(tasks, validationErrors, validationWarnings, gates) {
   const verifiedOpen = tasks.filter((task) => task.marker !== "x" && task.evidence.stage === "VERIFIED").length;
   const partial = tasks.find((task) => task.marker !== "x" && !["not started", "VERIFIED"].includes(task.evidence.stage));
   const firstBlocked = tasks.find((task) => task.marker === "!");
-  const firstPending = tasks.find((task) => task.marker === " ");
+  const firstPending = tasks.find((task) => task.marker === " ")!;
   const firstOpenIndex = tasks.findIndex((task) => task.marker !== "x");
   const outOfOrder = firstOpenIndex !== -1 ? tasks.slice(firstOpenIndex + 1).find((task) => task.marker === "x") : null;
 
@@ -157,15 +247,15 @@ function panorama(tasks, validationErrors, validationWarnings, gates) {
     stoppedAt = `Structural validation failed with ${validationErrors.length} error(s)`;
   } else if (stale) {
     state = "STALE EVIDENCE";
-    const task = tasks.find((entry) => entry.evidence.stale);
+    const task = tasks.find((entry) => entry.evidence.stale)!;
     stoppedAt = `Evidence no longer matches files at ${task.id}`;
   } else if (firstBlocked) {
     state = "BLOCKED";
     stoppedAt = `Blocked at ${firstBlocked.id}: ${firstBlocked.title}`;
   } else if (unverifiedChecked || verifiedOpen) {
     state = "INCONSISTENT STATE";
-    const task = tasks.find((entry) => entry.marker === "x" && entry.evidence.stage !== "VERIFIED")
-      ?? tasks.find((entry) => entry.marker !== "x" && entry.evidence.stage === "VERIFIED");
+    const task = (tasks.find((entry) => entry.marker === "x" && entry.evidence.stage !== "VERIFIED")
+      ?? tasks.find((entry) => entry.marker !== "x" && entry.evidence.stage === "VERIFIED"))!;
     stoppedAt = task.marker === "x"
       ? `Task ${task.id} is checked but evidence stage is ${task.evidence.stage}`
       : `Task ${task.id} has VERIFIED evidence but marker is not checked`;
@@ -201,15 +291,15 @@ function panorama(tasks, validationErrors, validationWarnings, gates) {
   };
 }
 
-export function collectProjectStatus(tasksPath = ".todo/tasks.md") {
+export function collectProjectStatus(tasksPath = ".todo/tasks.md"): ProjectStatus {
   const exists = existsSync(tasksPath);
   const text = exists ? readFileSync(tasksPath, "utf8") : "";
-  const validation = exists
+  const validation: TaskAnalysis = exists
     ? validateTasksDetailed(tasksPath)
-    : { errors: [], warnings: [], exceptions: [], contractVersion: null, contractVersionSource: "absent", migratedFromContractVersion: null };
+    : { errors: [], warnings: [], exceptions: [], contractVersion: null, contractVersionSource: "absent", migratedFromContractVersion: null, workId: null, tasks: [] };
   const todoDirectory = path.dirname(tasksPath);
   const workId = validation.workId ?? null;
-  const tasks = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId) }));
+  const tasks: StatusTask[] = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId) }));
   const gates = globalGates(text);
   return {
     artifacts: artifactStatus(tasksPath, validation),
@@ -226,10 +316,10 @@ export function collectProjectStatus(tasksPath = ".todo/tasks.md") {
   };
 }
 
-export function collectWorkIndex(root = process.cwd()) {
+export function collectWorkIndex(root = process.cwd()): WorkIndexReport {
   const works = listWorks(root).map((work) => {
     if (!work.plan_exists) return { ...work, panorama: null };
-    const report = collectProjectStatus(path.join(root, work.plan));
+    const report = collectProjectStatus(path.join(root, work.plan!));
     return {
       ...work,
       panorama: report.panorama,
@@ -240,9 +330,9 @@ export function collectWorkIndex(root = process.cwd()) {
   return { works };
 }
 
-function crossWorkDependencyState(root, workId, dependsOn) {
+function crossWorkDependencyState(root: string, workId: string, dependsOn: string): string[] {
   if (!dependsOn || dependsOn === "none") return [];
-  const blockers = [];
+  const blockers: string[] = [];
   for (const raw of dependsOn.split(",").map((entry) => entry.trim()).filter(Boolean)) {
     const match = raw.match(/^(\d{4})\/(\d+\.\d+)$/);
     if (!match || match[1] === workId) continue;
@@ -260,13 +350,14 @@ function crossWorkDependencyState(root, workId, dependsOn) {
   return blockers;
 }
 
-export function collectPlanStatus(target, root = process.cwd()) {
+export function collectPlanStatus(target: string, root = process.cwd()): PlanStatus {
   const resolved = resolvePlanTarget(root, target);
-  const report = collectProjectStatus(resolved.absolute);
+  const report: PlanStatus = { ...collectProjectStatus(resolved.absolute), crossWorkBlockers: {} };
   if (resolved.workId) {
+    const workId = resolved.workId;
     report.crossWorkBlockers = Object.fromEntries(report.tasks.map((task) => [
       task.id,
-      crossWorkDependencyState(root, resolved.workId, task.dependsOn),
+      crossWorkDependencyState(root, workId, task.dependsOn),
     ]).filter(([, blockers]) => blockers.length));
   } else {
     report.crossWorkBlockers = {};
@@ -274,7 +365,7 @@ export function collectPlanStatus(target, root = process.cwd()) {
   return report;
 }
 
-export function renderWorkIndex(report) {
+export function renderWorkIndex(report: WorkIndexReport): string {
   const lines = [
     "# Work index",
     "",
@@ -290,17 +381,17 @@ export function renderWorkIndex(report) {
   return `${lines.join("\n")}\n`;
 }
 
-function escapeCell(value) {
+function escapeCell(value: unknown): string {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 
-function markerStatus(marker) {
+function markerStatus(marker: string): string {
   if (marker === "x") return "[x] checked";
   if (marker === "!") return "[!] blocked";
   return "[ ] pending";
 }
 
-export function renderMarkdown(report) {
+export function renderMarkdown(report: PlanStatus): string {
   const lines = [
     "# Project status",
     "",
@@ -357,7 +448,7 @@ export function renderMarkdown(report) {
   return `${lines.join("\n")}\n`;
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv = process.argv.slice(2)): number {
   const json = argv.includes("--json");
   const args = argv.filter((argument) => argument !== "--json");
   if (args.length > 1) {

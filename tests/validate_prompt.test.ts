@@ -119,7 +119,7 @@ const VALID = `# PROMPT: Recuperação de senha
 | \`QR-001\` | \`SC-002\` | Respostas observáveis não revelam a existência da conta. |
 `;
 
-function validate(content) {
+function validate(content: string) {
   const directory = mkdtempSync(path.join(tmpdir(), "validate-prompt-"));
   const file = path.join(directory, ".prompts", "0001-change.md");
   const systemFile = path.join(directory, "system.md");

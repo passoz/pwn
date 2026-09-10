@@ -7,16 +7,16 @@ import test from "node:test";
 
 const script = path.resolve(import.meta.dirname, "../src/core/task_evidence.ts");
 
-function run(cwd, ...args) {
+function run(cwd: string, ...args: string[]) {
   return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
 }
 
-function git(cwd, ...args) {
+function git(cwd: string, ...args: string[]) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
 }
 
-function commit(cwd, message) {
+function commit(cwd: string, message: string): void {
   git(cwd, "add", ".");
   git(cwd, "commit", "-qm", message);
 }

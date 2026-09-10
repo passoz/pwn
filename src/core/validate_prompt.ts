@@ -40,7 +40,7 @@ const SYSTEM_REFERENCE = /\b(?:ACT|CAP|BR|CON|ENT|SQR|INT|GAP)-\d{3}\b/g;
 const VAGUE = /\b(?:rápid[oa]s?|segur[oa]s?|intuitiv[oa]s?|robust[oa]s?|adequad[oa]s?|corretamente|eficiente(?:mente)?)\b/gi;
 const STATUS = "**Status:** Pronto para planejamento";
 
-function occurrences(text, value) {
+function occurrences(text: string, value: string): number {
   let count = 0;
   let offset = 0;
   while ((offset = text.indexOf(value, offset)) !== -1) {
@@ -50,30 +50,30 @@ function occurrences(text, value) {
   return count;
 }
 
-function lineFor(text, index) {
+function lineFor(text: string, index: number): number {
   return text.slice(0, index).split("\n").length;
 }
 
-function matches(text, expression) {
+function matches(text: string, expression: RegExp): RegExpMatchArray[] {
   return [...text.matchAll(expression)];
 }
 
-function duplicateIds(entries, errors) {
-  const seen = new Set();
+function duplicateIds(entries: string[], errors: string[]): void {
+  const seen = new Set<string>();
   for (const entry of entries) {
     if (seen.has(entry)) errors.push(`duplicate ID: ${entry}`);
     seen.add(entry);
   }
 }
 
-function checkSequence(ids, prefix, errors) {
+function checkSequence(ids: string[], prefix: string, errors: string[]): void {
   ids.forEach((id, index) => {
     const expected = `${prefix}-${String(index + 1).padStart(3, "0")}`;
     if (id !== expected) errors.push(`${prefix} IDs must be sequential: expected ${expected}, found ${id}`);
   });
 }
 
-function sectionText(text, heading) {
+function sectionText(text: string, heading: string): string {
   const start = text.indexOf(heading);
   if (start === -1) return "";
   const contentStart = start + heading.length;
@@ -81,13 +81,24 @@ function sectionText(text, heading) {
   return text.slice(contentStart, next === -1 ? text.length : next);
 }
 
-function validateReferences(text, knownIds, errors) {
+function validateReferences(text: string, knownIds: Set<string>, errors: string[]): void {
   for (const match of text.matchAll(REFERENCE)) {
-    if (!knownIds.has(match[0])) errors.push(`line ${lineFor(text, match.index)}: reference to unknown ID: ${match[0]}`);
+    if (!knownIds.has(match[0])) errors.push(`line ${lineFor(text, match.index ?? 0)}: reference to unknown ID: ${match[0]}`);
   }
 }
 
-export function validatePrompt(filePath, systemSpecPath) {
+export interface PromptValidationCounts {
+  requirements: number;
+  scenarios: number;
+  successCriteria: number;
+}
+
+export interface PromptValidation {
+  errors: string[];
+  counts: PromptValidationCounts | null;
+}
+
+export function validatePrompt(filePath: string, systemSpecPath?: string): PromptValidation {
   if (!existsSync(filePath)) return { errors: [`file not found: ${filePath}`], counts: null };
 
   const text = readFileSync(filePath, "utf8");
@@ -162,7 +173,7 @@ export function validatePrompt(filePath, systemSpecPath) {
   if (!successCriteria.length) errors.push("at least one success criterion SC-001 is required");
   if (!edgeCases.length) errors.push("at least one edge case EC-001 is required");
 
-  const groups = [
+  const groups: Array<[string[], string]> = [
     [stories, "US"],
     [requirements.filter((match) => match[1].startsWith("FR-")).map((match) => match[1]), "FR"],
     [requirements.filter((match) => match[1].startsWith("QR-")).map((match) => match[1]), "QR"],
@@ -270,7 +281,7 @@ export function validatePrompt(filePath, systemSpecPath) {
   return { errors, counts };
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv: string[] = process.argv.slice(2)): number {
   const [filePath, systemSpecPath, ...extra] = argv;
   if (!filePath || !systemSpecPath || extra.length) {
     console.error("Usage: validate_prompt.js <prompt.md> <system-spec.md>");
@@ -285,9 +296,11 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   console.log("PROMPT VALIDATION: PASS");
-  console.log(`Requirements: ${result.counts.requirements}`);
-  console.log(`Scenarios: ${result.counts.scenarios}`);
-  console.log(`Success criteria: ${result.counts.successCriteria}`);
+  if (result.counts) {
+    console.log(`Requirements: ${result.counts.requirements}`);
+    console.log(`Scenarios: ${result.counts.scenarios}`);
+    console.log(`Success criteria: ${result.counts.successCriteria}`);
+  }
   return 0;
 }
 

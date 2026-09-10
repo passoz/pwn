@@ -51,7 +51,7 @@ N/A
 **Documentation:** N/A
 `;
 
-function validate(content) {
+function validate(content: string) {
   const directory = mkdtempSync(path.join(tmpdir(), "validate-tasks-"));
   const file = path.join(directory, ".todo", "0001-tasks.md");
   mkdirSync(path.dirname(file), { recursive: true });
@@ -59,7 +59,7 @@ function validate(content) {
   return validateTasks(file);
 }
 
-function validateWithSpec(content, specContent) {
+function validateWithSpec(content: string, specContent: string) {
   const directory = mkdtempSync(path.join(tmpdir(), "validate-tasks-spec-"));
   const file = path.join(directory, ".todo", "0001-tasks.md");
   const spec = path.join(directory, ".specs", "system.md");

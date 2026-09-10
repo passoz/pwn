@@ -43,7 +43,7 @@ const LOCAL_DEPENDENCY_ID = /^\d+\.\d+$/;
 const QUALIFIED_DEPENDENCY_ID = /^(\d{4})\/(\d+\.\d+)$/;
 const IMPLEMENTATION_STEP = /^\d+\.\s+\S/;
 const LEGACY_ALLOWANCE_KEYS = new Set(["implementation-files", "red-commands", "ac-commands", "implementation-steps"]);
-const UNSAFE_COMMANDS = [
+const UNSAFE_COMMANDS: Array<[string, RegExp]> = [
   ["sudo", /(^|[;&|]\s*|\s)sudo(?:\s|$)/],
   ["eval", /(^|[;&|]\s*|\s)eval(?:\s|$)/],
   ["download piped to shell", /\b(?:curl|wget)\b[^\n|]*\|\s*(?:ba)?sh\b/],
@@ -56,7 +56,55 @@ const UNSAFE_COMMANDS = [
   ["environment disclosure", /\b(?:cat\s+\.env\b|printenv\b|env\s*$)/],
 ];
 
-function section(lines, heading) {
+export type IssueSeverity = "warning" | "error";
+
+type IssueReporter = (severity: IssueSeverity, message: string) => void;
+
+export interface AnalyzeOptions {
+  strict?: boolean;
+  planPath?: string;
+}
+
+export interface MigrateOptions {
+  workId?: string | null;
+}
+
+export interface ParsedTask {
+  status: string;
+  taskId: string;
+  order: [number, number];
+  title: string;
+  start: number;
+  end: number;
+}
+
+export interface TaskSummary {
+  id: string;
+  status: string;
+  dependsOn: string;
+}
+
+export interface TaskAnalysis {
+  errors: string[];
+  warnings: string[];
+  exceptions: string[];
+  contractVersion: number | null;
+  contractVersionSource: string;
+  migratedFromContractVersion: number | null;
+  workId: string | null;
+  tasks: TaskSummary[];
+}
+
+export interface MigrationResult {
+  content: string;
+  changes: string[];
+  errors: string[];
+  warnings: string[];
+  fromVersion: number | null;
+  toVersion: number;
+}
+
+function section(lines: string[], heading: string): [number, number] | null {
   const start = lines.indexOf(heading);
   if (start === -1) return null;
   let end = lines.length;
@@ -69,11 +117,11 @@ function section(lines, heading) {
   return [start, end];
 }
 
-function contractComponents(lines) {
+function contractComponents(lines: string[]): Set<string> {
   const bounds = section(lines, "## Execution contract");
-  if (!bounds) return new Set();
+  if (!bounds) return new Set<string>();
   const [start, end] = bounds;
-  const components = new Set();
+  const components = new Set<string>();
   for (const line of lines.slice(start + 1, end)) {
     if (!line.startsWith("|")) continue;
     const cells = line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim().replace(/^`|`$/g, ""));
@@ -83,8 +131,8 @@ function contractComponents(lines) {
   return components;
 }
 
-function parseTasks(lines, issue) {
-  const found = [];
+function parseTasks(lines: string[], issue: IssueReporter): ParsedTask[] {
+  const found: Array<[number, RegExpMatchArray]> = [];
   lines.forEach((line, index) => {
     if (!ANY_TASK_HEADING.test(line)) return;
     const match = line.match(TASK_HEADING);
@@ -105,7 +153,7 @@ function parseTasks(lines, issue) {
   }));
 }
 
-function fieldValue(block, name) {
+function fieldValue(block: string[], name: string): string | null {
   const prefixes = [`**${name}:**`, `- **${name}:**`];
   for (const line of block) {
     for (const prefix of prefixes) {
@@ -115,18 +163,18 @@ function fieldValue(block, name) {
   return null;
 }
 
-function pathValues(value) {
+function pathValues(value: string): Set<string> {
   return new Set(value.split(",").map((part) => part.trim().replace(/^`|`$/g, "")).filter((part) => part && part !== "N/A"));
 }
 
-function inlineCommands(line) {
+function inlineCommands(line: string): string[] {
   return [...line.matchAll(INLINE_CODE)].map((match) => match[1]);
 }
 
-function commandsIn(lines) {
-  const commands = [];
+function commandsIn(lines: string[]): Array<[number, string]> {
+  const commands: Array<[number, string]> = [];
   let inContract = false;
-  const commandPrefixes = ["- `", "- [ ] `", "- [x] `", "- [!] `", "- **Playwright:** `", "- **Evidence:** `"];
+  const commandPrefixes: string[] = ["- `", "- [ ] `", "- [x] `", "- [!] `", "- **Playwright:** `", "- **Evidence:** `"];
 
   lines.forEach((line, zeroBasedIndex) => {
     const lineNumber = zeroBasedIndex + 1;
@@ -151,12 +199,12 @@ function commandsIn(lines) {
   return commands;
 }
 
-function compareOrder(left, right) {
+function compareOrder(left: [number, number], right: [number, number]): number {
   if (left[0] !== right[0]) return left[0] - right[0];
   return left[1] - right[1];
 }
 
-function fieldSection(block, name) {
+function fieldSection(block: string[], name: string): string[] {
   const start = block.indexOf(`**${name}:**`);
   if (start === -1) return [];
   let end = block.length;
@@ -169,10 +217,10 @@ function fieldSection(block, name) {
   return block.slice(start + 1, end);
 }
 
-function packageNames(command) {
+function packageNames(command: string): string[] {
   const tokens = command.trim().split(/\s+/);
   const manager = tokens[0]?.toLowerCase();
-  let packages = [];
+  let packages: string[] = [];
   if (["npm", "pnpm", "yarn", "pip", "pip3", "cargo"].includes(manager)) packages = tokens.slice(2);
   else if (manager === "go" && tokens[1]?.toLowerCase() === "get") packages = tokens.slice(2);
   else if (["apt", "apt-get", "brew"].includes(manager)) packages = tokens.slice(2);
@@ -190,8 +238,8 @@ function packageNames(command) {
     .filter(Boolean);
 }
 
-function specDependencies(specText) {
-  const dependencies = new Set();
+function specDependencies(specText: string): Set<string> {
+  const dependencies = new Set<string>();
   const declaration = /^\s*(?:-\s*)?\*\*(?:Dependencies|Dependency|Dependências|Dependência):\*\*\s+(.+)$/gim;
   for (const match of specText.matchAll(declaration)) {
     for (const value of match[1].matchAll(/`([^`]+)`/g)) dependencies.add(value[1].toLowerCase());
@@ -199,8 +247,8 @@ function specDependencies(specText) {
   return dependencies;
 }
 
-function dependencyInstallations(lines, issue, planPath) {
-  const allowedLines = new Set();
+function dependencyInstallations(lines: string[], issue: IssueReporter, planPath?: string): Set<number> {
+  const allowedLines = new Set<number>();
   const repositoryRoot = planPath ? path.resolve(path.dirname(planPath), "..") : null;
   for (const task of parseTasks(lines, () => {})) {
     if (task.status === "!") continue;
@@ -245,11 +293,11 @@ function dependencyInstallations(lines, issue, planPath) {
   return allowedLines;
 }
 
-function parseLegacyAllowances(block, taskId, contractVersion, migratedFrom, issue) {
+function parseLegacyAllowances(block: string[], taskId: string, contractVersion: number, migratedFrom: number | null, issue: IssueReporter): Map<string, number> {
   const value = fieldValue(block, "Legacy allowances");
-  const allowances = new Map();
+  const allowances = new Map<string, number>();
   if (value === null) return allowances;
-  if (contractVersion !== CURRENT_TASK_CONTRACT_VERSION || ![LEGACY_TASK_CONTRACT_VERSION, PREVIOUS_TASK_CONTRACT_VERSION].includes(migratedFrom)) {
+  if (contractVersion !== CURRENT_TASK_CONTRACT_VERSION || migratedFrom === null || ![LEGACY_TASK_CONTRACT_VERSION, PREVIOUS_TASK_CONTRACT_VERSION].includes(migratedFrom)) {
     issue("error", `task ${taskId}: Legacy allowances require a v${CURRENT_TASK_CONTRACT_VERSION} plan marked as migrated from v1 or v2`);
     return allowances;
   }
@@ -271,7 +319,7 @@ function parseLegacyAllowances(block, taskId, contractVersion, migratedFrom, iss
   return allowances;
 }
 
-function detectMigrationSource(lines, contractVersion, issue) {
+function detectMigrationSource(lines: string[], contractVersion: number, issue: IssueReporter): number | null {
   const declarations = lines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.startsWith("**Migrated from task contract:**"));
@@ -290,7 +338,7 @@ function detectMigrationSource(lines, contractVersion, issue) {
   return migratedFrom;
 }
 
-function detectContractVersion(lines, issue) {
+function detectContractVersion(lines: string[], issue: IssueReporter): { version: number; source: string } {
   const declarations = lines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.startsWith("**Contract version:**"));
@@ -316,16 +364,16 @@ function detectContractVersion(lines, issue) {
   return { version, source: "declared" };
 }
 
-export function analyzeTasks(text, options = {}) {
+export function analyzeTasks(text: string, options: AnalyzeOptions = {}): TaskAnalysis {
   const lines = text.split(/\r?\n/);
-  const errors = [];
-  const warnings = [];
-  const exceptions = [];
-  const issue = (severity, message) => (severity === "warning" ? warnings : errors).push(message);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const exceptions: string[] = [];
+  const issue: IssueReporter = (severity, message) => (severity === "warning" ? warnings : errors).push(message);
   const contract = detectContractVersion(lines, issue);
   const migratedFrom = detectMigrationSource(lines, contract.version, issue);
   const compatibility = contract.version < CURRENT_TASK_CONTRACT_VERSION;
-  const compatibilityIssue = (message) => issue(compatibility ? "warning" : "error", message);
+  const compatibilityIssue = (message: string) => issue(compatibility ? "warning" : "error", message);
 
   const workDeclarations = lines.map((line, index) => ({ line, index })).filter(({ line }) => line.startsWith("**Work ID:**"));
   const workMatch = workDeclarations[0]?.line.match(WORK_ID_DECLARATION);
@@ -349,10 +397,10 @@ export function analyzeTasks(text, options = {}) {
   const tasks = parseTasks(lines, issue);
   if (!tasks.length) issue("error", "no canonical task headings found");
 
-  const seen = new Set();
-  const primaryRequirements = new Map();
-  let previous = null;
-  const required = [
+  const seen = new Set<string>();
+  const primaryRequirements = new Map<string, string>();
+  let previous: [number, number] | null = null;
+  const required: string[] = [
     "Requirement",
     "Depends on",
     "Behavior",
@@ -366,7 +414,7 @@ export function analyzeTasks(text, options = {}) {
     "Visual",
     "Documentation",
   ];
-  const legacyAdvisoryFields = new Set(["Requirement", "Depends on"]);
+  const legacyAdvisoryFields = new Set<string>(["Requirement", "Depends on"]);
 
   for (const task of tasks) {
     if (seen.has(task.taskId)) issue("error", `task ${task.taskId}: duplicate ID`);
@@ -383,8 +431,8 @@ export function analyzeTasks(text, options = {}) {
 
     const block = lines.slice(task.start + 1, task.end);
     const allowances = parseLegacyAllowances(block, task.taskId, contract.version, migratedFrom, issue);
-    const consumedAllowances = new Set();
-    const atomicityIssue = (key, actual, valid, message) => {
+    const consumedAllowances = new Set<string>();
+    const atomicityIssue = (key: string, actual: number, valid: boolean, message: string): void => {
       if (valid) return;
       if (compatibility) {
         issue("warning", message);
@@ -397,7 +445,7 @@ export function analyzeTasks(text, options = {}) {
       }
       issue("error", message);
     };
-    const values = Object.fromEntries(required.map((name) => [name, fieldValue(block, name)]));
+    const values: Record<string, string | null> = Object.fromEntries(required.map((name) => [name, fieldValue(block, name)]));
     for (const [name, value] of Object.entries(values)) {
       if (value !== null) continue;
       const message = `task ${task.taskId}: missing field **${name}:**`;
@@ -561,7 +609,7 @@ export function analyzeTasks(text, options = {}) {
   };
 }
 
-export function validateTasksDetailed(filePath, options = {}) {
+export function validateTasksDetailed(filePath: string, options: AnalyzeOptions = {}): TaskAnalysis {
   if (!existsSync(filePath)) {
     return {
       errors: [`file not found: ${filePath}`],
@@ -577,12 +625,12 @@ export function validateTasksDetailed(filePath, options = {}) {
   return analyzeTasks(readFileSync(filePath, "utf8"), { ...options, planPath: filePath });
 }
 
-export function validateTasks(filePath, options = {}) {
+export function validateTasks(filePath: string, options: AnalyzeOptions = {}): string[] {
   return validateTasksDetailed(filePath, options).errors;
 }
 
-function taskBlocks(lines) {
-  const found = [];
+function taskBlocks(lines: string[]): Array<{ start: number; end: number; status: string; id: string }> {
+  const found: Array<{ index: number; match: RegExpMatchArray }> = [];
   lines.forEach((line, index) => {
     const match = line.match(TASK_HEADING);
     if (match) found.push({ index, match });
@@ -595,14 +643,14 @@ function taskBlocks(lines) {
   }));
 }
 
-function firstBodyLine(block) {
+function firstBodyLine(block: string[]): number {
   let index = 1;
   while (index < block.length && block[index] === "") index += 1;
   return index;
 }
 
-function legacyAtomicityAllowances(block) {
-  const allowances = [];
+function legacyAtomicityAllowances(block: string[]): string[] {
+  const allowances: string[] = [];
   const implementationFiles = pathValues(fieldValue(block, "Implementation files") || "").size;
   const redCommands = fieldSection(block, "RED").filter((line) => RED.test(line)).length;
   const acCommands = fieldSection(block, "ACs").filter((line) => AC.test(line)).length;
@@ -614,7 +662,7 @@ function legacyAtomicityAllowances(block) {
   return allowances;
 }
 
-function migrateTaskBlock(block, taskIndex, previousTaskId, changes) {
+function migrateTaskBlock(block: string[], taskIndex: number, previousTaskId: string | null, changes: string[]): string[] {
   if (block[0].startsWith("### [!]")) return block;
 
   const id = block[0].match(TASK_HEADING)?.slice(2, 4).join(".") ?? String(taskIndex + 1);
@@ -640,7 +688,7 @@ function migrateTaskBlock(block, taskIndex, previousTaskId, changes) {
   return block;
 }
 
-export function migrateTasksContent(text, options = {}) {
+export function migrateTasksContent(text: string, options: MigrateOptions = {}): MigrationResult {
   const before = analyzeTasks(text);
   if (before.errors.length) {
     return { content: text, changes: [], errors: before.errors, warnings: before.warnings, fromVersion: before.contractVersion, toVersion: CURRENT_TASK_CONTRACT_VERSION };
@@ -650,7 +698,7 @@ export function migrateTasksContent(text, options = {}) {
   }
 
   let lines = text.split(/\r?\n/);
-  const changes = [];
+  const changes: string[] = [];
   const workId = options.workId ?? null;
   if (!workId || !/^\d{4}$/.test(workId)) {
     return {
@@ -716,7 +764,7 @@ export function migrateTasksContent(text, options = {}) {
   };
 }
 
-function validatePlanIdentity(filePath, result) {
+function validatePlanIdentity(filePath: string, result: TaskAnalysis): string[] {
   if (result.contractVersion !== CURRENT_TASK_CONTRACT_VERSION) return [];
   const match = path.basename(filePath).match(/^(\d{4})-tasks\.md$/);
   if (!match || path.basename(path.dirname(filePath)) !== ".todo") {
@@ -726,17 +774,17 @@ function validatePlanIdentity(filePath, result) {
   return [];
 }
 
-function usage() {
+function usage(): void {
   console.error("usage: validate_tasks.js [--strict] PATH | --migrate --work NNNN [--write] PATH");
 }
 
-function printIssues(label, issues) {
+function printIssues(label: string, issues: string[]): void {
   if (!issues.length) return;
   console.log(`${label} (${issues.length}):`);
   for (const issue of issues) console.log(`- ${issue}`);
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv: string[] = process.argv.slice(2)): number {
   const strict = argv.includes("--strict");
   const migrate = argv.includes("--migrate");
   const write = argv.includes("--write");
@@ -798,7 +846,7 @@ export function main(argv = process.argv.slice(2)) {
     printIssues("Blocking issues", result.errors);
     return 1;
   }
-  const mode = result.contractVersion < CURRENT_TASK_CONTRACT_VERSION ? "legacy compatibility" : "current";
+  const mode = (result.contractVersion ?? 0) < CURRENT_TASK_CONTRACT_VERSION ? "legacy compatibility" : "current";
   console.log(`PASS: ${filePath} is executable under task contract v${result.contractVersion} (${mode})`);
   if (result.exceptions.length) printIssues("Preserved legacy exceptions", result.exceptions);
   if (result.warnings.length) {

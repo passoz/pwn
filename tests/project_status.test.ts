@@ -12,7 +12,7 @@ import { collectProjectStatus, renderMarkdown } from "../src/core/project_status
 
 const PROJECT_STATUS_SCRIPT = fileURLToPath(new URL("../src/core/project_status.ts", import.meta.url));
 
-function task(id, marker, requirement, dependsOn, title) {
+function task(id: string, marker: string, requirement: string, dependsOn: string, title: string): string {
   return `### [${marker}] [${id}] ${title}
 
 **Requirement:** ${requirement}
@@ -38,7 +38,7 @@ function task(id, marker, requirement, dependsOn, title) {
 `;
 }
 
-function plan(tasks, global = "N/A") {
+function plan(tasks: string[], global: string = "N/A"): string {
   return `# Tasks: project
 **Contract version:** 3
 **Work ID:** 0001
@@ -55,7 +55,7 @@ ${global}
 ${tasks.join("\n")}`;
 }
 
-function fixture(content) {
+function fixture(content: string) {
   const root = mkdtempSync(path.join(tmpdir(), "project-status-"));
   const tasksPath = path.join(root, ".todo", "0001-tasks.md");
   mkdirSync(path.dirname(tasksPath), { recursive: true });
@@ -63,7 +63,7 @@ function fixture(content) {
   return { root, tasksPath };
 }
 
-function digest(value) {
+function digest(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 

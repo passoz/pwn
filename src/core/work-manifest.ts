@@ -19,14 +19,70 @@ export const WORK_MANIFEST_VERSION = 1;
 export const WORK_ID = /^\d{4}$/;
 export const NUMBERED_PLAN = /^(\d{4})-tasks\.md$/;
 
-const ARTIFACT_PATTERNS = [
+const ARTIFACT_PATTERNS: Array<[string, RegExp]> = [
   [".work", /^(\d{4})\.json$/],
   [".sources", /^(\d{4})-.+\.md$/],
   [".prompts", /^(\d{4})-change\.md$/],
   [".todo", NUMBERED_PLAN],
 ];
 
-function assertRepositoryPath(root, candidate) {
+export interface WorkManifestOrigin {
+  type: string;
+  reference: string | null;
+}
+
+export interface WorkManifestArtifacts {
+  manifest: string;
+  source: string;
+  prompt: string;
+  plan: string;
+  evidence: string;
+  diagnostics: string;
+  screenshots: string;
+  attestations: string;
+}
+
+export interface WorkManifest {
+  version: number;
+  work_id: string;
+  state: string;
+  origin: WorkManifestOrigin;
+  artifacts: WorkManifestArtifacts;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReserveWorkOptions {
+  workId?: string | null;
+  originType?: string;
+  originReference?: string | null;
+  sourcePath?: string | null;
+}
+
+export interface WorkSummary {
+  work_id: string;
+  state: string;
+  origin?: WorkManifestOrigin;
+  plan?: string;
+  plan_exists?: boolean;
+  error?: string;
+}
+
+export interface MigrationMove {
+  from: string;
+  to: string;
+}
+
+export interface PlanTarget {
+  root: string;
+  target: string | undefined;
+  workId: string | undefined;
+  legacy: boolean;
+  relative: string;
+  absolute: string;
+}
+
+function assertRepositoryPath(root: string, candidate: string): string {
   const absoluteRoot = path.resolve(root);
   const absolute = path.resolve(root, candidate);
   if (absolute !== absoluteRoot && !absolute.startsWith(`${absoluteRoot}${path.sep}`)) {
@@ -35,8 +91,8 @@ function assertRepositoryPath(root, candidate) {
   return absolute;
 }
 
-function listIds(root) {
-  const ids = new Set();
+function listIds(root: string): string[] {
+  const ids = new Set<string>();
   for (const [directory, expression] of ARTIFACT_PATTERNS) {
     const absoluteDirectory = path.join(root, directory);
     if (!existsSync(absoluteDirectory)) continue;
@@ -49,19 +105,19 @@ function listIds(root) {
   return [...ids].sort();
 }
 
-function nextId(root) {
+function nextId(root: string): string {
   const ids = listIds(root);
   const highest = ids.length ? Number(ids.at(-1)) : 0;
   if (highest >= 9999) throw new Error("work ID space exhausted at 9999");
   return String(highest + 1).padStart(4, "0");
 }
 
-export function manifestPath(workId) {
+export function manifestPath(workId: string): string {
   if (!WORK_ID.test(workId)) throw new Error(`invalid Work ID: ${workId}; expected four digits`);
   return path.join(".work", `${workId}.json`);
 }
 
-export function canonicalArtifacts(workId, sourceKind = "request") {
+export function canonicalArtifacts(workId: string, sourceKind = "request"): WorkManifestArtifacts {
   if (!WORK_ID.test(workId)) throw new Error(`invalid Work ID: ${workId}; expected four digits`);
   const safeKind = String(sourceKind).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") || "request";
   return {
@@ -76,7 +132,7 @@ export function canonicalArtifacts(workId, sourceKind = "request") {
   };
 }
 
-function orderedManifest(manifest) {
+function orderedManifest(manifest: WorkManifest): WorkManifest {
   return {
     version: manifest.version,
     work_id: manifest.work_id,
@@ -88,17 +144,17 @@ function orderedManifest(manifest) {
   };
 }
 
-export function loadManifest(root, workId) {
+export function loadManifest(root: string, workId: string): WorkManifest {
   const relative = manifestPath(workId);
   const absolute = assertRepositoryPath(root, relative);
   if (!existsSync(absolute)) throw new Error(`work manifest not found: ${relative}`);
-  const manifest = JSON.parse(readFileSync(absolute, "utf8"));
+  const manifest = JSON.parse(readFileSync(absolute, "utf8")) as WorkManifest;
   if (manifest.version !== WORK_MANIFEST_VERSION) throw new Error(`unsupported work manifest version: ${manifest.version}`);
   if (manifest.work_id !== workId) throw new Error(`manifest Work ID mismatch: expected ${workId}, found ${manifest.work_id}`);
   return manifest;
 }
 
-export function reserveWork(root = process.cwd(), options = {}) {
+export function reserveWork(root: string = process.cwd(), options: ReserveWorkOptions = {}): WorkManifest {
   const repositoryRoot = path.resolve(root);
   const requested = options.workId;
   if (requested && !WORK_ID.test(requested)) throw new Error(`invalid Work ID: ${requested}; expected four digits`);
@@ -109,12 +165,13 @@ export function reserveWork(root = process.cwd(), options = {}) {
     const absoluteManifest = assertRepositoryPath(repositoryRoot, artifacts.manifest);
     mkdirSync(path.dirname(absoluteManifest), { recursive: true });
 
-    let descriptor;
+    let descriptor: number;
     try {
       descriptor = openSync(absoluteManifest, "wx", 0o600);
     } catch (error) {
-      if (!requested && error.code === "EEXIST") continue;
-      if (error.code === "EEXIST") throw new Error(`Work ID already reserved: ${workId}`);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!requested && code === "EEXIST") continue;
+      if (code === "EEXIST") throw new Error(`Work ID already reserved: ${workId}`);
       throw error;
     }
 
@@ -152,7 +209,7 @@ export function reserveWork(root = process.cwd(), options = {}) {
   }
 }
 
-export function updateManifest(root, workId, changes) {
+export function updateManifest(root: string, workId: string, changes: Partial<WorkManifest>): WorkManifest {
   const repositoryRoot = path.resolve(root);
   const manifest = loadManifest(repositoryRoot, workId);
   const allowedStates = new Set([
@@ -172,11 +229,11 @@ export function updateManifest(root, workId, changes) {
   return updated;
 }
 
-export function resolvePlanTarget(root = process.cwd(), target) {
+export function resolvePlanTarget(root: string = process.cwd(), target?: string): PlanTarget {
   const repositoryRoot = path.resolve(root);
   if (!target) throw new Error("explicit plan target required; use NNNN, a canonical plan path, or legacy");
-  let relative;
-  let workId;
+  let relative: string;
+  let workId: string | undefined;
   let legacy = false;
 
   if (target === "legacy") {
@@ -199,6 +256,7 @@ export function resolvePlanTarget(root = process.cwd(), target) {
   const absolute = assertRepositoryPath(repositoryRoot, relative);
   if (!existsSync(absolute)) throw new Error(`plan not found: ${relative}`);
   if (!legacy) {
+    if (!workId) throw new Error(`canonical plan target requires a Work ID: ${target}`);
     const manifest = loadManifest(repositoryRoot, workId);
     if (manifest.artifacts.plan !== relative) {
       throw new Error(`manifest plan mismatch for Work ID ${workId}: ${manifest.artifacts.plan}`);
@@ -207,9 +265,9 @@ export function resolvePlanTarget(root = process.cwd(), target) {
   return { root: repositoryRoot, target, workId, legacy, relative, absolute };
 }
 
-export function listWorks(root = process.cwd()) {
+export function listWorks(root: string = process.cwd()): WorkSummary[] {
   const repositoryRoot = path.resolve(root);
-  const works = listIds(repositoryRoot).map((workId) => {
+  const works: WorkSummary[] = listIds(repositoryRoot).map((workId) => {
     const manifestFile = path.join(repositoryRoot, manifestPath(workId));
     if (!existsSync(manifestFile)) {
       return { work_id: workId, state: "invalid", error: `missing ${manifestPath(workId)}` };
@@ -224,7 +282,7 @@ export function listWorks(root = process.cwd()) {
         plan_exists: existsSync(path.join(repositoryRoot, manifest.artifacts.plan)),
       };
     } catch (error) {
-      return { work_id: workId, state: "invalid", error: error.message };
+      return { work_id: workId, state: "invalid", error: (error as Error).message };
     }
   });
   if (existsSync(path.join(repositoryRoot, ".todo", "tasks.md"))) {
@@ -233,8 +291,8 @@ export function listWorks(root = process.cwd()) {
   return works;
 }
 
-function migrationMoves(root, workId) {
-  const moves = [];
+function migrationMoves(root: string, workId: string): MigrationMove[] {
+  const moves: MigrationMove[] = [];
   if (existsSync(path.join(root, ".todo/tasks.md"))) {
     moves.push({ from: ".todo/tasks.md", to: `.todo/${workId}-tasks.md` });
   }
@@ -255,14 +313,14 @@ function migrationMoves(root, workId) {
   return moves;
 }
 
-export function previewLegacyMigration(root = process.cwd()) {
+export function previewLegacyMigration(root: string = process.cwd()): { work_id: string; moves: MigrationMove[] } {
   const repositoryRoot = path.resolve(root);
   if (!existsSync(path.join(repositoryRoot, ".todo", "tasks.md"))) throw new Error("legacy plan not found: .todo/tasks.md");
   const workId = nextId(repositoryRoot);
   return { work_id: workId, moves: migrationMoves(repositoryRoot, workId) };
 }
 
-export function applyLegacyMigration(root = process.cwd()) {
+export function applyLegacyMigration(root: string = process.cwd()): { work_id: string; moves: MigrationMove[]; manifest: string } {
   const repositoryRoot = path.resolve(root);
   const preview = previewLegacyMigration(repositoryRoot);
   const manifest = reserveWork(repositoryRoot, {
@@ -279,7 +337,7 @@ export function applyLegacyMigration(root = process.cwd()) {
   return { ...preview, manifest: manifestPath(preview.work_id) };
 }
 
-function takeOption(args, name) {
+function takeOption(args: string[], name: string): string | null {
   const index = args.indexOf(name);
   if (index === -1) return null;
   const value = args[index + 1];
@@ -288,14 +346,14 @@ function takeOption(args, name) {
   return value;
 }
 
-function usage() {
+function usage(): void {
   console.error("usage: work_artifacts.js reserve [--work NNNN] [--origin-type TYPE] [--origin-reference REF] [--source PATH]");
   console.error("       work_artifacts.js resolve TARGET");
   console.error("       work_artifacts.js list [--json]");
   console.error("       work_artifacts.js migrate-legacy [--write]");
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv: string[] = process.argv.slice(2)): number {
   try {
     const [action, ...tokens] = argv;
     if (action === "reserve") {
@@ -335,7 +393,7 @@ export function main(argv = process.argv.slice(2)) {
     usage();
     return 2;
   } catch (error) {
-    console.error(`FAIL: ${error.message}`);
+    console.error(`FAIL: ${(error as Error).message}`);
     return 1;
   }
 }

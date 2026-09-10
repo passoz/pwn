@@ -169,7 +169,7 @@ export function validateFullTraceability(workDir: string, workId: string): GateF
   findings.push(...chainFindings);
 
   // Cross-reference: verify that referenced artifact files actually exist
-  const verifyFile = (artifactId: string, expectedPattern: string) => {
+  const verifyFile = (artifactId: string, expectedPattern: string | RegExp) => {
     if (!artifactId || artifactId === '') return;
     // Check if any file in workDir matches the pattern
     try {

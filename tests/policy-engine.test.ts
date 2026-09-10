@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDefaultContractV4 } from '../src/core/contract-engine.js';
-import { PolicyEngine } from '../src/core/policy-engine.js';
+import { PolicyEngine, type AgentOperation } from '../src/core/policy-engine.js';
 
 function makePolicy(writeAllow = ['src/**', 'tests/**'], writeDeny = ['.git/**', 'package.json']) {
   const contract = createDefaultContractV4('T-001', '0001', 'Policy Test', 'L1', {
@@ -182,14 +182,16 @@ test('PolicyEngine avalia múltiplas operações via evaluateAll', () => {
   ]);
   assert.equal(result.allAllowed, false);
   assert.equal(result.denials.length, 1);
-  assert.equal(result.denials[0].violationType, 'write_deny');
+  assert.equal((result.denials[0] as { violationType: string }).violationType, 'write_deny');
 });
 
 // ── Operações desconhecidas ─────────────────────────────────────────
 
 test('PolicyEngine retorna DENY para operação desconhecida', () => {
   const policy = makePolicy();
-  const decision = policy.evaluate({ type: 'unknown_op' as any });
-  assert.equal(decision.allowed, false);
+  // Operação fora da união conhecida, para exercitar o ramo default do evaluate.
+  const unknownOperation = { type: 'unknown_op' } as unknown as AgentOperation;
+  const decision = policy.evaluate(unknownOperation);
+  assert.ok(!decision.allowed);
   assert.equal(decision.violationType, 'denied_by_policy');
 });

@@ -14,8 +14,9 @@
   "scripts": {
     "start": "bun src/cli.ts",
     "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "validate": "bun src/cli.ts validate",
-    "check": "bun test && bun src/cli.ts self-check"
+    "check": "tsc --noEmit && bun test && bun src/cli.ts self-check"
   },
   "keywords": [
     "agent-harness",
@@ -28,5 +29,10 @@
   "license": "MIT",
   "dependencies": {
     "ajv": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^22.20.2",
+    "typescript": "5"
   }
 }
