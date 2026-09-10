@@ -193,9 +193,11 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
         }
 
-        const syncState = syncWorkManifest(workId);
-        if (syncState !== 'manifest-ausente') {
-          console.log(`✓ Manifest .work/${workId}.json → state: ${syncState}`);
+        if (!result.suspended) {
+          const syncState = syncWorkManifest(workId);
+          if (syncState !== 'manifest-ausente') {
+            console.log(`✓ Manifest .work/${workId}.json → state: ${syncState}`);
+          }
         }
 
         process.exit(result.status);

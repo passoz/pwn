@@ -24,7 +24,9 @@ export function getExistingWorkIds(rootDir: string = process.cwd()): string[] {
   return fs.readdirSync(baseDir).filter(name => {
     try {
       const full = path.join(baseDir, name);
-      return fs.statSync(full).isDirectory();
+      if (!fs.statSync(full).isDirectory()) return false;
+      // Diretório vazio não é um Work existente: não deve deslocar a numeração.
+      return fs.readdirSync(full).length > 0;
     } catch {
       return false;
     }

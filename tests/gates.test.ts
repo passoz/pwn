@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../src/core/work-artifacts.js';
+import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId, getExistingWorkIds } from '../src/core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, validateFullTraceability } from '../src/core/gates.js';
 
 function fixture() {
@@ -23,6 +23,19 @@ test('getNextWorkId e getLatestWorkId calculam IDs incrementais automaticamente'
     initWorkDirectory('0002', root);
     assert.equal(getLatestWorkId(root), '0002');
     assert.equal(getNextWorkId(root), '0003');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('getNextWorkId ignora diretório de Work vazio (sem artefatos)', () => {
+  const root = fixture();
+  try {
+    mkdirSync(path.join(root, '.piwerness', 'work', '0001'), { recursive: true });
+
+    assert.equal(getExistingWorkIds(root).length, 0);
+    assert.equal(getLatestWorkId(root), '0001');
+    assert.equal(getNextWorkId(root), '0001');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

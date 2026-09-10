@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,5 +65,62 @@ test('work audit não envia mais a ação inválida --audit ao task_evidence', a
   // (e não "unknown or missing action" do parse de --audit).
   const { stdout } = await runCli(['work', 'audit', '--work', '0001', '--task', '1.1'], dir);
   assert.match(stdout, /FAIL: baseline not found|verify|=== \[pwn work audit\]/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('run suspensa por risco L4 não sincroniza o manifest', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pwn-cli-l4-'));
+  const workDir = path.join(dir, '.piwerness', 'work', '0001');
+  mkdirSync(workDir, { recursive: true });
+  writeFileSync(path.join(workDir, 'plan.json'), JSON.stringify({
+    work_id: '0001',
+    title: 't',
+    components: [{ name: 'core', purpose: 'nucleo' }],
+    global_gates: ['suite'],
+    tasks: [{
+      id: '1.1', title: 'Task', requirement_id: 'FR-001', spec_reference: 'CAP-001', contract_id: 'CTR-001',
+      depends_on: [], components: ['core'], files: ['src/a.ts', 'tests/a.test.ts'],
+      implementation_files: ['src/a.ts'], test_files: ['tests/a.test.ts'],
+      red: { command: 'bun test', description: 'falha esperada' },
+      implementation_steps: ['step'],
+      acceptance_criteria: [{ command: 'bun test', description: 'passa' }],
+    }],
+  }), 'utf8');
+  writeFileSync(path.join(workDir, 'CTR-001.json'), JSON.stringify({
+    contract_version: '4.0', task_id: '1.1', work_id: '0001', title: 'Task',
+    risk: { level: 'L4', reasons: ['teste de suspensao'] },
+    validation_strategy: 'tdd-strict',
+    behavioral_contract: { scenarios: [] },
+    change_contract: { target_files: [], affected_components: [] },
+    architecture_contract: { invariants: [] },
+    acceptance_contract: { commands: ['bun test'], required_evidence: [] },
+    scope_contract: { write_allow: ['src/a.ts'], write_deny: [] },
+    budget_contract: { max_agent_attempts: 3, max_shell_executions: 10 },
+    escalation_contract: { on_write_violation: 'block_and_escalate', on_budget_exceeded: 'escalate_to_strong_agent', on_attempt_failed: 'retry_with_strong' },
+  }), 'utf8');
+
+  mkdirSync(path.join(dir, '.work'), { recursive: true });
+  const manifestPath = path.join(dir, '.work', '0001.json');
+  writeFileSync(manifestPath, JSON.stringify({
+    version: 1, work_id: '0001', state: 'planned',
+    origin: { type: 'local', reference: null },
+    artifacts: {
+      manifest: '.work/0001.json', source: '.sources/0001.md', prompt: '.prompts/0001.md',
+      plan: '.todo/0001-tasks.md', evidence: '.todo/evidence/0001', diagnostics: '.todo/diagnostics/0001',
+      screenshots: '.todo/screenshots/0001', attestations: '.todo/attestations/0001',
+    },
+    created_at: '2026-09-10T00:00:00Z', updated_at: '2026-09-10T00:00:00Z',
+  }), 'utf8');
+
+  const { status, stderr } = await runCli(
+    ['work', 'run', '--no-gate', '--work', '0001', '--task', '1.1', '--timeout-seconds', '10', '--', 'echo', 'ok'],
+    dir,
+  );
+
+  assert.equal(status, 0);
+  assert.match(stderr, /suspensa|L4/);
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  assert.equal(manifest.state, 'planned', 'manifest não deve ser sincronizado em run suspensa');
   rmSync(dir, { recursive: true, force: true });
 });
