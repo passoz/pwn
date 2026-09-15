@@ -28,6 +28,20 @@ export interface OrchestratedResult {
   suspended: boolean;
 }
 
+/**
+ * Exit code for a run suspended for human review (L4) instead of executed.
+ * Distinct from 0 so unattended automation cannot mistake "never ran" for success.
+ */
+export const EXIT_SUSPENDED = 3;
+
+/**
+ * Paths injected into the sandbox by the harness itself (see `prepareSandbox`).
+ * They are implementation plumbing, not agent writes, and must never be counted
+ * by the diff guard. `node_modules` is a symlink, so a `.gitignore` entry like
+ * `node_modules/` (the canonical form) does NOT hide it from `git status`.
+ */
+const HARNESS_INJECTED_PATHS = new Set(['node_modules', 'bunfig.toml']);
+
 const RISK_ORDER: RiskLevel[] = ['L0', 'L1', 'L2', 'L3', 'L4'];
 
 function maxRisk(contracts: TaskContractV4[]): RiskLevel {
@@ -57,7 +71,7 @@ function buildShellPolicy(contract: TaskContractV4): PolicyConfig['shell'] {
   };
 }
 
-function modifiedFiles(sandboxPath: string): string[] {
+export function modifiedFiles(sandboxPath: string): string[] {
   const proc = spawnSync('git', ['status', '--porcelain', '--untracked-files=all'], {
     cwd: sandboxPath,
     encoding: 'utf8',
@@ -65,9 +79,14 @@ function modifiedFiles(sandboxPath: string): string[] {
   if (proc.status !== 0) return [];
   return proc.stdout
     .split('\n')
-    .map((line) => (line.length > 3 ? line.slice(3).trim() : ''))
-    .map((entry) => entry.split(' -> ')[0].trim())
-    .filter(Boolean);
+    .filter((line) => line.length > 3)
+    .map((line) => {
+      const entry = line.slice(3).trim();
+      // Renames read as "R  old -> new"; the destination is the effective write.
+      const parts = entry.split(' -> ');
+      return parts[parts.length - 1].trim();
+    })
+    .filter((entry) => entry.length > 0 && !HARNESS_INJECTED_PATHS.has(entry));
 }
 
 /**
@@ -103,6 +122,7 @@ function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: n
     durationMs: Date.now() - startedAt,
     status: 'failed',
     attempts: 1,
+    isolated: options.isolated !== false,
   }, rootDir);
 }
 
@@ -145,7 +165,8 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
       riskLevel: 'L4',
     }, rootDir);
     console.error(`⏸  Tarefa L4 suspensa e enviada para a fila de revisão (${runId}).`);
-    return { status: 0, stdout: '', stderr: '', runId, diffViolations: [], suspended: true };
+    console.error(`   Aprove com 'pwn queue approve ${runId}' para destravar a execução (exit code ${EXIT_SUSPENDED}).`);
+    return { status: EXIT_SUSPENDED, stdout: '', stderr: '', runId, diffViolations: [], suspended: true };
   }
 
   const shellPolicy = buildShellPolicy(contract);
@@ -176,6 +197,7 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
       durationMs: Date.now() - startedAt,
       status: (proc.status ?? 1) === 0 ? 'success' : 'failed',
       attempts: 1,
+      isolated: false,
     }, rootDir);
     return {
       status: proc.status ?? 1,
@@ -246,6 +268,7 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     durationMs: Date.now() - startedAt,
     status: success ? 'success' : 'failed',
     attempts: 1,
+    isolated: true,
   }, rootDir);
 
   return { status, stdout, stderr, runId, diffViolations, suspended: false };

@@ -26,12 +26,14 @@ test('recordMetrics e readMetrics gravam e lêem métricas JSONL em .piwerness/m
       durationMs: 1200,
       status: 'success',
       attempts: 1,
+      isolated: true,
     }, root);
 
     const entries = readMetrics(root);
     assert.equal(entries.length, 1);
     assert.equal(entries[0].runId, 'RUN-100');
     assert.equal(entries[0].costUSD, 0.002);
+    assert.equal(entries[0].isolated, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -53,12 +55,44 @@ test('generateOptimizationSuggestions sugere otimizações de routing sem altera
       durationMs: 3000,
       status: 'success',
       attempts: 1,
+      isolated: false,
     }, root);
 
     const suggestions = generateOptimizationSuggestions(root);
     assert.ok(suggestions.length > 0);
     assert.equal(suggestions[0].recommendedRole, 'cheap');
     assert.ok(suggestions[0].estimatedSavingsPercent > 0);
+    // O modelo reportado vem das métricas reais, não de um literal fixo.
+    assert.equal(suggestions[0].currentModel, 'claude-3-7-sonnet');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateOptimizationSuggestions agrega os modelos reais dos registros strong', () => {
+  const root = fixture();
+  try {
+    for (const model of ['model-a', 'model-b']) {
+      recordMetrics({
+        timestamp: new Date().toISOString(),
+        runId: `RUN-${model}`,
+        workId: '0001',
+        taskId: 'T-003',
+        agentRole: 'strong',
+        model,
+        tokensInput: 10,
+        tokensOutput: 10,
+        costUSD: 0.01,
+        durationMs: 100,
+        status: 'success',
+        attempts: 1,
+        isolated: true,
+      }, root);
+    }
+
+    const suggestions = generateOptimizationSuggestions(root);
+    assert.equal(suggestions.length, 1);
+    assert.equal(suggestions[0].currentModel, 'model-a, model-b');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

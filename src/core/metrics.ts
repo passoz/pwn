@@ -14,6 +14,8 @@ export interface MetricsEntry {
   durationMs: number;
   status: 'success' | 'failed' | 'escalated';
   attempts: number;
+  /** true when the run executed inside a Git worktree sandbox with diff guard. */
+  isolated: boolean;
 }
 
 export interface OptimizationSuggestion {
@@ -60,6 +62,12 @@ export function readMetrics(rootDir: string = process.cwd()): MetricsEntry[] {
   return entries;
 }
 
+/**
+ * Heuristic discount assumed when downgrading a 'strong' role to 'cheap'.
+ * Declarative only — no routing decision is derived from it automatically.
+ */
+const STRONG_TO_CHEAP_SAVINGS_PERCENT = 65;
+
 export function generateOptimizationSuggestions(rootDir: string = process.cwd()): OptimizationSuggestion[] {
   const entries = readMetrics(rootDir);
 
@@ -72,12 +80,13 @@ export function generateOptimizationSuggestions(rootDir: string = process.cwd())
   // Analyze entries for tasks run with 'strong' that passed on attempt 1 without failures
   const strongSuccesses = entries.filter(e => e.agentRole === 'strong' && e.status === 'success' && e.attempts === 1);
   if (strongSuccesses.length > 0) {
+    const models = [...new Set(strongSuccesses.map(e => e.model))];
     suggestions.push({
       agentRole: 'strong',
-      currentModel: 'claude-3-7-sonnet',
+      currentModel: models.join(', '),
       recommendedRole: 'cheap',
       reason: `${strongSuccesses.length} execuções com papel 'strong' tiveram sucesso no 1º turno. Podem ser migradas para papel 'cheap' com economia.`,
-      estimatedSavingsPercent: 65,
+      estimatedSavingsPercent: STRONG_TO_CHEAP_SAVINGS_PERCENT,
     });
   }
 

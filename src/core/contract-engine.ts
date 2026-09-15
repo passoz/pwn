@@ -36,7 +36,8 @@ export interface TaskContractV4 {
   scope_contract: {
     write_allow: string[];
     write_deny: string[];
-    out_of_scope: string[];
+    /** Opcional: contratos V4 congelados anteriores à padronização podem omitir. */
+    out_of_scope?: string[];
   };
   budget_contract: {
     max_tokens?: number;

@@ -289,6 +289,27 @@ F5  [ ] F5.1 pack diff / skill link: implementar ou remover
     [ ] F5.4 Decidir router.ts e learnings.ts
 ```
 
+### Status de execução (2026-09-10, pós `ff36e38` e revisão de regressão)
+
+| ID | Estado | Observação |
+|---|---|---|
+| F0.1 / F0.2 / F0.3 | ✅ | Bun único, suíte estável, `check` agora inclui `validate` |
+| F1.1 / F1.2 / F1.3 / F1.4 | ✅ | `plan-renderer`, ajv, drift guard no `work run` |
+| F2.1 – F2.6 | ✅ | `run-orchestrator` ligado; ver correções de Diff Guard/L4 abaixo |
+| F3.1 / F3.3 | ✅ | cápsula lê o CTR congelado e tolera contrato sem `out_of_scope` |
+| F3.2 | ✅ | `target materialize --work` deriva escopo dos contratos |
+| F4.1 / F4.2 | ⛔ revertidos | `pwn init` e `runPackScript` removidos em `ff36e38` (CLI autocontido); não há mais vendorização |
+| F4.3 | ✅ | `validate` (projeto) separado de `self-check` (framework) |
+| F5.1 | ✅ | `pack`/`skill` removidos |
+| F5.2 | ✅ | `input_versions` com hash real; `state` unificado em `WORK_MANIFEST_STATES` |
+| F5.3 | ✅ | README/MANUAL alinhados ao runtime e ao enforcement reais |
+| F5.4 | ✅ | `router`/`learnings` integrados ao orquestrador |
+
+Regressões corrigidas nesta revisão: Diff Guard acusava o `node_modules` injetado pelo próprio
+harness como escrita fora de escopo (P0); `bun run validate` falhava no repo do framework;
+suspensão L4 retornava exit 0; `work contract` era um alias enganoso do validador de prompt.
+
+
 ---
 
 ## Apêndice — Reprodução do teste que originou o diagnóstico

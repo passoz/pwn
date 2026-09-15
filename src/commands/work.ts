@@ -1,6 +1,10 @@
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
 import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
+import { loadTaskContract } from '../core/task-contract.js';
+import { importV3Work, listV3WorkIds } from '../core/v3-import.js';
+import { scaffoldWork } from '../core/scaffold.js';
+import type { RiskLevel } from '../core/contract-engine.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
 import { syncWorkManifest } from '../core/manifest-sync.js';
 import { main as validatePromptMain } from '../core/validate_prompt.js';
@@ -72,8 +76,140 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       process.exit(validatePromptMain(args));
 
     case 'contract':
-      console.log('=== [pwn work contract] Gerenciando contrato de Work ===');
-      process.exit(validatePromptMain(args));
+      console.log('=== [pwn work contract] Validando contratos V4 congelados do Work ===');
+      {
+        const workId = flagValue(args, '--work') ?? getLatestWorkId();
+        const plan = loadPlan(workId);
+        if (!plan) {
+          console.error(`Nenhum plan.json encontrado em .piwerness/work/${workId}/. Rode 'pwn work init ${workId}' e defina as tasks antes de validar os contratos.`);
+          process.exit(1);
+        }
+
+        console.log(`Work ${workId} — ${plan.tasks.length} task(s) no plano\n`);
+        let failures = 0;
+        for (const task of plan.tasks) {
+          try {
+            const contract = loadTaskContract(workId, task.id);
+            if (!contract.risk?.level) throw new Error('risk.level ausente no contrato');
+            if (!contract.scope_contract?.write_allow?.length) throw new Error('scope_contract.write_allow vazio');
+            if (!contract.acceptance_contract?.commands?.length) {
+              throw new Error('acceptance_contract.commands vazio (fail-closed: nenhuma execução seria autorizada)');
+            }
+            console.log(`✓ ${task.id} — ${task.contract_id} | risco ${contract.risk.level} | ${contract.validation_strategy}`);
+            console.log(`    write_allow: ${contract.scope_contract.write_allow.join(', ')}`);
+            console.log(`    aceitação:   ${contract.acceptance_contract.commands.join(' ; ')}`);
+          } catch (err) {
+            failures += 1;
+            console.error(`✗ ${task.id} — ${(err as Error).message}`);
+          }
+        }
+
+        if (failures > 0) {
+          console.error(`\n[CONTRACT RESULT]: FAIL — ${failures} contrato(s) inválido(s) ou ausente(s). A execução ficaria bloqueada.`);
+          process.exit(1);
+        }
+        console.log('\n[CONTRACT RESULT]: PASS — todos os contratos V4 estão congelados e utilizáveis.');
+        process.exit(0);
+      }
+      break;
+
+    case 'import':
+      console.log('=== [pwn work import] Importando Works do layout v3 para o layout canônico ===');
+      {
+        const rootDir = path.resolve(flagValue(args, '--dir') ?? process.cwd());
+        const requested = flagValue(args, '--work');
+        const all = args.includes('--all');
+        const force = args.includes('--force');
+        const gateChain = args.includes('--gate-chain');
+        const riskArg = flagValue(args, '--risk') ?? 'L2';
+
+        const validRisks = ['auto', 'L0', 'L1', 'L2', 'L3', 'L4'];
+        if (!validRisks.includes(riskArg)) {
+          console.error(`--risk inválido: ${riskArg}. Opções: ${validRisks.join(', ')}`);
+          process.exit(1);
+        }
+        const risk = riskArg as RiskLevel | 'auto';
+
+        const available = listV3WorkIds(rootDir);
+        if (available.length === 0) {
+          console.error(`Nenhum Work v3 encontrado em ${path.join(rootDir, '.todo')} (esperado NNNN-tasks.md).`);
+          process.exit(1);
+        }
+
+        const targets = requested ? [requested] : available;
+        if (requested && !available.includes(requested) && !all) {
+          console.warn(`⚠  Work ${requested} não está em .todo/ (${available.join(', ')}); tentando mesmo assim.`);
+        }
+
+        console.log(`Raiz: ${rootDir}`);
+        console.log(`Works: ${targets.join(', ')} | risco: ${risk} | gate-chain: ${gateChain ? 'sim' : 'não'} | force: ${force ? 'sim' : 'não'}\n`);
+
+        for (const workId of targets) {
+          console.log(`── Work ${workId} ──`);
+          try {
+            const result = importV3Work({ rootDir, workId, force, risk, gateChain });
+            console.log(`✓ ${result.generated.length} artefato(s) em .piwerness/work/${workId}/: ${result.generated.join(', ')}`);
+            for (const skip of result.skipped) console.log(`  · ignorado ${skip.file}: ${skip.reason}`);
+            for (const warning of result.warnings) console.warn(`  ! ${warning}`);
+            const mapped = result.capabilityMapping.filter((entry) => entry.score > 0);
+            if (mapped.length > 0) {
+              console.log(`  capability mapping: ${mapped.map((entry) => `${entry.task}→${entry.capability}`).join(', ')}`);
+            }
+            const risks = [...new Set(result.riskMapping.map((entry) => entry.risk))].sort();
+            if (risk === 'auto') {
+              console.log(`  risco por task: ${result.riskMapping.map((entry) => `${entry.task}=${entry.risk}`).join(', ')}`);
+            } else {
+              console.log(`  risco congelado: ${risks.join(', ')}`);
+            }
+          } catch (err) {
+            console.error(`✗ Work ${workId}: ${(err as Error).message}`);
+            process.exit(1);
+          }
+          console.log('');
+        }
+
+        console.log('ℹ  Os artefatos v3 (.work/, .todo/, .prompts/, .sources/, .specs/) não foram alterados.');
+        console.log('   Próximos passos: pwn work contract --work <id> | pwn work plan --work <id> | pwn validate');
+        process.exit(0);
+      }
+      break;
+
+    case 'scaffold':
+      console.log('=== [pwn work scaffold] Criando cadeia completa e válida de Work ===');
+      {
+        const rootDir = path.resolve(flagValue(args, '--dir') ?? process.cwd());
+        const title = flagValue(args, '--title');
+        const workId = flagValue(args, '--work') ?? undefined;
+        const sourcePath = flagValue(args, '--source') ?? undefined;
+        const force = args.includes('--force');
+        const risk = (flagValue(args, '--risk') ?? 'L2') as RiskLevel;
+
+        if (!title) {
+          console.error('Uso: pwn work scaffold --title "<titulo>" [--work NNNN] [--source spec.md] [--risk Lx] [--dir PATH] [--force]');
+          process.exit(1);
+        }
+        const validRisks: RiskLevel[] = ['L0', 'L1', 'L2', 'L3', 'L4'];
+        if (!validRisks.includes(risk)) {
+          console.error(`--risk inválido: ${risk}. Opções: ${validRisks.join(', ')}`);
+          process.exit(1);
+        }
+
+        try {
+          const result = scaffoldWork({ rootDir, title, workId, sourcePath, risk, force });
+          console.log(`✓ Work ${result.workId} criado em ${result.workDir}`);
+          console.log(`Artefatos gerados (${result.generated.length}):`);
+          for (const file of result.generated) console.log(`  + ${file}`);
+          for (const skip of result.skipped) console.log(`  · ignorado ${skip.file}: ${skip.reason}`);
+          console.log('\nRevisão obrigatória antes de implementar:');
+          for (const note of result.review) console.log(`  ! ${note}`);
+          console.log(`\nPróximos passos:\n  pwn work contract --work ${result.workId}\n  pwn work gate GATE-PLAN-CONTRACT --work ${result.workId}\n  pwn validate --work ${result.workId}\n  pwn task capsule 1.1 ${result.workId}`);
+        } catch (err) {
+          console.error(`✗ ${(err as Error).message}`);
+          process.exit(1);
+        }
+        process.exit(0);
+      }
+      break;
 
     case 'plan':
       console.log('=== [pwn work plan] Planejando / Validando Grafo de Tarefas ===');
@@ -122,6 +258,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       {
         const hasNoGate = args.includes('--no-gate');
         const noIsolation = args.includes('--no-isolation');
+        const noSync = args.includes('--no-sync');
         const workId = flagValue(args, '--work') ?? getLatestWorkId();
         const taskId = flagValue(args, '--task');
         const timeoutSeconds = Number(flagValue(args, '--timeout-seconds') ?? '600');
@@ -189,11 +326,16 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           console.error('\n[DIFF VIOLATION] Arquivos fora do escopo do contrato:');
           result.diffViolations.forEach((v) => console.error(`  - ${v}`));
         }
-        if (taskId && result.status !== 0) {
+        if (taskId && result.status !== 0 && !result.suspended) {
           console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
         }
-
-        if (!result.suspended) {
+        if (result.suspended) {
+          console.error(`\n[SUSPENDED] A task ${taskId ?? '(work)'} do Work ${workId} não foi executada: aguarda decisão humana na fila AFK.`);
+          console.error(`Use 'pwn queue approve ${result.runId}' para destravar (exit code ${result.status}).`);
+          // Suspensão L4 não altera estado de governança.
+        } else if (noSync) {
+          console.log(`· Manifest .work/${workId}.json não sincronizado (--no-sync).`);
+        } else {
           const syncState = syncWorkManifest(workId);
           if (syncState !== 'manifest-ausente') {
             console.log(`✓ Manifest .work/${workId}.json → state: ${syncState}`);
@@ -238,11 +380,13 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.error(`Subcomando desconhecido para 'pwn work': ${subcommand}`);
       console.log('\nUso:');
       console.log('  pwn work init <id>  Inicializa diretório de artefatos sob .piwerness/work/<id>/');
+      console.log('  pwn work import    Importa Works do layout v3 (.work/, .todo/) para o layout canônico');
+      console.log('  pwn work scaffold  Cria um Work novo com cadeia completa (discovery→prd→spec→plan+CTR)');
       console.log('  pwn work gate <id>  Executa gate determinístico (GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC)');
       console.log('  pwn work specify   Especifica mudanças no baseline');
-      console.log('  pwn work contract  Valida/gera contratos de trabalho');
+      console.log('  pwn work contract  Valida os contratos V4 congelados (.piwerness/work/<id>/CTR-*.json)');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
-      console.log('  pwn work run       Executa tarefas do work de forma autônoma');
+      console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync)');
       console.log('  pwn work audit     Audita aceitação e evidência TDD');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');

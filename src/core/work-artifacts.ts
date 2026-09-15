@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { listWorkIds } from './work-manifest.js';
 
 export interface WorkArtifactsPaths {
   workDir: string;
@@ -33,8 +34,18 @@ export function getExistingWorkIds(rootDir: string = process.cwd()): string[] {
   });
 }
 
+/**
+ * Todos os Work IDs conhecidos, em qualquer trilha de artefatos.
+ * A numeração (`getNextWorkId`/`getLatestWorkId`) usa este espaço de IDs
+ * compartilhado com o manifest v3 (`.work/*.json`, `.todo/NNNN-tasks.md`, ...),
+ * evitando colisão entre `pwn work init` e as reservas do manifest.
+ */
+function allWorkIds(rootDir: string): string[] {
+  return listWorkIds(rootDir);
+}
+
 export function getLatestWorkId(rootDir: string = process.cwd()): string {
-  const ids = getExistingWorkIds(rootDir);
+  const ids = allWorkIds(rootDir);
   if (ids.length === 0) {
     return '0001';
   }
@@ -52,7 +63,7 @@ export function getLatestWorkId(rootDir: string = process.cwd()): string {
 }
 
 export function getNextWorkId(rootDir: string = process.cwd()): string {
-  const ids = getExistingWorkIds(rootDir);
+  const ids = allWorkIds(rootDir);
   if (ids.length === 0) {
     return '0001';
   }

@@ -16,7 +16,7 @@ export function handleMetricsCommand(subcommand: string, args: string[]): void {
             totalCost += e.costUSD;
             totalTokens += e.tokensInput + e.tokensOutput;
             console.log(`[${e.status.toUpperCase()}] Run: ${e.runId} | Task: ${e.taskId} | Role: ${e.agentRole} (${e.model})`);
-            console.log(`  Tokens: ${e.tokensInput + e.tokensOutput} | Custo: $${e.costUSD.toFixed(4)} | Duração: ${e.durationMs}ms | Tentativas: ${e.attempts}\n`);
+            console.log(`  Tokens: ${e.tokensInput + e.tokensOutput} | Custo: $${e.costUSD.toFixed(4)} | Duração: ${e.durationMs}ms | Tentativas: ${e.attempts} | Sandbox: ${e.isolated ? 'sim' : 'NÃO (--no-isolation)'}\n`);
           });
 
           console.log('--------------------------------------------------------------------------------');

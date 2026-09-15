@@ -26,6 +26,33 @@ const ARTIFACT_PATTERNS: Array<[string, RegExp]> = [
   [".todo", NUMBERED_PLAN],
 ];
 
+/** Canonical Work ID directory track, shared with the CLI (`pwn work init`). */
+const WORK_ID_DIRECTORY = path.join(".piwerness", "work");
+
+/**
+ * Single source of truth for the manifest `state` vocabulary.
+ * `manifest-sync` (which projects the plan panorama) maps into exactly this set.
+ */
+export const WORK_MANIFEST_STATES = [
+  "source_pending",
+  "prompt_pending",
+  "plan_pending",
+  "planned",
+  "active",
+  "blocked",
+  "completed",
+  "abandoned",
+  "invalid",
+] as const;
+
+export type WorkManifestState = (typeof WORK_MANIFEST_STATES)[number];
+
+const WORK_MANIFEST_STATE_SET: ReadonlySet<string> = new Set(WORK_MANIFEST_STATES);
+
+export function isWorkManifestState(value: string): value is WorkManifestState {
+  return WORK_MANIFEST_STATE_SET.has(value);
+}
+
 export interface WorkManifestOrigin {
   type: string;
   reference: string | null;
@@ -45,7 +72,7 @@ export interface WorkManifestArtifacts {
 export interface WorkManifest {
   version: number;
   work_id: string;
-  state: string;
+  state: WorkManifestState;
   origin: WorkManifestOrigin;
   artifacts: WorkManifestArtifacts;
   created_at: string;
@@ -102,6 +129,16 @@ function listIds(root: string): string[] {
       if (match) ids.add(match[1]);
     }
   }
+  // `.piwerness/work/<NNNN>/` shares the Work ID space: a Work initialised by the
+  // CLI must not be re-assigned by the manifest track (and vice versa). Empty
+  // directories are not Works and must not shift the numbering.
+  const workRoot = path.join(root, WORK_ID_DIRECTORY);
+  if (existsSync(workRoot)) {
+    for (const entry of readdirSync(workRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !WORK_ID.test(entry.name)) continue;
+      if (readdirSync(path.join(workRoot, entry.name)).length > 0) ids.add(entry.name);
+    }
+  }
   return [...ids].sort();
 }
 
@@ -151,6 +188,9 @@ export function loadManifest(root: string, workId: string): WorkManifest {
   const manifest = JSON.parse(readFileSync(absolute, "utf8")) as WorkManifest;
   if (manifest.version !== WORK_MANIFEST_VERSION) throw new Error(`unsupported work manifest version: ${manifest.version}`);
   if (manifest.work_id !== workId) throw new Error(`manifest Work ID mismatch: expected ${workId}, found ${manifest.work_id}`);
+  // Legacy manifests may carry a state outside the current vocabulary (e.g. the
+  // old `in_progress`); surface it as `invalid` instead of trusting the type.
+  if (!isWorkManifestState(manifest.state)) manifest.state = "invalid";
   return manifest;
 }
 
@@ -212,17 +252,7 @@ export function reserveWork(root: string = process.cwd(), options: ReserveWorkOp
 export function updateManifest(root: string, workId: string, changes: Partial<WorkManifest>): WorkManifest {
   const repositoryRoot = path.resolve(root);
   const manifest = loadManifest(repositoryRoot, workId);
-  const allowedStates = new Set([
-    "source_pending",
-    "prompt_pending",
-    "plan_pending",
-    "planned",
-    "active",
-    "blocked",
-    "completed",
-    "abandoned",
-  ]);
-  if (changes.state && !allowedStates.has(changes.state)) throw new Error(`invalid work state: ${changes.state}`);
+  if (changes.state && !isWorkManifestState(changes.state)) throw new Error(`invalid work state: ${changes.state}`);
   const updated = orderedManifest({ ...manifest, ...changes, updated_at: new Date().toISOString() });
   const absolute = assertRepositoryPath(repositoryRoot, manifestPath(workId));
   writeFileSync(absolute, `${JSON.stringify(updated, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
@@ -257,12 +287,22 @@ export function resolvePlanTarget(root: string = process.cwd(), target?: string)
   if (!existsSync(absolute)) throw new Error(`plan not found: ${relative}`);
   if (!legacy) {
     if (!workId) throw new Error(`canonical plan target requires a Work ID: ${target}`);
-    const manifest = loadManifest(repositoryRoot, workId);
-    if (manifest.artifacts.plan !== relative) {
-      throw new Error(`manifest plan mismatch for Work ID ${workId}: ${manifest.artifacts.plan}`);
+    // O manifest v3 e opcional no layout canonico: `work init` e `work scaffold`
+    // criam .piwerness/work/<NNNN>/ e o plano derivado em .todo/, sem manifest.
+    // Quando o manifest existe, o plano declarado nele precisa concordar.
+    const manifestAbsolute = assertRepositoryPath(repositoryRoot, manifestPath(workId));
+    if (existsSync(manifestAbsolute)) {
+      const manifest = loadManifest(repositoryRoot, workId);
+      if (manifest.artifacts.plan !== relative) {
+        throw new Error(`manifest plan mismatch for Work ID ${workId}: ${manifest.artifacts.plan}`);
+      }
     }
   }
   return { root: repositoryRoot, target, workId, legacy, relative, absolute };
+}
+
+export function listWorkIds(root: string = process.cwd()): string[] {
+  return listIds(path.resolve(root));
 }
 
 export function listWorks(root: string = process.cwd()): WorkSummary[] {
@@ -270,7 +310,20 @@ export function listWorks(root: string = process.cwd()): WorkSummary[] {
   const works: WorkSummary[] = listIds(repositoryRoot).map((workId) => {
     const manifestFile = path.join(repositoryRoot, manifestPath(workId));
     if (!existsSync(manifestFile)) {
-      return { work_id: workId, state: "invalid", error: `missing ${manifestPath(workId)}` };
+      // Sem manifest v3, o Work so existe se foi criado pelo layout canonico
+      // (`work init` / `work scaffold`). O plano derivado vive em .todo/<NNNN>-tasks.md.
+      const canonicalDirectory = path.join(repositoryRoot, WORK_ID_DIRECTORY, workId);
+      if (!existsSync(canonicalDirectory)) {
+        return { work_id: workId, state: "invalid", error: `missing ${manifestPath(workId)}` };
+      }
+      const plan = path.join(".todo", `${workId}-tasks.md`);
+      const planExists = existsSync(path.join(repositoryRoot, plan));
+      return {
+        work_id: workId,
+        state: planExists ? "planned" : "plan_pending",
+        plan,
+        plan_exists: planExists,
+      };
     }
     try {
       const manifest = loadManifest(repositoryRoot, workId);

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync, lstatSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync, lstatSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { runOrchestrated, prepareSandbox } from '../src/core/run-orchestrator.js';
+import { runOrchestrated, prepareSandbox, modifiedFiles, EXIT_SUSPENDED } from '../src/core/run-orchestrator.js';
 
 function git(cwd: string, ...args: string[]) {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -149,8 +149,61 @@ test('runOrchestrated suspende e enfileira tarefas L4 sem executar', () => {
     });
 
     assert.equal(result.suspended, true);
-    assert.equal(result.status, 0);
+    assert.equal(result.status, EXIT_SUSPENDED);
     assert.equal(existsSync(path.join(root, 'queue', 'review', `${result.runId}.json`)), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('runOrchestrated não reporta node_modules injetado pelo harness como violação de escopo', () => {
+  const root = fixture();
+  try {
+    // Formato canônico de .gitignore (com barra): não cobre o symlink que o harness cria.
+    writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n', 'utf8');
+    mkdirSync(path.join(root, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(path.join(root, 'ok.js'), "require('fs').writeFileSync('allowed.txt','x');\n", 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'ignore + in-scope script');
+    writeWork(root, 'node ok.js');
+
+    const result = runOrchestrated({
+      workId: '0001',
+      taskId: '1.1',
+      command: ['node', 'ok.js'],
+      timeoutSeconds: 10,
+      isolated: true,
+      rootDir: root,
+    });
+
+    assert.deepEqual(result.diffViolations, [], 'artefato do próprio harness não é escrita do agente');
+    assert.equal(result.status, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('modifiedFiles resolve o destino de renames e ignora artefatos injetados', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pwn-diff-parse-'));
+  try {
+    git(root, 'init', '-q');
+    git(root, 'config', 'user.email', 'test@example.invalid');
+    git(root, 'config', 'user.name', 'Test');
+    writeFileSync(path.join(root, 'old.txt'), 'x\n', 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'seed');
+
+    git(root, 'mv', 'old.txt', 'new.txt');
+    writeFileSync(path.join(root, 'forbidden.txt'), 'x\n', 'utf8');
+    mkdirSync(path.join(root, 'node_modules'), { recursive: true });
+    symlinkSync(path.join(tmpdir(), 'whatever'), path.join(root, 'bunfig.toml'));
+
+    const files = modifiedFiles(root);
+    assert.ok(files.includes('new.txt'), 'rename deve ser reportado pelo destino');
+    assert.ok(!files.includes('old.txt'), 'rename não deve ser reportado pela origem');
+    assert.ok(files.includes('forbidden.txt'), 'escrita real fora do escopo continua detectada');
+    assert.ok(!files.includes('node_modules'), 'node_modules injetado é ignorado');
+    assert.ok(!files.includes('bunfig.toml'), 'bunfig.toml injetado é ignorado');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

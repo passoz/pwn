@@ -16,7 +16,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "validate": "bun src/cli.ts validate",
-    "check": "tsc --noEmit && bun test && bun src/cli.ts self-check"
+    "check": "tsc --noEmit && bun test && bun src/cli.ts self-check && bun src/cli.ts validate"
   },
   "keywords": [
     "agent-harness",

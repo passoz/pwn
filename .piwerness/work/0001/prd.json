@@ -1,25 +1,46 @@
 {
   "$schema": "../../schemas/prd.schema.json",
-  "work_id": "0001",
+  "id": "PRD-0001",
   "meta": {
     "version": "1.0",
-    "created_at": "2026-08-26T23:56:15.883Z"
+    "created_at": "2026-08-26T23:56:15.883Z",
+    "updated_at": "2026-09-10T00:00:00.000Z",
+    "author": "operator"
   },
-  "title": "PRD do Work 0001",
+  "title": "PRD do Work 0001 — baseline de artefatos e gates",
   "status": "draft",
-  "problem": "Problema resolvido pelo PRD",
-  "actors": [
-    "ACT-001"
+  "scenario": "brownfield",
+  "problem": {
+    "statement": "O Work 0001 registra o baseline de artefatos e os gates de revisão do Piwerness, criado antes da padronização dos schemas normativos JSON."
+  },
+  "solution": {
+    "statement": "Manter o PRD mínimo do baseline alinhado ao schema formal, preservando a rastreabilidade do requisito FR-001."
+  },
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "statement": "Adotar PRD em JSON validado por schema como documento normativo do Work.",
+      "status": "accepted",
+      "made_by": "operator"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "FR-001",
+      "type": "functional",
+      "statement": "O Work deve manter rastreabilidade entre requisito, decisão, spec, task, contrato e evidência.",
+      "priority": "must"
+    }
+  ],
+  "stakeholders": [
+    {
+      "name": "operator",
+      "role": "ACT-001"
+    }
   ],
   "scope": {
-    "inside": [
-      "Escopo incluído"
-    ],
-    "outside": [
-      "Não-objetivos"
-    ]
+    "in_scope": ["Baseline documental do Work 0001"],
+    "out_of_scope": ["Implementação de produto"]
   },
-  "accepted_requirements": [
-    "FR-001"
-  ]
+  "accepted_requirements": ["FR-001"]
 }

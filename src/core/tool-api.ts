@@ -393,8 +393,12 @@ export class ToolAPI {
 
     const proc = spawnSync(command, args, options);
 
-    // If timed out, proc.signal will be set
-    if (proc.signal === 'SIGKILL') {
+    // The process spawned and ran: charge the budget even if it had to be killed.
+    this.budget.recordShellExecution();
+
+    // If timed out, spawnSync reports SIGKILL (killSignal) and/or an ETIMEDOUT error.
+    const timedOut = proc.signal === 'SIGKILL' || (proc.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+    if (timedOut) {
       this.logEvent('error', `Process killed by timeout (${timeoutMs}ms): ${command}`);
       return {
         success: false,
@@ -402,7 +406,6 @@ export class ToolAPI {
       };
     }
 
-    this.budget.recordShellExecution();
     this.logEvent('step', `Executed ${command} ${args.join(' ')} (exit=${proc.status})`);
 
     return {

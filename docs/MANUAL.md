@@ -209,6 +209,8 @@ Para evitar que execuções mal sucedidas de agentes corrompam a árvore de trab
 Quando o Piwerness é executado em modo não supervisionado (AFK - *Away From Keyboard*), tarefas de risco **L4** ou tarefas que falharam após escalação são pausadas e enviadas para a **Fila de Revisão Humana** (`src/core/queue.ts`).
 
 - **Diretório da Fila:** `queue/review/<run-id>.json`
+- **Sinal de suspensão:** a run sai com **exit code `3`** (não `0`), para que loops AFK não tratem
+  "não executou, aguarda humano" como sucesso. O manifest do Work **não** é sincronizado nesse caso.
 
 ### Interagindo com a Fila via CLI:
 
@@ -267,11 +269,10 @@ O **pwn-gui** é o utilitário web visual do Piwerness para inspeção e ediçã
 ## 12. Telemetria de Métricas & Teach Skills
 
 ### Métricas de Execução (`src/core/metrics.ts`):
-Toda execução registra consumo e desempenho em formato JSONL em `.piwerness/metrics.jsonl`:
-- Tokens de Entrada e Saída
-- Custo estimado em USD
-- Duração em milissegundos
-- Contagem de tentativas e taxa de sucesso
+Cada run grava uma linha em `.piwerness/metrics.jsonl`, com tokens de entrada/saída, custo estimado
+em USD, duração, tentativas, taxa de sucesso e o campo `isolated` — `true` para execuções em Git
+Worktree sandbox e `false` para escapes com `--no-isolation`, permitindo auditar depois quais runs
+rodaram sem isolamento.
 
 ### Sugestões de Otimização de Routing:
 O comando `pwn metrics optimize` analisa o histórico e gera sugestões consultivas (sem alterar arquivos automaticamente):
@@ -279,9 +280,9 @@ O comando `pwn metrics optimize` analisa o histórico e gera sugestões consulti
 bun bin/pwn.js metrics optimize
 ```
 *Exemplo de saída:*
-> `[Sugestão #1] Papel Atual: strong (claude-3-7-sonnet) -> Recomendado: cheap`  
+> `[Sugestão #1] Papel Atual: strong (<modelos reais do histórico>) -> Recomendado: cheap`  
 > `Motivo: 5 execuções com papel 'strong' tiveram sucesso no 1º turno. Podem ser migradas para 'cheap'.`  
-> `Economia Estimada: 65%`
+> `Economia Estimada: 65%` (heurística declarativa, não medida)
 
 ### Teach Skills (`src/core/learnings.ts`):
 Guarda aprendizados e convenções descobertas durante execuções locais em `.piwerness/learnings.json` (gitignored), permitindo a consolidação contínua de lições de engenharia.
@@ -290,8 +291,14 @@ Guarda aprendizados e convenções descobertas durante execuções locais em `.p
 
 ## 13. Referência de Comandos do CLI
 
-### `pwn validate [path]`
-Valida documentos normativos JSON contra os JSON Schemas formais.
+### `pwn validate [--work <work-id>]`
+Valida os documentos normativos do projeto contra os JSON Schemas formais (ajv).
+Com `--work NNNN`, valida apenas aquele Work; sem argumento, valida todos os Works presentes em
+`.piwerness/work/`. Em um repositório sem Works, cai no fallback que valida o conjunto normativo core
+(`spec.json`, `todo.json`, `.specs/system.json`, `packs/core/pipeline-core.json`) — o mesmo alvo de
+`pwn self-check`.
+
+> Um argumento posicional (ex.: `pwn validate spec.json`) **não** é interpretado como caminho.
 
 ### `pwn work init [work-id]`
 Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id>/`. Se `<work-id>` for omitido, o Piwerness calcula e atribui **automaticamente o próximo ID sequencial** (ex: `0001`, `0002`, `0003`...).
@@ -299,15 +306,60 @@ Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id
 ### `pwn work gate <gate-id> [--work <work-id>]`
 Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`). Se `--work` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
-### `pwn work run [--work <work-id>] [--task <task-id>] [--no-gate] -- <comando>...`
-Executa o Work sob o executor unattended (`unattended_exec.js`, timeout finito).
+### `pwn work specify [prompt.md] [system-spec.md]`
+Valida um prompt de mudança (`.prompts/NNNN-change.md`) contra a especificação do sistema via
+`validate_prompt`. Exige os dois argumentos posicionais.
+
+### `pwn work scaffold --title "<titulo>" [--work NNNN] [--source spec.md] [--risk Lx] [--dir PATH] [--force]`
+Cria um Work novo com a cadeia **completa e válida**: `discovery.json`, `requirements.json`,
+`prd.json` (schema), `spec.json`, `plan.json` (schema, task `1.1`), `CTR-001.json` (contrato V4
+congelado), `traceability-matrix.json` e o markdown derivado `.todo/NNNN-tasks.md`. Os valores são
+um **esqueleto** que o operador deve detalhar; o comando imprime exatamente o que revisar.
+
+### `pwn work import [--work NNNN | --all] [--dir PATH] [--gate-chain] [--force] [--risk Lx|auto]`
+Converte Works de um projeto que ainda usa o **layout v3** (`.work/NNNN.json`, `.todo/NNNN-tasks.md`,
+`.prompts/`, `.sources/`, `.specs/system.md`) para o layout canônico `.piwerness/work/NNNN/`:
+`plan.json` (round-trip byte-a-byte com o markdown v3), `CTR-*.json` derivados de RED/ACs/Files reais
+e, com `--gate-chain`, também `discovery/requirements/prd/spec/traceability`. **Nunca** altera os
+artefatos v3. Sem `--force`, não sobrescreve artefatos já importados.
+
+`--risk auto` classifica o risco **por task** a partir das próprias declarações (título, behavior,
+arquivos, RED e ACs):
+- **L3** — superfícies sensíveis: auth/sessão/credencial, pagamento/estorno, webhook/HMAC,
+  CORS/CSRF/rate limit, privacidade/LGPD, middleware de autorização, cripto.
+- **L1** — apenas documentação/README/formatação.
+- **L2** — todo o resto.
+
+**L4 nunca é atribuído automaticamente** — ele suspende a execução para revisão humana, o que
+precisa ser decisão deliberada do operador. O comando imprime o mapa `task→risco` e
+`task→capability` para revisão.
+
+### `pwn work contract [--work <work-id>]`
+Valida os **contratos V4 congelados** do Work: carrega `plan.json`, resolve o `contract_id` de cada
+task e verifica `.piwerness/work/<id>/CTR-*.json` (versão 4.0, `risk.level`, `write_allow` não vazio e
+`acceptance_contract.commands` não vazio — a política de shell é fail-closed). Sai com `0` (PASS) ou
+`1` (FAIL), listando cada task.
+
+### `pwn work run [--work <work-id>] [--task <task-id>] [--no-gate] [--no-isolation] -- <comando>...`
+Executa o Work sob contrato via `run-orchestrator` (não há mais wrapper `unattended_exec.js`):
+carrega os contratos V4 congelados, aplica a política de shell (allowlist derivada dos comandos de
+aceitação), cria um Git Worktree sandbox, media a execução pela Tool API, roda o **Diff Guard** sobre
+os arquivos modificados e grava telemetria.
+
+**Códigos de saída:** `0` sucesso · `1` falha (gate, contrato, política ou diff guard) ·
+`3` **suspenso para revisão humana** (risco L4, enfileirado em `queue/review/` sem executar).
 
 **Enforcement por default (fail-closed):** antes de executar qualquer comando, o `work run` avalia a **cadeia determinística completa de 5 gates** (`GATE-DISC-REQ` → `GATE-REQ-PRD` → `GATE-PRD-SPEC` → `GATE-SPEC-PLAN` → `GATE-PLAN-CONTRACT`) sobre os artefatos de `.piwerness/work/<work-id>/`. Se qualquer gate retornar `blocked` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`), a execução **é bloqueada com exit 1**. Modelos baratos não podem pular essa validação por decisão própria.
 
 - `--work <work-id>`: Work a validar/executar (default: último Work ID ativo).
 - `--task <task-id>`: identifica a task no relatório de falha.
 - `--no-gate`: **contorna a cadeia de gates** (governança documental). O enforcement (sandbox, política, diff guard) continua ativo. Decisão explícita de humano/operador para risco aceito.
-- `--no-isolation`: **contorna o sandbox** (executa no diretório de trabalho). A política de shell continua ativa. Use apenas quando o worktree não se aplica (ex: projeto sem git).
+- `--no-isolation`: **contorna o sandbox** (executa no diretório de trabalho). A política de shell continua ativa e o escape fica registrado em `metrics.jsonl` (campo `isolated: false`). Use apenas quando o worktree não se aplica (ex: projeto sem git).
+- `--no-sync`: **não sincroniza** o manifest v3 `.work/NNNN.json` com o estado do panorama. Por padrão o `work run` atualiza o `state`/`updated_at` desse manifest; use `--no-sync` quando o `.work/` pertencer a outra ferramenta e não deva ser reescrito.
+
+> O Diff Guard ignora os artefatos que o próprio harness injeta no worktree (`node_modules` e
+> `bunfig.toml`); escrever em `node_modules` não é uma escrita do agente, mas continua fora do
+> `write_allow`.
 
 ```bash
 # Executa apenas se a cadeia de 5 gates aprovar
@@ -337,11 +389,10 @@ Exibe a matriz de capacidades dos runtimes ou materializa artefatos no diretóri
 ### `pwn metrics [list|optimize]`
 Exibe estatísticas de consumo de tokens/custo ou gera sugestões de otimização de routing.
 
-### `pwn skill [list|discover|link]`
-(Removido — skills do port foram descontinuadas com o desacoplamento do ai-engineering-skills.)
-
-### `pwn pack [list|diff]`
-(Removido — o único artefato restante em `packs/` é o pipeline normativo `core/pipeline-core.json`, validado por `pwn self-check`.)
+### `pwn skill`, `pwn pack`
+(Removidos — o desacoplamento do `ai-engineering-skills` eliminou as skills/prompts do port e todo o
+`packs/software-engineering`; o único artefato restante em `packs/` é o pipeline normativo
+`core/pipeline-core.json`, validado por `pwn self-check`.)
 
 ---
 
@@ -350,9 +401,27 @@ Exibe estatísticas de consumo de tokens/custo ou gera sugestões de otimizaçã
 Abaixo está o fluxo para iniciar uma nova funcionalidade no Piwerness, que pode ser feito de forma automática via script ou passo a passo via CLI:
 
 ### Opção A: Modo Automatizado (Via Script Greenfield)
-Execute o script informando apenas o título ou ideia da funcionalidade (o Work ID é auto-incrementado):
+Execute o script informando apenas o título ou ideia da funcionalidade (o Work ID é auto-incrementado).
+Ele cria a cadeia completa e válida e aprova os 5 gates:
 ```bash
 ./scripts/prepare-greenfield-work.sh "Sistema de Notificações em Tempo Real"
+# Contra outro projeto: PWN_DIR=../meu-projeto ./scripts/prepare-greenfield-work.sh "Nova feature"
+```
+
+### Opção A2: Modo Direto pelo CLI
+Equivalente ao script, sem o encadeamento de gates:
+```bash
+bun bin/pwn.js work scaffold --title "Sistema de Notificações em Tempo Real" --risk L2
+bun bin/pwn.js work contract --work 0002
+```
+> O scaffold gera um **esqueleto** (task `1.1` com placeholders). Detalhe o `plan.json` e regenere o
+> markdown com `pwn work plan --work 0002 --force` antes de implementar.
+
+### Opção A3: Importar um projeto no layout v3
+Se o projeto ainda usa `.work/`, `.todo/`, `.prompts/`, `.sources/` e `.specs/system.md`, traduza os
+Works existentes para o layout canônico (sem tocar nos arquivos v3):
+```bash
+bun bin/pwn.js work import --all --gate-chain
 ```
 
 ### Opção B: Modo Passo a Passo via CLI
@@ -366,6 +435,10 @@ O comando criará automaticamente a pasta sequencial (ex: `.piwerness/work/0002/
 - `requirements.json`
 - `prd.json`
 - `traceability-matrix.json`
+
+> `work init` cria apenas os templates. Para já obter também `spec.json`, `plan.json`,
+> `CTR-001.json` e o markdown derivado (cadeia válida de ponta a ponta), use
+> `pwn work scaffold` (Opção A2).
 
 #### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
 Edite `.piwerness/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão (se omitido, `--work` usa o último Work ID):

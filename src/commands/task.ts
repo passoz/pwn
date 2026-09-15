@@ -33,6 +33,10 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
           console.error('\n[DIFF VIOLATION] Arquivos fora do escopo do contrato:');
           result.diffViolations.forEach((v) => console.error(`  - ${v}`));
         }
+        if (result.suspended) {
+          console.error(`\n[SUSPENDED] A task ${taskId} do Work ${workId} não foi executada: aguarda decisão humana na fila AFK.`);
+          console.error(`Use 'pwn queue approve ${result.runId}' para destravar (exit code ${result.status}).`);
+        }
         process.exit(result.status);
       }
       break;

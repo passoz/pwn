@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { TaskContractV4, BudgetController, BudgetViolation } from './contract-engine.js';
-import { PolicyEngine, AgentOperation, PolicyDecision, PolicyConfig } from './policy-engine.js';
+import { TaskContractV4, BudgetController } from './contract-engine.js';
+import { PolicyEngine, PolicyConfig } from './policy-engine.js';
 import { SandboxSession, SandboxError, createGitWorktreeSandbox, cleanupGitWorktreeSandbox } from './sandbox.js';
 import { checkDiffAgainstContract, ContractDiffCheckReport } from './contract-guard.js';
 import { ToolAPI } from './tool-api.js';
@@ -15,12 +15,6 @@ export interface RunEvent {
   type: 'start' | 'step' | 'budget_check' | 'policy_check' | 'diff_check' | 'error' | 'end';
   message: string;
   detail?: any;
-}
-
-export interface RunResult {
-  status: number;
-  stdout: string;
-  stderr: string;
 }
 
 export interface RunContext {
@@ -105,61 +99,6 @@ export function initRunContext(
 
   ctx.status = 'running';
   return ctx;
-}
-
-/**
- * Evaluate a proposed operation against the policy engine.
- * Returns the decision without executing anything.
- */
-export function evaluateOperation(ctx: RunContext, operation: AgentOperation): PolicyDecision {
-  const decision = ctx.policy.evaluate(operation);
-  emitEvent(ctx, 'policy_check',
-    decision.allowed
-      ? `ALLOW: ${operation.type}`
-      : `DENY: ${operation.type} — ${decision.reason}`,
-    decision,
-  );
-  return decision;
-}
-
-/**
- * Check budget limits. Returns null if OK, or the violation.
- */
-export function checkBudget(ctx: RunContext): BudgetViolation | null {
-  const violation = ctx.budget.checkBudget();
-  if (violation) {
-    ctx.status = 'budget_exceeded';
-    emitEvent(ctx, 'budget_check', `BUDGET EXCEEDED: ${violation.message}`, violation);
-  }
-  return violation;
-}
-
-/**
- * Run a shell command inside the sandbox USING the mandatory Tool API.
- *
- * DEPRECATED DIRECT USE: Agents should call ctx.tools.exec() directly.
- * This wrapper exists for backward compatibility and pack script execution.
- */
-export function runInSandbox(ctx: RunContext, command: string, args: string[] = []): RunResult {
-  // Use the Tool API — the ONLY authorized execution gateway
-  const result = ctx.tools.exec(command, args);
-
-  if (!result.success) {
-    const errorMsg = result.budgetViolation
-      ? `BUDGET EXCEEDED: ${result.budgetViolation.message}`
-      : `POLICY VIOLATION: ${result.error}`;
-    return {
-      status: 1,
-      stdout: '',
-      stderr: errorMsg,
-    };
-  }
-
-  return {
-    status: result.data?.status ?? 0,
-    stdout: result.data?.stdout ?? '',
-    stderr: result.data?.stderr ?? '',
-  };
 }
 
 /**

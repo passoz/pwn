@@ -4,7 +4,7 @@
 
 [![Bun](https://img.shields.io/badge/Bun-v1.4.0-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![JSON Schema](https://img.shields.io/badge/JSON_Schema-Draft_2020--12-green?logo=json)](https://json-schema.org/)
+[![JSON Schema](https://img.shields.io/badge/JSON_Schema-Draft_07-green?logo=json)](https://json-schema.org/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 ---
@@ -48,14 +48,22 @@ bun --version
 # Validar os documentos normativos do próprio framework
 bun bin/pwn.js self-check
 
-# Executar a suíte de testes (224/224 PASS)
+# Executar a suíte de testes (Bun) — o número de testes fica visível na saída
 bun test
+
+# Gate de CI local: typecheck + testes + self-check + validate
+bun run check
 ```
 
 > **Runtime único:** o `pwn` é Bun-first. `node bin/pwn.js` falha com mensagem clara
 > apontando para `bun`. Os scripts npm (`bun run check`, `bun run validate`) usam Bun.
 > O CLI é autocontido: toda a lógica de governança e auditoria vive em `src/`, sem
 > dependência de packs ou scripts externos.
+
+> **Códigos de saída de `work run` / `task run`:** `0` sucesso · `1` falha (gate, contrato,
+> política ou diff guard) · `3` **suspenso para revisão humana** (risco L4 enfileirado em
+> `queue/review/`, sem executar). O código `3` existe para que automação AFK não confunda
+> "não executou" com "sucesso".
 
 ---
 
@@ -75,11 +83,18 @@ bun bin/pwn.js work init                       # Auto-atribui o próximo Work ID
 bun bin/pwn.js work init 0001                  # Inicializa um Work ID específico
 bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
+bun bin/pwn.js work specify --work 0001        # Especifica mudanças no baseline (valida o prompt-change.md)
+bun bin/pwn.js work contract --work 0001       # Valida os contratos V4 congelados (CTR-*.json) do Work
+bun bin/pwn.js work scaffold --title "..."     # Cria um Work novo com cadeia completa e válida (discovery→prd→spec→plan+CTR)
+bun bin/pwn.js work import --all               # Importa Works do layout v3 (.work/, .todo/) para o layout canônico
+bun bin/pwn.js work import --all --risk auto   # idem, congelando risco por task (L1/L2/L3) a partir do conteúdo
+bun bin/pwn.js work plan --work 0001           # Gera/valida o markdown do plano a partir de plan.json
+bun bin/pwn.js work sync --work 0001           # Sincroniza o state do manifest .work/NNNN.json
 
 # Execução e Auditoria (fail-closed por padrão + enforcement em runtime)
 bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates + executa em sandbox com diff guard
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test    # Pula gates; enforcement continua
-bun bin/pwn.js work run --no-isolation --work 0001 -- bun test          # Pula sandbox; política continua (escape auditado)
+bun bin/pwn.js work run --no-isolation --work 0001 -- bun test          # Pula sandbox; política continua (escape registrado em metrics.jsonl)
 bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify)
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." -- bun test   # Registra RED via CLI
 
@@ -96,21 +111,32 @@ bun bin/pwn.js target list
 bun bin/pwn.js target materialize --target opencode
 
 # Telemetria de Métricas e Otimização de Routing
-bun bin/pwn.js metrics list
+bun bin/pwn.js metrics list                    # Histórico de execuções, com flag de sandbox (isolated) por run
 bun bin/pwn.js metrics optimize
 ```
 
 ## ⚡ Scripts Utilitários de Pré-Implementação
 
-O Piwerness disponibiliza scripts autônomos para acelerar o ciclo de pré-implementação e aprovação nos 5 portões determinísticos até o congelamento da cápsula de contexto V4:
+Os scripts criam a cadeia completa e **válida** de um Work novo (discovery → requirements →
+PRD → spec → plan + contrato V4 congelado), aprovam os 5 portões determinísticos, validam os
+schemas e exibem a cápsula de contexto. Ambos são wrappers finos de `pwn work scaffold`, rodam
+**de qualquer diretório** e aceitam `PWN_DIR` (projeto-alvo) e `PWN_BIN` (comando do CLI).
 
 ```bash
-# Greenfield (sem spec legada): Cria e aprova a esteira até a pré-implementação a partir de uma ideia
+# Greenfield (sem spec legada): a partir de uma ideia
 ./scripts/prepare-greenfield-work.sh "Novo Módulo de Pagamentos PIX"
 
-# Brownfield (com spec legada): Importa a spec.md legada, vincula requisitos e aprova os portões
+# Brownfield (com spec legada): importa a spec.md e a snapshota no Work
 ./scripts/prepare-legacy-reimplementation.sh /caminho/para/sua-spec.md
+
+# Contra outro projeto, sem sair do diretório atual
+PWN_DIR=../meu-projeto ./scripts/prepare-greenfield-work.sh "Nova feature"
 ```
+
+> Os scripts só produzem um **esqueleto** com placeholders; o plano
+> (`.piwerness/work/<id>/plan.json`) precisa ser detalhado antes de implementar. Para adequar um
+> projeto que já usa o layout v3 (`.work/`, `.todo/`, `.prompts/`, `.sources/`, `.specs/`) ao
+> piwerness, use `pwn work import --all --gate-chain`.
 
 ---
 
@@ -161,6 +187,7 @@ piwerness/
 ## 📚 Documentação e Manual
 
 - 📖 **[Manual Completo da Ferramenta (MANUAL.md)](docs/MANUAL.md)** — Guia extenso de arquitetura, contrato V4, roteamento, gates, sandboxes e casos de uso.
+- 🧭 **[Plano de Ajustes (PLANO-AJUSTES.md)](docs/PLANO-AJUSTES.md)** — Diagnóstico F0-F5, critérios de aceite e status de execução.
 - 🗄️ **[Arquivo Histórico (DECISIONS.md & SPEC.md)](docs/archive/)** — Registro de decisões de arquitetura e especificação original.
 
 ---

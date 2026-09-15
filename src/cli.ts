@@ -16,7 +16,7 @@ USO:
 
 COMANDOS DISPONÍVEIS:
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
-                      (init, gate, specify, contract, plan, run, audit, status, sync)
+                      (init, import, scaffold, gate, specify, contract, plan, run, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
   target <subcomando> Gerencia runtimes e materialização de targets

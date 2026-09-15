@@ -1,4 +1,4 @@
-import { TaskContractV4, createDefaultContractV4 } from './contract-engine.js';
+import { TaskContractV4 } from './contract-engine.js';
 
 export interface ContextCapsuleOptions {
   task: TaskContractV4;
@@ -7,6 +7,11 @@ export interface ContextCapsuleOptions {
 
 export function generateContextCapsule(options: ContextCapsuleOptions): string {
   const { task, relevantInterfaces = [] } = options;
+  // Contratos V4 congelados mais antigos podem omitir out_of_scope; a cápsula
+  // nunca deve quebrar por um campo opcional ausente.
+  const writeAllow = task.scope_contract.write_allow ?? [];
+  const writeDeny = task.scope_contract.write_deny ?? [];
+  const outOfScope = task.scope_contract.out_of_scope ?? [];
 
   return `
 ================================================================================
@@ -29,13 +34,13 @@ Then:  ${s.then}`).join('\n\n')}
 2. CHANGE & WRITE ALLOWLIST
 --------------------------------------------------------------------------------
 WRITE ALLOW:
-${task.scope_contract.write_allow.map(w => `  + ${w}`).join('\n')}
+${writeAllow.map(w => `  + ${w}`).join('\n')}
 
 WRITE DENY (PROHIBITED):
-${task.scope_contract.write_deny.map(d => `  - ${d}`).join('\n')}
+${writeDeny.map(d => `  - ${d}`).join('\n')}
 
 OUT OF SCOPE:
-${task.scope_contract.out_of_scope.map(o => `  ! ${o}`).join('\n')}
+${outOfScope.length ? outOfScope.map(o => `  ! ${o}`).join('\n') : '  (não declarado)'}
 
 --------------------------------------------------------------------------------
 3. VALIDATION COMMANDS

@@ -21,7 +21,14 @@
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "minLength": 1 },
-          "purpose": { "type": "string" }
+          "purpose": { "type": "string" },
+          "root": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "regression": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "lint": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "build": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "security": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "dev": { "type": "string", "description": "v3 execution-contract assurance column" },
+          "health": { "type": "string", "description": "v3 execution-contract assurance column" }
         }
       }
     },

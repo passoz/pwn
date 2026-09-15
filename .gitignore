@@ -1,3 +1,10 @@
 node_modules/
 .pi/
 *.log
+
+# Artefatos de runtime do harness (telemetria, eventos, aprendizados, sandboxes e fila AFK)
+.piwerness/metrics.jsonl
+.piwerness/RUN-*.jsonl
+.piwerness/learnings.json
+.piwerness/sandboxes/
+queue/review/

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -77,10 +77,86 @@ test("previews and explicitly applies a legacy layout migration", () => {
   assert.equal(listWorks(root)[0].state, "planned");
 });
 
+test("listWorks ignora diretórios .piwerness/work vazios e compartilha o espaço de IDs", () => {
+  const root = fixture();
+  const workRoot = path.join(root, ".piwerness", "work");
+  try {
+    // Diretório vazio não é um Work: não desloca a numeração.
+    mkdirSync(path.join(workRoot, "0001"), { recursive: true });
+    assert.equal(reserveWork(root).work_id, "0001");
+
+    // Work real da trilha .piwerness/work ocupa o ID no espaço compartilhado.
+    mkdirSync(path.join(workRoot, "0002"), { recursive: true });
+    writeFileSync(path.join(workRoot, "0002", "intake.json"), "{}\n");
+    assert.equal(reserveWork(root).work_id, "0003");
+    assert.ok(listWorks(root).some((work) => work.work_id === "0003"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("lists a legacy plan explicitly without assigning a number silently", () => {
   const root = fixture();
   mkdirSync(path.join(root, ".todo"), { recursive: true });
   writeFileSync(path.join(root, ".todo", "tasks.md"), "legacy\n");
   assert.deepEqual(listWorks(root), [{ work_id: "legacy", state: "legacy", plan: ".todo/tasks.md", plan_exists: true }]);
   assert.equal(resolvePlanTarget(root, "legacy").legacy, true);
+});
+
+test("resolves a canonical Work that has no v3 manifest", () => {
+  const root = fixture();
+  try {
+    mkdirSync(path.join(root, ".piwerness", "work", "0001"), { recursive: true });
+    writeFileSync(path.join(root, ".piwerness", "work", "0001", "plan.json"), "{}\n");
+    mkdirSync(path.join(root, ".todo"), { recursive: true });
+    writeFileSync(path.join(root, ".todo", "0001-tasks.md"), "# Tasks: canonical\n");
+
+    const target = resolvePlanTarget(root, "0001");
+    assert.equal(target.workId, "0001");
+    assert.equal(target.relative, path.join(".todo", "0001-tasks.md"));
+    assert.equal(target.absolute, path.join(root, ".todo", "0001-tasks.md"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps the plan check when the manifest exists", () => {
+  const root = fixture();
+  try {
+    const manifest = reserveWork(root);
+    mkdirSync(path.join(root, ".todo"), { recursive: true });
+    writeFileSync(path.join(root, manifest.artifacts.plan), "# Tasks: sample\n");
+    writeFileSync(path.join(root, ".todo", "9999-tasks.md"), "# Tasks: other\n");
+    updateManifest(root, manifest.work_id, {
+      artifacts: { ...manifest.artifacts, plan: ".todo/9999-tasks.md" },
+    });
+
+    assert.throws(() => resolvePlanTarget(root, manifest.work_id), /manifest plan mismatch/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("lists a canonical Work without manifest instead of calling it invalid", () => {
+  const root = fixture();
+  try {
+    const workRoot = path.join(root, ".piwerness", "work");
+    mkdirSync(path.join(workRoot, "0001"), { recursive: true });
+    writeFileSync(path.join(workRoot, "0001", "plan.json"), "{}\n");
+    mkdirSync(path.join(root, ".todo"), { recursive: true });
+    writeFileSync(path.join(root, ".todo", "0001-tasks.md"), "# Tasks: canonical\n");
+    mkdirSync(path.join(workRoot, "0002"), { recursive: true });
+    writeFileSync(path.join(workRoot, "0002", "prd.json"), "{}\n");
+
+    const planned = listWorks(root).find((work) => work.work_id === "0001");
+    assert.equal(planned?.state, "planned");
+    assert.equal(planned?.plan_exists, true);
+    assert.equal(planned?.error, undefined);
+
+    const pending = listWorks(root).find((work) => work.work_id === "0002");
+    assert.equal(pending?.state, "plan_pending");
+    assert.equal(pending?.plan_exists, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -41,6 +41,22 @@ test('getNextWorkId ignora diretório de Work vazio (sem artefatos)', () => {
   }
 });
 
+test('getNextWorkId compartilha o espaço de IDs com a trilha do manifest', () => {
+  const root = fixture();
+  try {
+    mkdirSync(path.join(root, '.work'), { recursive: true });
+    writeFileSync(path.join(root, '.work', '0004.json'), '{}\n');
+
+    // getExistingWorkIds continua restrito a .piwerness/work (usado por pwn validate).
+    assert.equal(getExistingWorkIds(root).length, 0);
+    // Mas a numeração não pode reaproveitar um ID já reservado pelo manifest.
+    assert.equal(getLatestWorkId(root), '0004');
+    assert.equal(getNextWorkId(root), '0005');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('initWorkDirectory cria a estrutura completa sob .piwerness/work/<work-id>/', () => {
   const root = fixture();
   try {

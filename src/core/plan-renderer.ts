@@ -8,6 +8,36 @@ import path from 'node:path';
 export interface PlanComponent {
   name: string;
   purpose: string;
+  // v3 execution-contract assurance columns. When any component declares these,
+  // the renderer emits the full v3 table so legacy plans round-trip byte-for-byte.
+  root?: string;
+  regression?: string;
+  lint?: string;
+  build?: string;
+  security?: string;
+  dev?: string;
+  health?: string;
+}
+
+/** Ordered v3 assurance columns: [model key, markdown header]. */
+export const ASSURANCE_COLUMNS: ReadonlyArray<readonly [keyof PlanComponent, string]> = [
+  ['root', 'Root'],
+  ['regression', 'Regression'],
+  ['lint', 'Lint'],
+  ['build', 'Build'],
+  ['security', 'Security'],
+  ['dev', 'Dev'],
+  ['health', 'Health'],
+];
+
+/** The v3 writer pads separators to `header.length + 2` dashes. */
+function separator(headers: string[]): string {
+  return `|${headers.map((header) => '-'.repeat(header.length + 2)).join('|')}|`;
+}
+
+/** The v3 writer wraps every path in inline code. */
+function codeList(values: string[]): string {
+  return values.map((value) => `\`${value}\``).join(', ');
 }
 
 export interface PlanRed {
@@ -71,14 +101,27 @@ export function renderTasksMarkdown(plan: Plan): string {
   lines.push('');
   lines.push('## Execution contract');
   lines.push('');
-  lines.push('| Component | Purpose |');
-  lines.push('|-----------|---------|');
-  for (const component of plan.components) {
-    lines.push(`| \`${component.name}\` | ${component.purpose} |`);
+  const extended = plan.components.some((component) =>
+    ASSURANCE_COLUMNS.some(([key]) => component[key] !== undefined),
+  );
+  if (extended) {
+    const headers = ['Component', ...ASSURANCE_COLUMNS.map(([, header]) => header)];
+    lines.push(`| ${headers.join(' | ')} |`);
+    lines.push(separator(headers));
+    for (const component of plan.components) {
+      const cells = ASSURANCE_COLUMNS.map(([key]) => `\`${component[key] ?? 'N/A'}\``);
+      lines.push(`| ${component.name} | ${cells.join(' | ')} |`);
+    }
+  } else {
+    const headers = ['Component', 'Purpose'];
+    lines.push(`| ${headers.join(' | ')} |`);
+    lines.push(separator(headers));
+    for (const component of plan.components) {
+      lines.push(`| \`${component.name}\` | ${component.purpose} |`);
+    }
   }
   lines.push('');
   lines.push('## Global gates');
-  lines.push('');
   for (const gate of plan.global_gates) {
     lines.push(`- [ ] ${gate}`);
   }
@@ -86,21 +129,26 @@ export function renderTasksMarkdown(plan: Plan): string {
   for (const task of plan.tasks) {
     lines.push('');
     lines.push(`### [${marker(task)}] [${task.id}] ${task.title}`);
+    lines.push('');
     lines.push(`**Requirement:** ${task.requirement_id}`);
     lines.push(`**Depends on:** ${task.depends_on.length ? task.depends_on.join(', ') : 'none'}`);
     lines.push(`**Behavior:** ${task.behavior}`);
     lines.push(`**Components:** ${task.components.join(', ')}`);
-    lines.push(`**Files:** ${task.files.join(', ')}`);
-    lines.push(`**Implementation files:** ${task.implementation_files.join(', ')}`);
-    lines.push(`**Test files:** ${task.test_files.join(', ')}`);
+    lines.push(`**Files:** ${codeList(task.files)}`);
+    lines.push(`**Implementation files:** ${codeList(task.implementation_files)}`);
+    lines.push(`**Test files:** ${codeList(task.test_files)}`);
+    lines.push('');
     lines.push('**RED:**');
     lines.push(`- \`${task.red.command}\` — ${task.red.description}`);
+    lines.push('');
     lines.push('**Implementation:**');
     task.implementation_steps.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+    lines.push('');
     lines.push('**ACs:**');
     for (const ac of task.acceptance_criteria) {
       lines.push(`- [ ] \`${ac.command}\` — ${ac.description}`);
     }
+    lines.push('');
     lines.push(`**Visual:** ${task.visual ?? 'N/A'}`);
     lines.push(`**Documentation:** ${task.documentation ?? 'N/A'}`);
   }

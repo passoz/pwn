@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createDefaultContractV4, BudgetController } from '../src/core/contract-engine.js';
+import { createDefaultContractV4, BudgetController, type TaskContractV4 } from '../src/core/contract-engine.js';
 import { checkFileAgainstScope, checkDiffAgainstContract } from '../src/core/contract-guard.js';
 import { generateContextCapsule } from '../src/core/capsule.js';
 
@@ -89,6 +89,19 @@ test('generateContextCapsule formata os limites e cenários da cápsula', () => 
   assert.match(capsule, /TASK ID:\s+T-002/);
   assert.match(capsule, /WRITE ALLOW:/);
   assert.match(capsule, /WRITE DENY \(PROHIBITED\):/);
+});
+
+test('generateContextCapsule tolera contrato congelado sem out_of_scope', () => {
+  const contract = createDefaultContractV4('T-003', '0001', 'Cápsula Legada', 'L2');
+  const legacy: TaskContractV4 = {
+    ...contract,
+    scope_contract: { write_allow: ['src/a.ts'], write_deny: [] },
+  };
+
+  const capsule = generateContextCapsule({ task: legacy });
+  assert.match(capsule, /OUT OF SCOPE:/);
+  assert.match(capsule, /\(não declarado\)/);
+  assert.match(capsule, /\+ src\/a\.ts/);
 });
 
 // ── BudgetController tests ─────────────────────────────────────────
