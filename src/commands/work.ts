@@ -1,5 +1,6 @@
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId } from '../core/work-artifacts.js';
-import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, GateOutput } from '../core/gates.js';
+import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, evaluateAllGates, computeWorkCoverage, GateOutput } from '../core/gates.js';
+import { readGateCache, writeGateCache, clearGateCache } from '../core/gate-cache.js';
 import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
 import { loadTaskContract } from '../core/task-contract.js';
 import { importV3Work, listV3WorkIds } from '../core/v3-import.js';
@@ -20,6 +21,17 @@ function flagValue(args: string[], name: string): string | null {
   return args[index + 1];
 }
 
+/** Mapa canônico gate → avaliador determinístico. */
+const GATE_EVALUATORS: Record<string, (workId: string, workDir: string) => GateOutput> = {
+  'GATE-DISC-REQ': evaluateGateDiscReq,
+  'GATE-REQ-PRD': evaluateGateReqPrd,
+  'GATE-PRD-SPEC': evaluateGatePrdSpec,
+  'GATE-SPEC-PLAN': evaluateGateSpecPlan,
+  'GATE-PLAN-CONTRACT': evaluateGatePlanContract,
+};
+
+const KNOWN_GATES = Object.keys(GATE_EVALUATORS);
+
 export function handleWorkCommand(subcommand: string, args: string[]): void {
   switch (subcommand) {
     case 'init':
@@ -37,30 +49,66 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
 
     case 'gate':
       {
-        const gateId = args[0] || 'GATE-DISC-REQ';
-        const workIdIdx = args.indexOf('--work');
-        const workId = (workIdIdx !== -1 && args[workIdIdx + 1]) ? args[workIdIdx + 1] : getLatestWorkId();
-
-        console.log(`=== [pwn work gate] Executando Gate ${gateId} para Work ${workId} ===`);
+        const rootDir = process.cwd();
+        const noCache = args.includes('--no-cache');
+        const workId = flagValue(args, '--work') ?? getLatestWorkId();
         const paths = getWorkArtifactsPaths(workId);
 
-        let output;
-        if (gateId === 'GATE-DISC-REQ') {
-          output = evaluateGateDiscReq(workId, paths.workDir);
-        } else if (gateId === 'GATE-REQ-PRD') {
-          output = evaluateGateReqPrd(workId, paths.workDir);
-        } else if (gateId === 'GATE-PRD-SPEC') {
-          output = evaluateGatePrdSpec(workId, paths.workDir);
-        } else if (gateId === 'GATE-SPEC-PLAN') {
-          output = evaluateGateSpecPlan(workId, paths.workDir);
-        } else if (gateId === 'GATE-PLAN-CONTRACT') {
-          output = evaluateGatePlanContract(workId, paths.workDir);
-        } else {
-          console.error(`Gate desconhecido: ${gateId}. Opções: GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC, GATE-SPEC-PLAN, GATE-PLAN-CONTRACT`);
+        if (args.includes('--clear-cache')) {
+          console.log('=== [pwn work gate] Limpando cache de gates ===');
+          const removed = clearGateCache(rootDir);
+          console.log(`✓ ${removed} arquivo(s) de cache removido(s) de .piwerness/gate-cache/.`);
+          process.exit(0);
+        }
+
+        if (args.includes('--all')) {
+          console.log(`=== [pwn work gate] Executando todos os gates para Work ${workId} ===`);
+          const outputs = evaluateAllGates(workId, paths.workDir);
+
+          for (const gate of outputs) {
+            console.log(`\n── ${gate.gate} ──`);
+            if (gate.findings.length === 0) {
+              console.log('  (nenhum finding)');
+              continue;
+            }
+            for (const finding of gate.findings) {
+              console.log(`  [${finding.severity}] ${finding.id} · ${finding.type} · ${finding.status}`);
+              console.log(`      ${finding.description}`);
+              console.log(`      resolução: ${finding.required_resolution} (owner: ${finding.resolution_owner})`);
+            }
+          }
+
+          console.log('\n── Resumo por gate ──');
+          for (const gate of outputs) {
+            console.log(`${gate.gate}: ${gate.result} (${gate.findings.length} findings)`);
+          }
+
+          const blockedGates = outputs.filter((gate) => gate.result === 'blocked');
+          if (blockedGates.length > 0) {
+            console.error(`\n[GATE RESULT]: BLOCKED — ${blockedGates.length} gate(s) bloqueado(s): ${blockedGates.map((gate) => gate.gate).join(', ')}.`);
+            process.exit(1);
+          }
+          console.log('\n[GATE RESULT]: PASS — todos os gates aprovados.');
+          process.exit(0);
+        }
+
+        const gateId = args[0] && !args[0].startsWith('--') ? args[0] : 'GATE-DISC-REQ';
+        const evaluator = GATE_EVALUATORS[gateId];
+        if (!evaluator) {
+          console.error(`Gate desconhecido: ${gateId}. Opções: ${KNOWN_GATES.join(', ')}`);
           process.exit(1);
         }
 
+        // A chave do cache deriva do próprio GateOutput (input_versions), portanto a
+        // avaliação antecede a consulta; um hit reutiliza o veredicto gravado.
+        const fresh = evaluator(workId, paths.workDir);
+        const cached = noCache ? null : readGateCache(gateId, rootDir, fresh.input_versions);
+        const output = cached ?? fresh;
+
+        console.log(`=== [pwn work gate] Executando Gate ${gateId} para Work ${workId}${cached ? ' (cache)' : ''} ===`);
         console.log(JSON.stringify(output, null, 2));
+
+        if (!cached && !noCache) writeGateCache(fresh, rootDir);
 
         if (output.result === 'blocked') {
           console.error(`\n[GATE RESULT]: BLOCKED — Existem lacunas ou conflitos materiais no Work ${workId}.`);
@@ -265,6 +313,58 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         const separator = args.indexOf('--');
         const command = separator === -1 ? [] : args.slice(separator + 1);
 
+        // ── --dry-run: valida a cadeia inteira e reporta impedimentos sem executar nada ──
+        if (args.includes('--dry-run')) {
+          console.log(`=== [pwn work run] Simulação (--dry-run) do Work ${workId} — nada será executado ===`);
+          const paths = getWorkArtifactsPaths(workId);
+          const impediments: string[] = [];
+
+          const gateOutputs = evaluateAllGates(workId, paths.workDir);
+          console.log('\n── Gates ──');
+          for (const gate of gateOutputs) {
+            console.log(`${gate.gate}: ${gate.result} (${gate.findings.length} findings)`);
+            if (gate.result !== 'blocked') continue;
+            const material = gate.findings.filter((f) => f.status === 'open' && (f.severity === 'critical' || f.severity === 'high'));
+            const detail = material.length > 0 ? material.map((f) => f.id).join(', ') : `${gate.findings.length} finding(s)`;
+            impediments.push(`${gate.gate}: blocked — ${detail}`);
+          }
+
+          console.log('\n── Contratos ──');
+          const plan = loadPlan(workId);
+          if (!plan) {
+            console.log('  (plan.json ausente)');
+            impediments.push(`plan.json ausente para o Work ${workId}.`);
+          } else {
+            for (const task of plan.tasks) {
+              try {
+                const contract = loadTaskContract(workId, task.id);
+                const problems: string[] = [];
+                if (!contract.risk?.level) problems.push('risk.level ausente');
+                if (!contract.scope_contract?.write_allow?.length) problems.push('scope_contract.write_allow vazio');
+                if (!contract.acceptance_contract?.commands?.length) problems.push('acceptance_contract.commands vazio');
+                if (problems.length > 0) {
+                  for (const problem of problems) impediments.push(`Task ${task.id} (${task.contract_id}): ${problem}`);
+                  console.error(`✗ ${task.id} — ${problems.join('; ')}`);
+                } else {
+                  console.log(`✓ ${task.id} — ${task.contract_id} | risco ${contract.risk.level} | ${contract.scope_contract.write_allow.length} write_allow | ${contract.acceptance_contract.commands.length} comando(s)`);
+                }
+              } catch (err) {
+                impediments.push(`Task ${task.id}: ${(err as Error).message}`);
+                console.error(`✗ ${task.id} — ${(err as Error).message}`);
+              }
+            }
+          }
+
+          console.log('\n── Impedimentos ──');
+          if (impediments.length === 0) {
+            console.log('(nenhum) — Work elegível para execução.');
+            process.exit(0);
+          }
+          for (const impediment of impediments) console.error(`  - ${impediment}`);
+          console.error(`\n[DRY-RUN]: ${impediments.length} impedimento(s). A execução ficaria bloqueada.`);
+          process.exit(1);
+        }
+
         // ── Pré-condição obrigatória: cadeia determinística de 5 gates ──
         if (!hasNoGate) {
           const paths = getWorkArtifactsPaths(workId);
@@ -359,8 +459,39 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       break;
 
     case 'status':
-      console.log('=== [pwn work status] Relatório de Status do Work ===');
-      process.exit(projectStatusMain(args));
+      {
+        // --coverage: relatório determinístico de cobertura do Work (requisitos →
+        // capabilities → tasks → contratos → ACs), derivado dos artefatos normativos.
+        if (args.includes('--coverage')) {
+          const workId = flagValue(args, '--work')
+            ?? args.find((a) => /^\d{4}$/.test(a))
+            ?? getLatestWorkId();
+          const paths = getWorkArtifactsPaths(workId);
+          if (!fs.existsSync(paths.workDir)) {
+            console.error(`Work ${workId} não encontrado em ${paths.workDir}.`);
+            process.exit(1);
+          }
+          const cov = computeWorkCoverage(paths.workDir);
+          console.log(`=== [pwn work status --coverage] Cobertura do Work ${workId} ===\n`);
+          const line = (label: string, value: number, total: number) => {
+            const mark = total === 0 ? '·' : value === total ? '✓' : '⚠';
+            console.log(`  ${mark} ${label.padEnd(34)} ${value}/${total}`);
+          };
+          line('requisitos aceitos', cov.accepted_requirements, cov.requirements);
+          line('capabilities com regras', cov.capabilities_with_rules, cov.capabilities);
+          line('tasks com contrato congelado', cov.tasks_with_contract, cov.tasks);
+          line('tasks com critérios de aceite', cov.tasks_with_acs, cov.tasks);
+          const gaps =
+            (cov.requirements - cov.accepted_requirements)
+            + (cov.capabilities - cov.capabilities_with_rules)
+            + (cov.tasks - cov.tasks_with_contract)
+            + (cov.tasks - cov.tasks_with_acs);
+          console.log(`\n[COVERAGE RESULT]: ${gaps === 0 ? 'COMPLETO' : `${gaps} lacuna(s)`}`);
+          process.exit(gaps === 0 ? 0 : 1);
+        }
+        console.log('=== [pwn work status] Relatório de Status do Work ===');
+        process.exit(projectStatusMain(args));
+      }
 
     case 'sync':
       console.log('=== [pwn work sync] Sincronizando estado do manifest .work/NNNN.json ===');
@@ -383,10 +514,12 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('  pwn work import    Importa Works do layout v3 (.work/, .todo/) para o layout canônico');
       console.log('  pwn work scaffold  Cria um Work novo com cadeia completa (discovery→prd→spec→plan+CTR)');
       console.log('  pwn work gate <id>  Executa gate determinístico (GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC)');
+      console.log('  pwn work gate --all [--work NNNN] [--no-cache]  Executa os 5 gates e resume por gate');
+      console.log('  pwn work gate --clear-cache  Remove o cache de veredictos (.piwerness/gate-cache/)');
       console.log('  pwn work specify   Especifica mudanças no baseline');
       console.log('  pwn work contract  Valida os contratos V4 congelados (.piwerness/work/<id>/CTR-*.json)');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
-      console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync)');
+      console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync, --dry-run)');
       console.log('  pwn work audit     Audita aceitação e evidência TDD');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');

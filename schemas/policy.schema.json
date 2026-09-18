@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://piwerness.dev/schemas/policy.schema.json",
+  "title": "Piwerness Policy Schema",
+  "description": "Política declarativa OPCIONAL (`.piwerness/policy.json`). Ausente, malformada ou inválida ⇒ o harness usa os defaults internos. Cada seção é opcional e é mesclada sobre os defaults.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "risk_keywords": {
+      "type": "object",
+      "description": "Palavras-chave de classificação de risco usadas por `--risk auto` (substring, texto normalizado).",
+      "additionalProperties": false,
+      "properties": {
+        "l3": {
+          "type": "array",
+          "description": "Superfícies sensíveis (auth, sessões, credenciais, pagamentos, webhooks, LGPD...).",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "l1": {
+          "type": "array",
+          "description": "Somente documentação/formatação.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+
+    "gate_thresholds": {
+      "type": "object",
+      "description": "Limiares usados pelos gates de traceabilidade.",
+      "additionalProperties": false,
+      "properties": {
+        "max_findings_before_block": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Achados abertos tolerados antes de bloquear o gate (0 = nenhum tolerado)."
+        },
+        "max_acs_per_task": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Máximo de critérios de aceitação por task (0 = sem limite explícito)."
+        }
+      }
+    },
+
+    "shell": {
+      "type": "object",
+      "description": "Política de shell por correspondência ESTRUTURAL ({ command, args }); nunca há parsing de string de shell.",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_commands": {
+          "type": "array",
+          "description": "Comandos permitidos. Lista vazia ⇒ nega tudo, salvo allow_all_shell.",
+          "items": { "$ref": "#/definitions/commandRule" }
+        },
+        "denied_commands": {
+          "type": "array",
+          "description": "Comandos bloqueados. A negação sempre vence a permissão.",
+          "items": { "$ref": "#/definitions/commandRule" }
+        },
+        "allow_all_shell": {
+          "type": "boolean",
+          "description": "Permite explicitamente TODOS os comandos de shell. Use com cautela."
+        }
+      }
+    },
+
+    "network": {
+      "type": "object",
+      "description": "Política de rede por prefixo de domínio/URL.",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_domains": {
+          "type": "array",
+          "description": "Domínios/prefixos permitidos. Lista vazia ⇒ nega tudo, salvo allow_all_network.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "denied_domains": {
+          "type": "array",
+          "description": "Domínios/prefixos bloqueados. A negação sempre vence a permissão.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allow_all_network": {
+          "type": "boolean",
+          "description": "Permite explicitamente TODA a rede. Use com cautela."
+        }
+      }
+    }
+  },
+
+  "definitions": {
+    "commandRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "description": "Prefixo de argumentos. Ausente/vazio ⇒ casa qualquer argumento do comando.",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { initRunContext, finalizeRun, verifyDiff, saveRunEvents, type RunContext
 import { createDefaultContractV4, type TaskContractV4, type RiskLevel } from './contract-engine.js';
 import { loadTaskContract, loadWorkContracts } from './task-contract.js';
 import { DEFAULT_SHELL_POLICY, PolicyEngine, type PolicyConfig } from './policy-engine.js';
+import { resolvePolicy } from './policy-config.js';
 import { recordMetrics } from './metrics.js';
 import { enqueueReview } from './queue.js';
 import { selectForRisk } from './router.js';
@@ -69,6 +70,19 @@ function buildShellPolicy(contract: TaskContractV4): PolicyConfig['shell'] {
     deniedCommands: [...DEFAULT_SHELL_POLICY.deniedCommands],
     allowAllShell: false,
   };
+}
+
+/**
+ * Overrides de política da run (shell/rede).
+ *
+ * Sem `.piwerness/policy.json` (`source: 'defaults'`) o comportamento histórico é
+ * PRESERVADO: allowlist derivada dos comandos de aceitação do contrato e denylist
+ * padrão do PolicyEngine. Com arquivo válido, a política declarada o substitui.
+ */
+function buildPolicyOverrides(contract: TaskContractV4, rootDir: string): Partial<PolicyConfig> {
+  const resolved = resolvePolicy(rootDir);
+  if (resolved.source === 'file') return { shell: resolved.shell, network: resolved.network };
+  return { shell: buildShellPolicy(contract) };
 }
 
 export function modifiedFiles(sandboxPath: string): string[] {
@@ -169,8 +183,8 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     return { status: EXIT_SUSPENDED, stdout: '', stderr: '', runId, diffViolations: [], suspended: true };
   }
 
-  const shellPolicy = buildShellPolicy(contract);
-  const policy = new PolicyEngine(contract, { shell: shellPolicy });
+  const policyOverrides = buildPolicyOverrides(contract, rootDir);
+  const policy = new PolicyEngine(contract, policyOverrides);
 
   // F2.4 (não isolado): política ainda é aplicada, sem sandbox/diff guard.
   if (options.isolated === false) {
@@ -212,7 +226,7 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
   // F2.1/F2.4: execução mediada pela Tool API dentro do sandbox.
   let ctx: RunContext;
   try {
-    ctx = initRunContext(contract, rootDir, runId, { shell: shellPolicy });
+    ctx = initRunContext(contract, rootDir, runId, policyOverrides);
   } catch (err) {
     console.error(`[SANDBOX ABORT] ${(err as Error).message}`);
     console.error('Dica: rode com --no-isolation para executar sem sandbox (decisão explícita do operador).');

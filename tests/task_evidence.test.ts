@@ -77,7 +77,7 @@ test("enforces immutable RED/GREEN evidence", () => {
 
 **Documentation:** N/A
 `, "utf8");
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2").status, 1);
+  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2").status, 2);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "AC-1", "--", process.execPath, "test-app.mjs").status, 0);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "REGRESSION", "--", process.execPath, "test-app.mjs").status, 0);
   assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2").status, 0);

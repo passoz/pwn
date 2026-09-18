@@ -1,7 +1,7 @@
 # 📖 Manual Completo do Piwerness (`pwn`)
 
 > **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
-> *Versão do Harness: 1.0 (Bun / TypeScript)*
+> *Versão do Harness: 1.1 (Bun / TypeScript)*
 
 ---
 
@@ -21,6 +21,7 @@
 12. [Telemetria de Métricas & Teach Skills](#12-telemetria-de-métricas--teach-skills)
 13. [Referência de Comandos do CLI](#13-referência-de-comandos-do-cli)
 14. [Tutorial Passo a Passo: Criando um Work Greenfield](#14-tutorial-passo-a-passo-criando-um-work-greenfield)
+15. [Limites Conhecidos](#15-limites-conhecidos)
 
 ---
 
@@ -36,6 +37,11 @@ Diferente de assistentes convencionais baseados unicamente em instruções gené
 3. **Escrita Restrita (Allowlist-First):** O executor de IA só pode alterar arquivos listados na `write_allow` do contrato.
 4. **Isolamento Total:** Execuções ocorrem em Git Worktrees descartáveis.
 5. **Roteamento Proporcional ao Risco:** Tarefas simples usam modelos locais/econômicos (`cheap`); tarefas complexas ou com falhas sobem para modelos de alto raciocínio (`strong`).
+6. **Tudo tem teto declarado:** limites explícitos nos schemas (enum de `complexity`, `maxItems` de ACs/steps/componentes) forçam decomposição em vez de permitir artefatos monolíticos.
+7. **Relatório completo, não primeiro erro:** verificação devolve *todos* os findings numa passada (`gate --all`, `--dry-run`, `audit` incompleto) — o gargalo é o ciclo humano, não o compute.
+8. **"Incompleto" ≠ "errado":** exit code `2` (falta evidência) é distinto de `1` (violação), para automação AFK não confundir os dois.
+9. **Pine a versão, não o atalho:** cache e atestação carregam `harness_version`/`gate_version`; evidência produzida sob outra versão nunca é aceita em silêncio.
+10. **Valide o validador:** `self-check --mutate` quebra artefatos de propósito para provar que os gates realmente bloqueiam (ver `docs/LIMITES.md`).
 
 ---
 
@@ -50,6 +56,9 @@ Conforme estabelecido pela **DEC-029**, todos os documentos que regem o comporta
 | **Plano de Tarefas** | `todo.json` | `schemas/tasks.schema.json` | Armazena o plano de execução e progresso |
 | **Decisão de Produto (PRD)** | `.piwerness/work/<id>/prd.json` | `schemas/prd.schema.json` | Declara requisitos aceitos e não alvos |
 | **Evidências de Auditoria** | `.piwerness/work/<id>/evidence.json` | `schemas/evidence.schema.json` | Registra logs e provas de execução |
+| **Política do Projeto** (opcional) | `.piwerness/policy.json` | `schemas/policy.schema.json` | Keywords de risco, thresholds e allowlists de shell/rede |
+
+> **Política é dado, não código.** Constantes de decisão (keywords de risco, thresholds, allowlist de shell, domínios de rede) podem viver em `.piwerness/policy.json` — revisável e diffável — em vez de espalhadas pelo motor. O arquivo é **opcional**: ausente ou inválido, valem os defaults embutidos e o comportamento é idêntico ao anterior. Alterar política passa a ser um diff pequeno, não um patch em três arquivos.
 
 ### Validação dos Documentos:
 Você pode validar a integridade de todos os documentos normativos do repositório a qualquer momento com:
@@ -132,8 +141,42 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 - **`GATE-DISC-REQ`:** Valida se `discovery.json` e `requirements.json` existem no Work e se todos os requisitos possuem critérios de aceite testáveis.
 - **`GATE-REQ-PRD`:** Valida se `prd.json` está preenchido e vincula explicitamente os requisitos aceitos (`accepted_requirements`).
 - **`GATE-PRD-SPEC`:** Valida se a especificação técnica `spec.json` existe e se cada capacidade possui regras de negócio mapeadas (`rules`).
-- **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas.
+- **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas. Inclui também a **validação de atomicidade** (`validateTaskAtomicity`), que emite findings *advisory* (`low`/`medium` — nunca bloqueiam) quando uma task referencia mais de uma capability, cobre mais de um componente, toca mais de 6 arquivos de implementação, ou descreve mais de 3 comportamentos independentes.
 - **`GATE-PLAN-CONTRACT`:** Valida se todas as tarefas do plano possuem contratos V4 congelados (`contract_id`).
+
+### Relatório completo em vez do primeiro erro:
+
+`pwn work gate --all` avalia os **5 gates numa única passada** e agrupa todos os findings por gate, seguidos de um resumo (`GATE-X: pass|pass_with_notes|blocked (N findings)`). Exit `1` se qualquer gate estiver bloqueado. O objetivo é trocar N ciclos de "corrigir → rodar → descobrir o próximo problema" por um único ciclo com a lista completa.
+
+```bash
+bun bin/pwn.js work gate --all --work 0001
+```
+
+### Cache de veredicto de gate:
+
+Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.piwerness/gate-cache/<GATE>-<chave>.json`, envelopado com `gate_version` e `harness_version`. Um cache de outra versão do harness **nunca** é servido — isso impede que um upgrade do `pwn` sirva veredicto obsoleto. A segunda execução do mesmo gate com os mesmos inputs mostra `(cache)` no cabeçalho.
+
+```bash
+bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia; 2ª: (cache)
+bun bin/pwn.js work gate GATE-DISC-REQ --work 0001 --no-cache
+bun bin/pwn.js work gate --clear-cache
+```
+
+### Pré-voo de execução:
+
+`pwn work run --dry-run` roda os 5 gates e valida os contratos V4 de cada task (`risk.level`, `write_allow` não vazio, `acceptance_contract.commands` não vazio), listando **todos** os impedimentos — sem criar sandbox, sem executar comando. Exit `1` se houver qualquer impedimento.
+
+```bash
+bun bin/pwn.js work run --dry-run --work 0001 -- bun test
+```
+
+### Cobertura agregada do Work:
+
+`pwn work status --coverage` deriva, dos próprios artefatos, quantos requisitos estão aceitos, quantas capabilities têm regras, quantas tasks têm contrato congelado e critérios de aceite. Exit `0` quando não há lacunas, `1` caso contrário.
+
+```bash
+bun bin/pwn.js work status --coverage --work 0001
+```
 
 ### Enforcement no caminho de execução (fail-closed):
 
@@ -372,9 +415,33 @@ bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 ### `pwn work audit [verify|check|candidate] [--work <work-id>] [--task <task-id>] ...`
 Audita evidências e aceitação TDD via `task_evidence.js`. Sem ação explícita, assume `verify`. As ações válidas são `baseline`, `red`, `green`, `verify`, `check` e `candidate` (passadas adiante); qualquer outra opção na posição de ação é rejeitada pelo validador com mensagem clara.
 
+**Códigos de saída por classe** (para que automação não confunda os estados):
+
+| Código | Classe | Exemplos |
+|---|---|---|
+| `0` | Sucesso | RED/GREEN/verify capturados; atestação gerada |
+| `1` | **Violação** | implementação alterada antes do RED; teste mudou após o GREEN; `verification invalidated`; mutation check falhou; `--expect` não literal |
+| `2` | **Incompleto** | falta baseline/RED/GREEN; AC/REGRESSION ainda não observados; plano ausente |
+
+O código `2` imprime a lista **completa** do que falta (não para no primeiro item), o que permite corrigir tudo numa rodada.
+
+**`--expect-literal`:** exige que o texto passado em `--expect` apareça **literalmente** em algum arquivo de `state.test_files`. Sem a flag, a validação continua sendo a comparação por substring no output (comportamento histórico).
+
 ```bash
 # Verifica evidência da task 1.1 do Work 0001
 bun bin/pwn.js work audit --work 0001 --task 1.1
+
+# RED com a asserção amarrada ao arquivo de teste congelado
+bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" --expect-literal -- node tests/calc.test.mjs
+```
+
+**Atestação versionada:** o `candidate` grava `version: 2` com `harness_version` e `gate_version` (além dos campos já existentes). `readAttestation(filePath)` lê o arquivo e informa `compatible` — atestações `v1` continuam legíveis, e uma `v2` sem `harness_version` é marcada incompatível em vez de aceita em silêncio.
+
+### `pwn self-check [--mutate [--work <work-id>]]`
+Valida os documentos normativos do framework. Com `--mutate`, roda **mutation testing dos próprios gates**: copia um Work para um diretório temporário, quebra um artefato de propósito e verifica se o gate correspondente passa de `pass` para `blocked`. O relatório é explícito sobre gates que **não** bloqueiam (advisory) — é assim que se descobre um gate decorativo. Exit `1` quando uma mutação que deveria ser detectada não é; o Work real nunca é modificado.
+
+```bash
+bun bin/pwn.js self-check --mutate
 ```
 
 ### `pwn task capsule <task-id> [work-id]`
@@ -476,3 +543,22 @@ bun bin/pwn.js work run --no-gate --work 0002 --timeout-seconds 600 -- bun test 
 ```
 
 Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard monitorando cada alteração e total rastreabilidade.
+
+---
+
+## 15. Limites Conhecidos
+
+O harness é **honesto sobre o que não garante**. O documento completo, com evidência em código (arquivo:linha) e a alternativa recomendada para cada caso, está em **[LIMITES.md](LIMITES.md)**.
+
+Resumo dos limites estruturais:
+
+| Limite | O que isso significa na prática |
+|---|---|
+| Gates validam **presença e vínculo de ID**, não intenção | Um ID fabricado ou uma capability só com título passa; o gate não lê o texto para conferir se a capability implementa o requisito |
+| Diff Guard valida **caminho**, não conteúdo | Escrever código incorreto dentro do `write_allow` não é detectado |
+| `--expect` é comparado por **substring** (por padrão) | Use `--expect-literal` para amarrar a asserção ao arquivo de teste congelado |
+| Sandbox é isolamento de **árvore Git**, não de SO | Um subprocesso pode escapar do worktree (`tests/security-adv.test.ts` registra isso) |
+| Não há verificação de **qualidade semântica** de código | Nenhum gate julga se o código está correto, legível ou bem projetado |
+| `pwn validate` valida **schema**, não verdade | Um `prd.json` sintaticamente válido pode descrever um produto incoerente |
+
+**Como detectar gates decorativos:** `pwn self-check --mutate` quebra artefatos de propósito e verifica se o gate correspondente realmente bloqueia. Um gate que aceita a mutação aparece no relatório como `NÃO DETECTADO (advisory)`.

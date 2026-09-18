@@ -587,6 +587,9 @@ export function evaluateGateSpecPlan(workId: string, workDir: string): GateOutpu
     }
   }
 
+  // Atomicidade é advisory: severidades low/medium nunca bloqueiam o gate.
+  findings.push(...validateTaskAtomicity(workDir));
+
   const hasCriticalOrHigh = findings.some(f => (f.severity === 'critical' || f.severity === 'high') && f.status === 'open');
   const traceGaps = findings.filter(f => f.type === 'traceability_gap').length;
 
@@ -996,4 +999,146 @@ export function validateSemanticTraceability(workDir: string, workId: string): G
   findings.push(...validateContractSemantics(workDir));
   findings.push(...validateEvidenceSemantics(workDir));
   return findings;
+}
+
+// ── Atomicidade de Tasks e Cobertura Agregada ───────────────────────
+
+/** Lê um artefato JSON do Work sem lançar: retorna null quando ausente ou ilegível. */
+function readArtifactJson(filePath: string): unknown {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Artefatos são dados externos não validados aqui; normaliza-se a forma antes do uso.
+function asJsonArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asJsonString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Verifica atomicidade das tasks do plano: uma task deve mapear para UMA capability,
+ * UM componente e um conjunto pequeno de arquivos. Findings são advisory (medium/low).
+ */
+export function validateTaskAtomicity(workDir: string): GateFinding[] {
+  const planData = readArtifactJson(path.join(workDir, 'plan.json'));
+  if (!isJsonObject(planData)) return [];
+
+  const findings: GateFinding[] = [];
+
+  asJsonArray(planData.tasks).forEach((rawTask, idx) => {
+    const task = isJsonObject(rawTask) ? rawTask : {};
+    const taskId = asJsonString(task.id) || String(idx + 1);
+
+    const specRef = asJsonString(task.spec_reference).trim();
+    if (specRef && /[,+]| e | and /i.test(specRef)) {
+      findings.push({
+        id: `FIND-ATOMIC-SPEC-${taskId}`,
+        severity: 'medium',
+        type: 'coverage_gap',
+        source_refs: ['plan.json'],
+        target_refs: [specRef],
+        description: `Task ${taskId} referencia múltiplas capabilities em spec_reference ("${specRef}")`,
+        required_resolution: 'Dividir a task para referenciar uma única capability',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+
+    const components = asJsonArray(task.components);
+    if (components.length > 1) {
+      findings.push({
+        id: `FIND-ATOMIC-COMP-${taskId}`,
+        severity: 'low',
+        type: 'coverage_gap',
+        source_refs: ['plan.json'],
+        target_refs: components.map((component) => String(component)),
+        description: `Task ${taskId} cobre ${components.length} componentes (${components.join(', ')})`,
+        required_resolution: 'Dividir a task por componente ou justificar o acoplamento',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+
+    const implementationFiles = asJsonArray(task.implementation_files);
+    if (implementationFiles.length > 6) {
+      findings.push({
+        id: `FIND-ATOMIC-FILES-${taskId}`,
+        severity: 'low',
+        type: 'coverage_gap',
+        source_refs: ['plan.json'],
+        target_refs: implementationFiles.map((file) => String(file)),
+        description: `Task ${taskId} declara ${implementationFiles.length} arquivos de implementação (> 6)`,
+        required_resolution: 'Dividir a task em unidades menores',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+
+    const behavior = asJsonString(task.behavior);
+    const conjunctions = behavior ? (behavior.match(/ e | and /g) || []).length : 0;
+    if (conjunctions > 3) {
+      findings.push({
+        id: `FIND-ATOMIC-BEHAVIOR-${taskId}`,
+        severity: 'low',
+        type: 'coverage_gap',
+        source_refs: ['plan.json'],
+        target_refs: [],
+        description: `Task ${taskId} descreve múltiplos comportamentos encadeados (${conjunctions} conjunções)`,
+        required_resolution: 'Decompor o comportamento em tasks atômicas',
+        resolution_owner: 'planner',
+        status: 'open',
+      });
+    }
+  });
+
+  return findings;
+}
+
+/** Cobertura agregada de um Work: quantos requisitos/capabilities/tasks/contratos existem e estão vinculados. */
+export function computeWorkCoverage(workDir: string): {
+  requirements: number; accepted_requirements: number;
+  capabilities: number; capabilities_with_rules: number;
+  tasks: number; tasks_with_contract: number; tasks_with_acs: number;
+} {
+  const requirementsData = readArtifactJson(path.join(workDir, 'requirements.json'));
+  const prdData = readArtifactJson(path.join(workDir, 'prd.json'));
+  const specData = readArtifactJson(path.join(workDir, 'spec.json'));
+  const planData = readArtifactJson(path.join(workDir, 'plan.json'));
+
+  const requirements = isJsonObject(requirementsData) ? asJsonArray(requirementsData.requirements) : [];
+  const acceptedRequirements = isJsonObject(prdData) ? asJsonArray(prdData.accepted_requirements) : [];
+  const capabilities = isJsonObject(specData) ? asJsonArray(specData.capabilities) : [];
+  const tasks = isJsonObject(planData) ? asJsonArray(planData.tasks) : [];
+
+  return {
+    requirements: requirements.length,
+    accepted_requirements: acceptedRequirements.length,
+    capabilities: capabilities.length,
+    capabilities_with_rules: capabilities.filter((capability) => isJsonObject(capability) && asJsonArray(capability.rules).length > 0).length,
+    tasks: tasks.length,
+    tasks_with_contract: tasks.filter((task) => isJsonObject(task) && asJsonString(task.contract_id).length > 0).length,
+    tasks_with_acs: tasks.filter((task) => isJsonObject(task) && asJsonArray(task.acceptance_criteria).length > 0).length,
+  };
+}
+
+/** Roda os 5 gates na ordem canônica e devolve todos os outputs (não para no primeiro bloqueado). */
+export function evaluateAllGates(workId: string, workDir: string): GateOutput[] {
+  return [
+    evaluateGateDiscReq(workId, workDir),
+    evaluateGateReqPrd(workId, workDir),
+    evaluateGatePrdSpec(workId, workDir),
+    evaluateGateSpecPlan(workId, workDir),
+    evaluateGatePlanContract(workId, workDir),
+  ];
 }

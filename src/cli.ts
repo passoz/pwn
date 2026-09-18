@@ -26,7 +26,9 @@ COMANDOS DISPONÍVEIS:
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   validate [--work NNNN]  Valida documentos normativos JSON do projeto contra JSON Schemas
-  self-check          Valida os documentos normativos do próprio framework
+  self-check [--mutate [--work NNNN]]
+                      Valida os documentos normativos do framework
+                      (--mutate roda mutation testing nos próprios gates)
 
 OPÇÕES:
   --help, -h          Exibe esta mensagem de ajuda
@@ -34,8 +36,11 @@ OPÇÕES:
 
 EXEMPLOS:
   pwn self-check
+  pwn self-check --mutate
   pwn validate --work 0001
-  pwn work status 0001
+  pwn work gate --all --work 0001
+  pwn work run --dry-run --work 0001 -- bun test
+  pwn work status --coverage 0001
   pwn work run --work 0001 -- bun test
   pwn task capsule 1.1 0001
 `);
@@ -72,7 +77,7 @@ export function main(): void {
       break;
 
     case 'self-check':
-      handleSelfCheckCommand();
+      handleSelfCheckCommand(args.slice(1));
       break;
 
     case 'queue':

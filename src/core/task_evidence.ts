@@ -20,6 +20,24 @@ let ATTESTATION_DIR: string;
 const REDACT = "[REDACTED]";
 const SENSITIVE = ["authorization", "token", "password", "passwd", "cookie", "api_key", "apikey", "secret"];
 
+/** Código de saída para execução concluída com sucesso. */
+export const EXIT_OK = 0;
+/** Código de saída para violação de contrato ou erro de uso. */
+export const EXIT_VIOLATION = 1;
+/** Código de saída para auditoria incompleta: falta evidência ou pré-requisito (não é violação). */
+export const EXIT_INCOMPLETE = 2;
+/** Código de saída reservado para suspensão (espelha run-orchestrator.ts); não emitido por este módulo. */
+export const EXIT_SUSPENDED = 3;
+
+/** Versão do formato de atestação de aceitação gerado por este módulo. */
+const ATTESTATION_VERSION = 2;
+/** Versão do schema de gates referenciado pela atestação. */
+const GATE_VERSION = "1";
+/** Versão usada quando `package.json` da raiz do harness não pode ser lido. */
+const FALLBACK_HARNESS_VERSION = "0.1.0";
+/** Raiz do harness (diretório que contém `package.json`), derivada do caminho deste módulo. */
+const HARNESS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 /** Hash of a single file at snapshot time. */
 interface FileDigest {
   exists: boolean;
@@ -97,6 +115,8 @@ interface RedArgs {
   work: string;
   task: string;
   expect: string;
+  /** Exige que `--expect` apareça literalmente em algum arquivo de `state.test_files`. */
+  expectLiteral: boolean;
   command: string[];
 }
 
@@ -114,6 +134,8 @@ interface CheckArgs {
   task: string;
   name: string;
   expect: string | null;
+  /** Exige que `--expect` apareça literalmente na saída do comando de check. */
+  expectLiteral: boolean;
   command: string[];
 }
 
@@ -206,6 +228,33 @@ function loadState(task: string): EvidenceState {
   const filePath = statePath(task);
   if (!existsSync(filePath)) throw new Error(`baseline not found for task ${task}; run baseline first`);
   return JSON.parse(readFileSync(filePath, "utf8")) as EvidenceState;
+}
+
+/** Resultado de {@link tryLoadState}: estado carregado ou motivo de incompletude. */
+type StateLoad = { state: EvidenceState } | { incomplete: string };
+
+/**
+ * Variante tolerante de {@link loadState}: em vez de lançar quando o estado ainda não existe,
+ * devolve o motivo da ausência para que a ação relate uma auditoria INCOMPLETA (exit 2).
+ */
+function tryLoadState(task: string): StateLoad {
+  const filePath = statePath(task);
+  if (!existsSync(filePath)) return { incomplete: `baseline not found for task ${task}; run baseline first` };
+  try {
+    return { state: JSON.parse(readFileSync(filePath, "utf8")) as EvidenceState };
+  } catch (error) {
+    return { incomplete: `state unreadable for task ${task}: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * Imprime a lista completa do que falta para concluir a auditoria e devolve `EXIT_INCOMPLETE`.
+ * Incompletude não é violação: o pré-requisito simplesmente ainda não foi produzido.
+ */
+function reportIncomplete(items: string[]): number {
+  console.error(`INCOMPLETO: faltam ${items.length} evidência(s):`);
+  for (const item of items) console.error(`  - ${item}`);
+  return EXIT_INCOMPLETE;
 }
 
 function saveState(task: string, state: EvidenceState): void {
@@ -356,13 +405,22 @@ function getContractVersion(workId: string): number {
 }
 
 function red(args: RedArgs): number {
-  const state = loadState(args.task);
+  const loaded = tryLoadState(args.task);
+  if ("incomplete" in loaded) return reportIncomplete([`baseline (${loaded.incomplete})`]);
+  const state = loaded.state;
   const implementationChanges = changed(state.baseline_implementation, snapshot(state.implementation_files));
   if (implementationChanges.length) throw new Error(`RED invalid: implementation changed before RED: ${implementationChanges.join(", ")}`);
 
   const testNow = snapshot(state.test_files);
   const testChanges = changed(state.baseline_tests, testNow);
   if (!testChanges.length) throw new Error("RED invalid: no test file changed since baseline");
+
+  const literalInTests = !args.expectLiteral
+    || state.test_files.some((filePath) => existsSync(filePath) && readFileSync(filePath, "utf8").includes(args.expect));
+  if (!literalInTests) {
+    console.error("FAIL: --expect não é literal nos arquivos de teste congelados");
+    return EXIT_VIOLATION;
+  }
 
   const result = run(args.command);
   const relevant = Boolean(args.expect && result.output.includes(args.expect));
@@ -392,8 +450,10 @@ function red(args: RedArgs): number {
 }
 
 function green(args: GreenArgs): number {
-  const state = loadState(args.task);
-  if (!state.red_tests) throw new Error(`RED evidence not found for task ${args.task}`);
+  const loaded = tryLoadState(args.task);
+  if ("incomplete" in loaded) return reportIncomplete([`baseline (${loaded.incomplete})`]);
+  const state = loaded.state;
+  if (!state.red_tests) return reportIncomplete([`RED (RED evidence not found for task ${args.task})`]);
   const redCommand = state.red_command!;
   const redExpect = state.red_expect!;
 
@@ -429,12 +489,18 @@ function green(args: GreenArgs): number {
 }
 
 function verify(args: VerifyArgs): number {
-  const state = loadState(args.task);
-  if (!state.green_implementation) throw new Error(`GREEN evidence not found for task ${args.task}`);
+  const loaded = tryLoadState(args.task);
+  if ("incomplete" in loaded) return reportIncomplete([`baseline (${loaded.incomplete})`]);
+  const state = loaded.state;
+  const greenImplementation = state.green_implementation;
+  const greenTests = state.green_tests;
+  if (!greenImplementation || !greenTests) {
+    return reportIncomplete([`GREEN (GREEN evidence not found for task ${args.task})`]);
+  }
   const redCommand = state.red_command!;
   const redExpect = state.red_expect!;
-  const testChanges = changed(state.green_tests!, snapshot(state.test_files));
-  const implementationChanges = changed(state.green_implementation, snapshot(state.implementation_files));
+  const testChanges = changed(greenTests, snapshot(state.test_files));
+  const implementationChanges = changed(greenImplementation, snapshot(state.implementation_files));
   if (testChanges.length || implementationChanges.length) {
     const details = [];
     if (testChanges.length) details.push(`tests changed: ${testChanges.join(", ")}`);
@@ -460,8 +526,13 @@ function auditCheck(args: CheckArgs): number {
     throw new Error(`invalid audit check name: ${args.name}`);
   }
   if (!args.command.length) throw new Error("audit check command is required after --");
-  const state = loadState(args.task);
+  if (args.expectLiteral && !args.expect) throw new Error("--expect-literal requires --expect");
+  const loaded = tryLoadState(args.task);
+  if ("incomplete" in loaded) return reportIncomplete([`baseline (${loaded.incomplete})`]);
+  const state = loaded.state;
   const result = run(args.command);
+  // Com `--expect-literal` a exigência é a mesma comparação verbatim na saída do comando;
+  // a flag existe para simetria com `red` e para tornar a intenção explícita.
   const relevant = !args.expect || result.output.includes(args.expect);
   const verdict = result.exitCode === 0 && relevant ? "PASS" : "FAIL";
   const log = writeLog(args.task, args.name, args.command, result.exitCode, result.output, verdict);
@@ -509,20 +580,36 @@ function candidate(args: VerifyArgs): number {
   if (verifyExit !== 0) return verifyExit;
   const state = loadState(args.task);
   const planPath = args.work === "legacy" ? path.join(".todo", "tasks.md") : path.join(".todo", `${args.work}-tasks.md`);
-  if (!existsSync(planPath)) throw new Error(`plan not found: ${planPath}`);
-  const auditRequirements = taskAuditRequirements(readFileSync(planPath, "utf8"), args.task);
-  for (const name of auditRequirements.required) {
-    const check = state.audit_checks?.[name];
-    if (!check || check.verdict !== "PASS") throw new Error(`acceptance candidate requires observed PASS for ${name}`);
-    if (!existsSync(check.log) || digest(check.log).sha256 !== check.log_sha256) throw new Error(`acceptance evidence changed after ${name}: ${check.log}`);
+  const requiredNames: string[] = [];
+  const missing: string[] = [];
+  const alteredLogs: string[] = [];
+  if (!existsSync(planPath)) {
+    missing.push(`plano do Work (plan not found: ${planPath})`);
+  } else {
+    requiredNames.push(...taskAuditRequirements(readFileSync(planPath, "utf8"), args.task).required);
+    for (const name of requiredNames) {
+      const check = state.audit_checks?.[name];
+      if (!check || check.verdict !== "PASS") {
+        missing.push(`${name} (não observado)`);
+        continue;
+      }
+      if (!existsSync(check.log)) alteredLogs.push(`log ausente após ${name}: ${check.log}`);
+      else if (digest(check.log).sha256 !== check.log_sha256) alteredLogs.push(`log alterado após ${name}: ${check.log}`);
+    }
   }
   const evidenceFiles = ["red", "green", "verify"].map((check) => path.join(LOG_DIR, `${args.task}-${check}.log`));
-  for (const filePath of evidenceFiles) if (!existsSync(filePath)) throw new Error(`evidence missing: ${filePath}`);
+  for (const filePath of evidenceFiles) if (!existsSync(filePath)) missing.push(`evidência ausente: ${filePath}`);
+
+  const problems = [...missing, ...alteredLogs];
+  if (problems.length) return reportIncomplete(problems);
+
   const evidenceDigest = createHash("sha256");
   for (const filePath of evidenceFiles) evidenceDigest.update(readFileSync(filePath));
   const subject = {
-    version: 1,
+    version: ATTESTATION_VERSION,
     kind: "task-acceptance-candidate",
+    harness_version: harnessVersion(),
+    gate_version: GATE_VERSION,
     work_id: args.work,
     task_id: args.task,
     result: "pass",
@@ -530,7 +617,7 @@ function candidate(args: VerifyArgs): number {
     implementation: state.green_implementation,
     tests: state.green_tests,
     evidence_sha256: evidenceDigest.digest("hex"),
-    audit_checks: Object.fromEntries(auditRequirements.required.map((name) => [name, state.audit_checks![name]])),
+    audit_checks: Object.fromEntries(requiredNames.map((name) => [name, state.audit_checks![name]])),
     generated_at: new Date().toISOString(),
   };
   mkdirSync(ATTESTATION_DIR, { recursive: true });
@@ -538,6 +625,39 @@ function candidate(args: VerifyArgs): number {
   writeFileSync(target, `${JSON.stringify(subject, null, 2)}\n`, "utf8");
   console.log(`PASS: acceptance candidate generated for ${args.work}/${args.task}: ${target}`);
   return 0;
+}
+
+/** Versão do harness declarada em `package.json` na raiz; fallback `0.1.0`. */
+function harnessVersion(): string {
+  try {
+    const manifest = JSON.parse(readFileSync(path.join(HARNESS_ROOT, "package.json"), "utf8")) as { version?: unknown };
+    return typeof manifest.version === "string" && manifest.version ? manifest.version : FALLBACK_HARNESS_VERSION;
+  } catch {
+    return FALLBACK_HARNESS_VERSION;
+  }
+}
+
+/**
+ * Lê uma atestação de aceitação e informa se foi gerada por uma versão compatível do harness.
+ * Compatível: `version` 1 (legado) ou 2 (que exige `harness_version` presente).
+ * Devolve `null` quando o arquivo não existe, não é JSON válido ou não declara `version` numérica.
+ */
+export function readAttestation(
+  filePath: string,
+): { version: number; harness_version: string | null; compatible: boolean } | null {
+  if (!existsSync(filePath)) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const record = parsed as { version?: unknown; harness_version?: unknown };
+  const version = typeof record.version === "number" ? record.version : Number(record.version);
+  if (!Number.isInteger(version)) return null;
+  const harness_version = typeof record.harness_version === "string" && record.harness_version ? record.harness_version : null;
+  return { version, harness_version, compatible: version === 1 || (version === 2 && harness_version !== null) };
 }
 
 function takeOption(tokens: string[], name: string, options: { multiple: true; required?: boolean }): string[];
@@ -570,12 +690,20 @@ function takeOption(
   return values;
 }
 
+/** Remove uma flag booleana (sem valor) da lista de tokens; retorna true quando estava presente. */
+function takeFlag(tokens: string[], name: string): boolean {
+  const index = tokens.indexOf(name);
+  if (index === -1) return false;
+  tokens.splice(index, 1);
+  return true;
+}
+
 function usage(): void {
   console.error("usage: task_evidence.js baseline --work NNNN|legacy --task ID --implementation PATH... --tests PATH...");
-  console.error("       task_evidence.js red --work NNNN|legacy --task ID --expect TEXT -- COMMAND...");
+  console.error("       task_evidence.js red --work NNNN|legacy --task ID --expect TEXT [--expect-literal] -- COMMAND...");
   console.error("       task_evidence.js green --work NNNN|legacy --task ID [--expect TEXT] [-- COMMAND...]");
   console.error("       task_evidence.js verify --work NNNN|legacy --task ID");
-  console.error("       task_evidence.js check --work NNNN|legacy --task ID --name NAME [--expect TEXT] -- COMMAND...");
+  console.error("       task_evidence.js check --work NNNN|legacy --task ID --name NAME [--expect TEXT] [--expect-literal] -- COMMAND...");
   console.error("       task_evidence.js candidate --work NNNN|legacy --task ID");
 }
 
@@ -596,10 +724,11 @@ function parseArgs(argv: string[]): ParsedArgs {
     return { action, work, task, implementation, tests };
   }
   if (action === "red") {
+    const expectLiteral = takeFlag(options, "--expect-literal");
     const expect = takeOption(options, "--expect", { required: true });
     if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
     if (!command.length) throw new Error("RED command is required after --");
-    return { action, work, task, expect, command };
+    return { action, work, task, expect, expectLiteral, command };
   }
   if (action === "green") {
     const expect = takeOption(options, "--expect");
@@ -607,10 +736,11 @@ function parseArgs(argv: string[]): ParsedArgs {
     return { action, work, task, expect, command };
   }
   if (action === "check") {
+    const expectLiteral = takeFlag(options, "--expect-literal");
     const name = takeOption(options, "--name", { required: true });
     const expect = takeOption(options, "--expect");
     if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
-    return { action, work, task, name, expect, command };
+    return { action, work, task, name, expect, expectLiteral, command };
   }
   if (options.length || command.length) throw new Error(`unexpected arguments: ${[...options, ...command].join(" ")}`);
   return { action, work, task };
@@ -627,7 +757,7 @@ export function main(argv: string[] = process.argv.slice(2)): number {
     return verify(args);
   } catch (error) {
     console.error(`FAIL: ${(error as Error).message}`);
-    return 1;
+    return EXIT_VIOLATION;
   }
 }
 

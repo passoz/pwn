@@ -25,6 +25,16 @@ O **Piwerness** (`pwn`) é uma plataforma de engenharia de software autônoma e 
 - **Matriz de Capacidades Multialvo:** Adapters nativos de materialização para os runtimes **Pi**, **OpenCode** e **omp** sem degradação silenciosa.
 - **Editor Visual (`pwn-gui`):** Utilitário web standalone em `file://` (`tools/pipeline-editor/index.html`) para edição e visualização de pipelines em tempo real.
 - **Telemetria & Teach Skills:** Métrica de tokens/custo em JSONL (`.piwerness/metrics.jsonl`) com recomendações de otimização de routing e aprendizado contínuo (`.piwerness/learnings.json`).
+- **Relatório Completo de Gates (`gate --all`):** Roda os 5 gates numa passada e devolve todos os findings agrupados, em vez de parar no primeiro bloqueio.
+- **Cache de Veredicto de Gate:** Verdicts cacheados por hash dos inputs (`.piwerness/gate-cache/`), versionados por `gate_version`/`harness_version` — cache de outra versão nunca é servido.
+- **Pré-voo de Execução (`run --dry-run`):** Lista *todos* os impedimentos (gates + contratos) antes de criar sandbox ou executar qualquer comando.
+- **Cobertura do Work (`status --coverage`):** Relatório determinístico requisitos → capabilities → tasks → contratos → ACs, com exit code por lacuna.
+- **Mutation Testing dos Gates (`self-check --mutate`):** Quebra artefatos de propósito e verifica se o gate correspondente realmente bloqueia — revela gates decorativos.
+- **Auditoria TDD com Exit Codes por Classe:** `2` = **incompleto** (falta evidência) distinto de `1` = **violação**, para automação AFK não confundir os dois.
+- **`--expect-literal`:** Exige que o texto do `--expect` do RED exista literalmente nos arquivos de teste congelados, eliminando falso RED/GREEN por substring acidental.
+- **Política Declarativa (`.piwerness/policy.json`):** Keywords de risco, thresholds, allowlist de shell e domínios de rede num arquivo revisável e diffável, validado por schema (opcional; sem ele valem os defaults).
+- **Tetos Declarados nos Schemas:** `complexity` como enum fechado e limites de itens (ACs, steps, componentes, tasks) — o schema recusa e força decompor.
+- **Atestação Versionada:** A atestação de aceitação grava `harness_version`/`gate_version` (`version: 2`), e `readAttestation` informa compatibilidade — evidência antiga nunca é aceita em silêncio.
 
 ---
 
@@ -65,6 +75,12 @@ bun run check
 > `queue/review/`, sem executar). O código `3` existe para que automação AFK não confunda
 > "não executou" com "sucesso".
 
+> **Códigos de saída de `work audit`:** `0` sucesso · `1` **violação** (ex.: implementação
+> alterada antes do RED, teste mudou após o GREEN, mutation check falhou) · `2` **incompleto**
+> (falta evidência ou pré-requisito — o relatório lista *todos* os itens ausentes) · `3`
+> suspenso. A separação entre `1` e `2` permite que automação distinga "procedimento errado"
+> de "procedimento ainda não concluído".
+
 ---
 
 ## 🛠️ Guia de Comandos do CLI (`pwn`)
@@ -77,12 +93,16 @@ bun bin/pwn.js --version
 # Validação de Documentos Normativos
 bun bin/pwn.js validate --work 0001            # Valida prd.json/plan.json do Work com JSON Schema (ajv)
 bun bin/pwn.js self-check                      # Valida os documentos do próprio framework
+bun bin/pwn.js self-check --mutate             # Mutation testing nos gates (revela gates decorativos)
 
 # Gestão de Works e Portões (Gates) — Auto-incremento inteligente de Work IDs
 bun bin/pwn.js work init                       # Auto-atribui o próximo Work ID (ex: 0001, 0002)
 bun bin/pwn.js work init 0001                  # Inicializa um Work ID específico
-bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo
+bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID ativo (usa cache por hash)
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
+bun bin/pwn.js work gate --all --work 0001     # Roda os 5 gates e devolve TODOS os findings numa passada
+bun bin/pwn.js work gate --no-cache --work 0001 # Ignora leitura/escrita do cache de veredictos
+bun bin/pwn.js work gate --clear-cache         # Remove o cache de veredictos (.piwerness/gate-cache/)
 bun bin/pwn.js work specify --work 0001        # Especifica mudanças no baseline (valida o prompt-change.md)
 bun bin/pwn.js work contract --work 0001       # Valida os contratos V4 congelados (CTR-*.json) do Work
 bun bin/pwn.js work scaffold --title "..."     # Cria um Work novo com cadeia completa e válida (discovery→prd→spec→plan+CTR)
@@ -90,13 +110,16 @@ bun bin/pwn.js work import --all               # Importa Works do layout v3 (.wo
 bun bin/pwn.js work import --all --risk auto   # idem, congelando risco por task (L1/L2/L3) a partir do conteúdo
 bun bin/pwn.js work plan --work 0001           # Gera/valida o markdown do plano a partir de plan.json
 bun bin/pwn.js work sync --work 0001           # Sincroniza o state do manifest .work/NNNN.json
+bun bin/pwn.js work status --coverage --work 0001 # Cobertura do Work (requisitos→caps→tasks→contratos→ACs)
 
 # Execução e Auditoria (fail-closed por padrão + enforcement em runtime)
+bun bin/pwn.js work run --dry-run --work 0001 -- bun test  # Pré-voo: lista TODOS os impedimentos sem executar
 bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates + executa em sandbox com diff guard
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test    # Pula gates; enforcement continua
 bun bin/pwn.js work run --no-isolation --work 0001 -- bun test          # Pula sandbox; política continua (escape registrado em metrics.jsonl)
 bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify)
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." -- bun test   # Registra RED via CLI
+bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." --expect-literal -- bun test  # Exige --expect literal nos testes congelados
 
 # Cápsula de Contexto de Tarefas (contrato V4 congelado)
 bun bin/pwn.js task capsule 1.1 0001           # Lê o CTR congelado (não gera default genérico)
@@ -140,6 +163,42 @@ PWN_DIR=../meu-projeto ./scripts/prepare-greenfield-work.sh "Nova feature"
 
 ---
 
+## ⚙️ Política Declarativa (`.piwerness/policy.json`)
+
+Constantes de decisão ficam num arquivo revisável e diffável, separadas do motor que as aplica. O arquivo é **opcional**: sem ele valem os defaults embutidos (comportamento idêntico ao anterior).
+
+```json
+{
+  "risk_keywords": { "l3": ["auth", "payment", "webhook"], "l1": ["readme", "changelog"] },
+  "gate_thresholds": { "max_findings_before_block": 0, "max_acs_per_task": 12 },
+  "shell": {
+    "allowed_commands": [{ "command": "bun", "args": ["test"] }],
+    "denied_commands": [],
+    "allow_all_shell": false
+  },
+  "network": { "allowed_domains": [], "denied_domains": [], "allow_all_network": false }
+}
+```
+
+Validado contra `schemas/policy.schema.json`; um arquivo inválido gera aviso e cai nos defaults (nunca quebra a execução).
+
+---
+
+## 🔍 Relatório, Cache e Pré-voo
+
+| Comando | O que faz |
+|---|---|
+| `pwn work gate --all` | Roda os 5 gates numa passada e agrupa **todos** os findings (em vez de parar no primeiro bloqueio) |
+| `pwn work gate <GATE>` | Avalia um gate; usa cache por hash dos inputs (mostra `(cache)` no hit); `--no-cache` desliga |
+| `pwn work gate --clear-cache` | Limpa `.piwerness/gate-cache/` |
+| `pwn work run --dry-run` | Lista **todos** os impedimentos (gates + contratos) sem criar sandbox nem executar |
+| `pwn work status --coverage` | Cobertura requisitos → capabilities → tasks → contratos → ACs, com exit code por lacuna |
+| `pwn self-check --mutate` | Mutation testing dos gates: quebra artefatos de propósito e verifica se o gate bloqueia |
+
+> O cache é versionado por `gate_version` e `harness_version`: um cache gerado por outra versão do harness **nunca** é servido.
+
+---
+
 ## 🎨 Editor Visual de Pipelines (`pwn-gui`)
 
 O Piwerness inclui um editor visual de pipelines autocontido em HTML/CSS/JS que funciona 100% offline via `file://`:
@@ -171,12 +230,13 @@ piwerness/
 │   └── core/                  # Pipeline normativo base (pipeline-core.json)
 ├── .specs/
 │   └── system.json            # Especificação do sistema baseline (normativo)
-├── schemas/                   # JSON Schemas formais (draft-07): pipeline, prd, tasks, evidence, system, plan
+├── schemas/                   # JSON Schemas formais (draft-07): pipeline, prd, tasks, evidence, system, plan, policy
 ├── tests/                     # Suíte de testes automatizados (Bun)
 ├── tools/
 │   └── pipeline-editor/       # Editor visual standalone (index.html)
 ├── docs/
 │   ├── MANUAL.md              # Manual Extenso e Completo da Ferramenta
+│   ├── LIMITES.md             # O que o harness NÃO garante (limites honestos, com evidência)
 │   └── archive/               # Arquivo histórico (SPEC.md e DECISIONS.md)
 ├── spec.json                  # Especificação técnica normativa técnica
 └── todo.json                  # Plano de execução normativo (normativo)
@@ -187,6 +247,7 @@ piwerness/
 ## 📚 Documentação e Manual
 
 - 📖 **[Manual Completo da Ferramenta (MANUAL.md)](docs/MANUAL.md)** — Guia extenso de arquitetura, contrato V4, roteamento, gates, sandboxes e casos de uso.
+- ⚠️ **[Limites Conhecidos (LIMITES.md)](docs/LIMITES.md)** — O que o harness **não** garante, com evidência em código e o que fazer em vez disso.
 - 🧭 **[Plano de Ajustes (PLANO-AJUSTES.md)](docs/PLANO-AJUSTES.md)** — Diagnóstico F0-F5, critérios de aceite e status de execução.
 - 🗄️ **[Arquivo Histórico (DECISIONS.md & SPEC.md)](docs/archive/)** — Registro de decisões de arquitetura e especificação original.
 
