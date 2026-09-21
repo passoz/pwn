@@ -1,18 +1,20 @@
 
 import { createHash } from "node:crypto";
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
-  realpathSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+
+import { isDirectEntry } from "./entry-guard.js";
+import harnessManifest from "../../package.json" with { type: "json" };
 
 let STATE_DIR: string;
 let LOG_DIR: string;
@@ -33,10 +35,6 @@ export const EXIT_SUSPENDED = 3;
 const ATTESTATION_VERSION = 2;
 /** Versão do schema de gates referenciado pela atestação. */
 const GATE_VERSION = "1";
-/** Versão usada quando `package.json` da raiz do harness não pode ser lido. */
-const FALLBACK_HARNESS_VERSION = "0.1.0";
-/** Raiz do harness (diretório que contém `package.json`), derivada do caminho deste módulo. */
-const HARNESS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /** Hash of a single file at snapshot time. */
 interface FileDigest {
@@ -299,13 +297,129 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+interface ChainEntry {
+  sequence: number;
+  timestamp: string;
+  task: string;
+  check: string;
+  command: string[];
+  exit_code: number;
+  output_sha256: string;
+  prev_hash: string;
+  entry_hash: string;
+}
+
+const GENESIS_HASH = "0".repeat(64);
+
+function appendEvidenceChain(task: string, check: string, command: string[], exitCode: number, output: string): ChainEntry {
+  mkdirSync(LOG_DIR, { recursive: true });
+  const chainPath = path.join(LOG_DIR, `${task}-chain.jsonl`);
+  const entries: ChainEntry[] = [];
+  if (existsSync(chainPath)) {
+    try {
+      const lines = readFileSync(chainPath, "utf8").trim().split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          entries.push(JSON.parse(line));
+        } catch {
+          // Linha corrompida: não reseta entradas anteriores já válidas
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const prevHash = entries.length > 0 ? entries[entries.length - 1].entry_hash : GENESIS_HASH;
+  const sequence = entries.length + 1;
+  const timestamp = new Date().toISOString();
+  const outputSha256 = createHash("sha256").update(output).digest("hex");
+
+  const entryPayload = JSON.stringify([
+    prevHash,
+    sequence,
+    timestamp,
+    task,
+    check,
+    command,
+    exitCode,
+    outputSha256,
+  ]);
+  const entryHash = createHash("sha256").update(entryPayload).digest("hex");
+
+  const entry: ChainEntry = {
+    sequence,
+    timestamp,
+    task,
+    check,
+    command,
+    exit_code: exitCode,
+    output_sha256: outputSha256,
+    prev_hash: prevHash,
+    entry_hash: entryHash,
+  };
+
+  appendFileSync(chainPath, JSON.stringify(entry) + "\n", "utf8");
+  return entry;
+}
+
+export function verifyEvidenceChain(task: string): { valid: boolean; reason?: string; headHash?: string } {
+  const chainPath = path.join(LOG_DIR, `${task}-chain.jsonl`);
+  if (!existsSync(chainPath)) {
+    return { valid: false, reason: `cadeia de evidências não encontrada: ${chainPath}` };
+  }
+  try {
+    const lines = readFileSync(chainPath, "utf8").trim().split("\n").filter(Boolean);
+    if (!lines.length) return { valid: false, reason: "cadeia de evidências vazia" };
+    let prev = GENESIS_HASH;
+    const latestForCheck: Record<string, string> = {};
+    for (let i = 0; i < lines.length; i++) {
+      const entry: ChainEntry = JSON.parse(lines[i]);
+      if (entry.sequence !== i + 1) return { valid: false, reason: `lacuna de sequência no passo ${i + 1}` };
+      if (entry.prev_hash !== prev) return { valid: false, reason: `elo quebrado na cadeia no passo ${i + 1}` };
+      const expectedPayload = JSON.stringify([
+        entry.prev_hash,
+        entry.sequence,
+        entry.timestamp,
+        entry.task,
+        entry.check,
+        entry.command,
+        entry.exit_code,
+        entry.output_sha256,
+      ]);
+      const expectedHash = createHash("sha256").update(expectedPayload).digest("hex");
+      if (entry.entry_hash !== expectedHash) {
+        return { valid: false, reason: `hash divergente na entrada ${i + 1}` };
+      }
+      prev = entry.entry_hash;
+      latestForCheck[entry.check.toLowerCase()] = entry.entry_hash;
+    }
+
+    // Verificar que cada log persistido no disco corresponde ao último registro de sua classe na cadeia
+    for (const [checkName, expectedHash] of Object.entries(latestForCheck)) {
+      const logFile = path.join(LOG_DIR, `${task}-${checkName}.log`);
+      if (existsSync(logFile)) {
+        const logContent = readFileSync(logFile, "utf8");
+        if (!logContent.includes(`CHAIN_HASH: ${expectedHash}`)) {
+          return { valid: false, reason: `log ${checkName.toUpperCase()} adulterado (CHAIN_HASH não confere com o elo da cadeia)` };
+        }
+      }
+    }
+
+    return { valid: true, headHash: prev };
+  } catch (err) {
+    return { valid: false, reason: (err as Error).message };
+  }
+}
+
 function writeLog(task: string, check: string, command: string[], exitCode: number, output: string, verdict: string, extra = ""): string {
   mkdirSync(LOG_DIR, { recursive: true });
+  const chainEntry = appendEvidenceChain(task, check, command, exitCode, output);
   const filePath = path.join(LOG_DIR, `${task}-${check.toLowerCase()}.log`);
   const quoted = command.map(shellQuote).join(" ");
   writeFileSync(
     filePath,
-    `TASK: ${task}\nCHECK: ${check}\nCOMMAND: ${quoted}\nEXIT: ${exitCode}\nOUTPUT:\n${output}\n${extra}VERDICT: ${verdict}\n`,
+    `TASK: ${task}\nCHECK: ${check}\nCOMMAND: ${quoted}\nEXIT: ${exitCode}\nOUTPUT:\n${output}\n${extra}VERDICT: ${verdict}\nCHAIN_HASH: ${chainEntry.entry_hash}\n`,
     "utf8",
   );
   return filePath;
@@ -600,7 +714,9 @@ function candidate(args: VerifyArgs): number {
   const evidenceFiles = ["red", "green", "verify"].map((check) => path.join(LOG_DIR, `${args.task}-${check}.log`));
   for (const filePath of evidenceFiles) if (!existsSync(filePath)) missing.push(`evidência ausente: ${filePath}`);
 
-  const problems = [...missing, ...alteredLogs];
+  const chainCheck = verifyEvidenceChain(args.task);
+  const chainProblems = chainCheck.valid ? [] : [`cadeia de evidências (${chainCheck.reason})`];
+  const problems = [...missing, ...alteredLogs, ...chainProblems];
   if (problems.length) return reportIncomplete(problems);
 
   const evidenceDigest = createHash("sha256");
@@ -608,7 +724,7 @@ function candidate(args: VerifyArgs): number {
   const subject = {
     version: ATTESTATION_VERSION,
     kind: "task-acceptance-candidate",
-    harness_version: harnessVersion(),
+    harness_version: harnessManifest.version,
     gate_version: GATE_VERSION,
     work_id: args.work,
     task_id: args.task,
@@ -617,6 +733,7 @@ function candidate(args: VerifyArgs): number {
     implementation: state.green_implementation,
     tests: state.green_tests,
     evidence_sha256: evidenceDigest.digest("hex"),
+    evidence_chain_head: chainCheck.headHash ?? null,
     audit_checks: Object.fromEntries(requiredNames.map((name) => [name, state.audit_checks![name]])),
     generated_at: new Date().toISOString(),
   };
@@ -625,16 +742,6 @@ function candidate(args: VerifyArgs): number {
   writeFileSync(target, `${JSON.stringify(subject, null, 2)}\n`, "utf8");
   console.log(`PASS: acceptance candidate generated for ${args.work}/${args.task}: ${target}`);
   return 0;
-}
-
-/** Versão do harness declarada em `package.json` na raiz; fallback `0.1.0`. */
-function harnessVersion(): string {
-  try {
-    const manifest = JSON.parse(readFileSync(path.join(HARNESS_ROOT, "package.json"), "utf8")) as { version?: unknown };
-    return typeof manifest.version === "string" && manifest.version ? manifest.version : FALLBACK_HARNESS_VERSION;
-  } catch {
-    return FALLBACK_HARNESS_VERSION;
-  }
 }
 
 /**
@@ -761,8 +868,7 @@ export function main(argv: string[] = process.argv.slice(2)): number {
   }
 }
 
-const currentFile = fileURLToPath(import.meta.url);
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(currentFile)) {
+if (isDirectEntry(import.meta.url)) {
   if (process.argv.length < 3) usage();
   process.exitCode = main();
 }

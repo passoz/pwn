@@ -1,7 +1,8 @@
 
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isDirectEntry } from './entry-guard.js';
 
 const REQUIRED_SECTIONS = [
   "## Delta da system spec",
@@ -304,5 +305,4 @@ export function main(argv: string[] = process.argv.slice(2)): number {
   return 0;
 }
 
-const currentFile = fileURLToPath(import.meta.url);
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(currentFile)) process.exitCode = main();
+if (isDirectEntry(import.meta.url)) process.exitCode = main();

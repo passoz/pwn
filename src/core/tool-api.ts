@@ -24,7 +24,7 @@ import { spawnSync, SpawnSyncOptions } from 'node:child_process';
 import { PolicyEngine, AgentOperation, PolicyDecision } from './policy-engine.js';
 import { BudgetController, BudgetViolation } from './contract-engine.js';
 import { RunContext, RunEvent } from './runner.js';
-
+import { isBwrapSupported, wrapWithBwrap } from './sandbox.js';
 // ── Result Types ───────────────────────────────────────────────────
 
 export interface ToolResult<T = unknown> {
@@ -116,17 +116,20 @@ export class ToolAPI {
   private budget: BudgetController;
   private runCtx?: RunContext;
   private cwd: string;
+  private isolated: boolean;
 
   constructor(options: {
     policy: PolicyEngine;
     budget: BudgetController;
     cwd: string;
     runCtx?: RunContext;
+    isolated?: boolean;
   }) {
     this.policy = options.policy;
     this.budget = options.budget;
     this.cwd = options.cwd;
     this.runCtx = options.runCtx;
+    this.isolated = options.isolated ?? true;
   }
 
   // ── Budget & Policy Pre-check ────────────────────────────────────
@@ -383,16 +386,28 @@ export class ToolAPI {
       };
     }
 
+    const sanitizedEnv = { ...process.env };
+    delete sanitizedEnv.PWN_VERIFIER_KEY;
+
     const options: SpawnSyncOptions = {
       cwd: this.cwd,
       encoding: 'utf8',
-      env: { ...process.env },
+      env: sanitizedEnv,
       timeout: timeoutMs,
       killSignal: 'SIGKILL',
     };
+    let execCmd = command;
+    let execArgs = args;
+    if (this.isolated !== false && isBwrapSupported()) {
+      const net = this.policy.networkPolicy;
+      // bwrap atua no nível de namespace OS: apenas allowAllNetwork libera a interface de rede
+      const allowNet = Boolean(net?.allowAllNetwork);
+      const wrapped = wrapWithBwrap(command, args, this.cwd, { allowNetwork: allowNet });
+      execCmd = wrapped.command;
+      execArgs = wrapped.args;
+    }
 
-    const proc = spawnSync(command, args, options);
-
+    const proc = spawnSync(execCmd, execArgs, options);
     // The process spawned and ran: charge the budget even if it had to be killed.
     this.budget.recordShellExecution();
 

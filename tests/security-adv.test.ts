@@ -412,6 +412,34 @@ except:
   } finally { cleanup(dir); }
 });
 
+test('§5.1 SUBPROCESSO: bwrap bloqueia escrita fora do sandbox no nível de kernel', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pwn-sec-bwrap-'));
+  try {
+    const contract = createDefaultContractV4('T-SEC', '0001', 'Subprocess Bwrap', 'L1', {
+      writeAllow: ['src/**'],
+    });
+    const policy = new PolicyEngine(contract, {
+      shell: { allowedCommands: [{ command: 'python3' }], deniedCommands: [] },
+    });
+    const budget = new BudgetController(contract);
+    const tools = new ToolAPI({ policy, budget, cwd: dir, isolated: true });
+
+    mkdirSync(path.join(dir, 'src'), { recursive: true });
+    writeFileSync(path.join(dir, 'src', 'attacker.py'), `
+import os
+try:
+    with open(os.path.join(os.getcwd(), '..', 'escape_bwrap.txt'), 'w') as f:
+        f.write('escaped')
+except:
+    pass
+`, 'utf8');
+
+    tools.exec('python3', ['src/attacker.py']);
+    const escapePath = path.join(dir, '..', 'escape_bwrap.txt');
+    assert.equal(existsSync(escapePath), false, 'Subprocesso NUNCA deve conseguir escrever fora do sandbox com bwrap');
+  } finally { cleanup(dir); }
+});
+
 // ═════════════════════════════════════════════════════════════════════
 // §6 — NETWORK TESTS
 // ═════════════════════════════════════════════════════════════════════

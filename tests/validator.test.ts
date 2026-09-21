@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { validateWorkDocuments } from '../src/core/validator.js';
+import { validateNormativeDocument, validateWorkDocuments } from '../src/core/validator.js';
 
 function workFixture(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-validate-'));
@@ -68,6 +68,25 @@ test('validateWorkDocuments reprova prd.json inválido apontando o campo', () =>
     assert.ok(prd);
     assert.equal(prd.valid, false);
     assert.ok(prd.errors.some((e) => /required property/.test(e)), `erro deve citar campo ausente: ${prd.errors.join('; ')}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('validateNormativeDocument reprova documento que declara schema desconhecido', () => {
+  const dir = workFixture();
+  try {
+    writeFileSync(
+      path.join(dir, '.piwerness/work/0001/plan.json'),
+      JSON.stringify({ ...validPlan, $schema: 'https://piwerness.dev/schemas/inexistente.schema.json' }),
+      'utf8',
+    );
+    const result = validateNormativeDocument('.piwerness/work/0001/plan.json', dir);
+    assert.equal(result.valid, false, 'documento com schema declarado e indisponível nunca pode passar');
+    assert.ok(
+      result.errors.some((e) => e.includes('inexistente.schema.json')),
+      `erro deve nomear o schema indisponível: ${result.errors.join('; ')}`,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -9,9 +9,10 @@ import {
   readGateCache,
   writeGateCache,
   clearGateCache,
+  signVerdict,
 } from '../src/core/gate-cache.js';
+import { lawsDigest } from '../src/core/validator.js';
 import type { GateOutput } from '../src/core/gates.js';
-
 function fixtureDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'pwn-gate-cache-'));
 }
@@ -97,12 +98,16 @@ describe('gate-cache', () => {
       }), 'utf8');
       expect(readGateCache('GATE-SPEC-PLAN', workDir, inputVersions)).toBeNull();
 
-      // sanity: com as versões corretas o mesmo arquivo é servido
+      // sanity: com as versões corretas e assinatura válida o arquivo é servido
+      const validOut = sampleOutput('GATE-SPEC-PLAN', inputVersions);
+      const currentLaws = lawsDigest();
       fs.writeFileSync(file, JSON.stringify({
         gate_version: GATE_CACHE_VERSION,
         harness_version: HARNESS_VERSION,
+        laws_sha256: currentLaws,
         computed_at: new Date().toISOString(),
-        output: sampleOutput('GATE-SPEC-PLAN', inputVersions),
+        output: validOut,
+        signature: signVerdict(validOut, workDir, currentLaws),
       }), 'utf8');
       expect(readGateCache('GATE-SPEC-PLAN', workDir, inputVersions)).not.toBeNull();
     } finally {
@@ -151,5 +156,51 @@ describe('gate-cache', () => {
     expect(first).toMatch(/^[0-9a-f]{12}$/);
     expect(gateCacheKey('GATE-REQ-PRD', { discovery: 'aaa', requirements: 'bbb' })).not.toBe(first);
     expect(gateCacheKey('GATE-DISC-REQ', { discovery: 'aaa', requirements: 'CCC' })).not.toBe(first);
+  });
+
+  test('(f) readGateCache rejeita envelope adulterado (HMAC inválido)', () => {
+    const workDir = fixtureDir();
+    try {
+      const inputVersions = { prd: '111', spec: '222' };
+      const out = sampleOutput('GATE-PRD-SPEC', inputVersions);
+      out.result = 'blocked';
+      writeGateCache(out, workDir);
+
+      // Leitura legítima passa
+      const cached = readGateCache('GATE-PRD-SPEC', workDir, inputVersions);
+      expect(cached).not.toBeNull();
+      expect(cached?.result).toBe('blocked');
+
+      // Agora adulteramos o arquivo em disco: alteramos 'blocked' para 'pass'
+      const file = cacheFilePath(workDir, 'GATE-PRD-SPEC', inputVersions);
+      const content = JSON.parse(fs.readFileSync(file, 'utf8'));
+      content.output.result = 'pass';
+      content.output.findings = [];
+      fs.writeFileSync(file, JSON.stringify(content, null, 2), 'utf8');
+
+      // Leitura DEVE rejeitar o arquivo forjado
+      const forged = readGateCache('GATE-PRD-SPEC', workDir, inputVersions);
+      expect(forged).toBeNull();
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  test('(g) readGateCache rejeita envelope com laws_sha256 divergente', () => {
+    const workDir = fixtureDir();
+    try {
+      const inputVersions = { prd: '111', spec: '222' };
+      const out = sampleOutput('GATE-PRD-SPEC', inputVersions);
+      writeGateCache(out, workDir);
+
+      const file = cacheFilePath(workDir, 'GATE-PRD-SPEC', inputVersions);
+      const content = JSON.parse(fs.readFileSync(file, 'utf8'));
+      content.laws_sha256 = '0000000000000000';
+      fs.writeFileSync(file, JSON.stringify(content, null, 2), 'utf8');
+
+      expect(readGateCache('GATE-PRD-SPEC', workDir, inputVersions)).toBeNull();
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
   });
 });

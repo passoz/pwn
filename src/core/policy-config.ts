@@ -17,8 +17,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Ajv, type ValidateFunction } from 'ajv';
+import policySchema from '../../schemas/policy.schema.json' with { type: 'json' };
 import {
   DEFAULT_NETWORK_POLICY,
   DEFAULT_SHELL_POLICY,
@@ -27,9 +27,6 @@ import {
   type ShellPolicy,
 } from './policy-engine.js';
 
-// Os schemas vivem na raiz de instalação do harness, não no cwd do chamador.
-const SCHEMA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../schemas');
-const POLICY_SCHEMA_FILE = 'policy.schema.json';
 const POLICY_RELATIVE_PATH = path.join('.piwerness', 'policy.json');
 
 export interface PolicyConfigFile {
@@ -74,21 +71,17 @@ export function policyFilePath(rootDir: string = process.cwd()): string {
 // ── Validação ──────────────────────────────────────────────────────
 
 let compiledValidator: ValidateFunction | null = null;
-let validatorUnavailable = false;
 
-/** Compila (uma vez) o schema de política. Retorna null se o schema não puder ser carregado. */
-function policyValidator(): ValidateFunction | null {
-  if (compiledValidator) return compiledValidator;
-  if (validatorUnavailable) return null;
-  try {
-    const schema = JSON.parse(fs.readFileSync(path.join(SCHEMA_DIR, POLICY_SCHEMA_FILE), 'utf8'));
-    compiledValidator = new Ajv({ allErrors: true, strict: false }).compile(schema);
-    return compiledValidator;
-  } catch (err) {
-    validatorUnavailable = true;
-    console.warn(`[policy] schema ${POLICY_SCHEMA_FILE} indisponível (${(err as Error).message}) — usando defaults`);
-    return null;
+/**
+ * Compila (uma vez) o schema de política, **embutido no bundle**. Não depende do
+ * disco: o binário movido para outro diretório valida `.piwerness/policy.json`
+ * contra a mesma lei.
+ */
+function policyValidator(): ValidateFunction {
+  if (!compiledValidator) {
+    compiledValidator = new Ajv({ allErrors: true, strict: false }).compile(structuredClone(policySchema));
   }
+  return compiledValidator;
 }
 
 // ── Normalização (snake_case do arquivo → tipos do PolicyEngine) ────
@@ -169,7 +162,6 @@ export function loadPolicyFile(rootDir: string = process.cwd()): PolicyConfigFil
   }
 
   const validate = policyValidator();
-  if (!validate) return null;
   if (!validate(raw)) {
     const detail = (validate.errors ?? [])
       .map((err) => `${err.instancePath || '/'} ${err.message ?? 'inválido'}`)

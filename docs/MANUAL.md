@@ -66,6 +66,21 @@ Você pode validar a integridade de todos os documentos normativos do repositór
 bun bin/pwn.js validate
 ```
 
+### Leis embutidas e pinagem (drift)
+
+Os schemas são **embutidos no bundle** (`import` de JSON em `src/core/validator.ts`): sob
+`bun src/cli.ts` o import é resolvido do disco a cada execução; sob `bun build --compile` a
+cópia congelada viaja dentro do binário. Em nenhum dos dois casos o caminho do módulo entra na
+decisão — o mesmo binário, movido para outro diretório e sem `schemas/` ao lado, continua
+validando contra as mesmas leis.
+
+`schemas/` (e um `schemas/` ao lado do executável, quando existir) passa a ser apenas cópia
+**revisável e diffável**. Se divergir da cópia embutida, todo comando aborta com
+`leis embutidas divergem de schemas/ no disco` (exit `1`): a cópia embutida é a que vale.
+Adotar uma edição de lei exige reconstruir o harness — não existe caminho em que editar
+`schemas/*.json` afrouxe o enforcement em silêncio. Documento que declara um `$schema` que o
+verificador não carrega é **reprovado**, nunca aceito por falta de schema.
+
 ---
 
 ## 3. Contract Engine v4 & As 7 Dimensões Contratuais
@@ -152,12 +167,14 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 bun bin/pwn.js work gate --all --work 0001
 ```
 
-### Cache de veredicto de gate:
+### Cache de veredicto de gate (Certificado Assinado por HMAC):
 
-Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.piwerness/gate-cache/<GATE>-<chave>.json`, envelopado com `gate_version` e `harness_version`. Um cache de outra versão do harness **nunca** é servido — isso impede que um upgrade do `pwn` sirva veredicto obsoleto. A segunda execução do mesmo gate com os mesmos inputs mostra `(cache)` no cabeçalho.
+Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.piwerness/gate-cache/<GATE>-<chave>.json`, envelopado em formato **v2** com `gate_version`, `harness_version`, `laws_sha256` (hash determinístico de todas as leis embutidas) e assinado com **HMAC-SHA256**.
+
+A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.piwerness/.verifier_key`. Qualquer adulteração manual em disco (ex: tentar alterar `result: "blocked"` para `"pass"`) quebra o HMAC e faz o cache ser **imediatamente rejeitado**, forçando a reavaliação limpa do gate. Da mesma forma, se qualquer schema embutido mudar, o `laws_sha256` invalida caches antigos.
 
 ```bash
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia; 2ª: (cache)
+bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia e assina; 2ª: (cache verificado)
 bun bin/pwn.js work gate GATE-DISC-REQ --work 0001 --no-cache
 bun bin/pwn.js work gate --clear-cache
 ```
@@ -234,18 +251,23 @@ Se um agente `cheap` estiver executando uma tarefa e:
 
 ---
 
-## 8. Sandboxes em Git Worktree
+## 8. Sandboxes em Git Worktree + Isolamento OS (Bubblewrap)
 
-Para evitar que execuções mal sucedidas de agentes corrompam a árvore de trabalho principal ou deixem arquivos pela metade, o Piwerness utiliza o **Git Worktree Sandbox** (`src/core/sandbox.ts`).
+Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o repositório principal, escapem para o sistema operacional ou façam exfiltração de dados via rede, o Piwerness combina dois níveis estritos de contenção:
+
+1. **Isolamento de Árvore (Git Worktree):** O código é clonado para `.piwerness/sandboxes/RUN-xxx/` numa branch dedicada `pwn-sandbox-RUN-xxx`. Edições de arquivos e testes ocorrem apenas nessa árvore descartável.
+2. **Isolamento de Kernel (Bubblewrap / `bwrap`):** Todos os subprocessos invocados pelo agente são envelopados via `bwrap` (quando disponível no host Linux):
+   - **Filesystem Read-Only:** Todo o SO (`/`) é montado em `--ro-bind` somente-leitura. Tentativas de escrever fora da sandbox (ex: `open('../escape.txt', 'w')`) falham com `Read-only file system` no nível do kernel.
+   - **Isolamento de Rede:** Subprocessos rodam com `--unshare-net` (rede desconectada), exceto se expressamente autorizados pela política declarativa de rede.
+   - **Namespace de Processos:** Rodam sob `--unshare-pid`, sem visão nem capacidade de sinalizar (`kill`, `ptrace`) processos do sistema.
 
 ### Ciclo de Vida:
 1. Ao iniciar a execução de uma run (`RUN-xxx`), o Piwerness invoca `createGitWorktreeSandbox('RUN-xxx')`.
-2. Um diretório isolado é criado em `.piwerness/sandboxes/RUN-xxx/` associado a uma branch temporária `pwn-sandbox-RUN-xxx`.
-3. O agente executa todas as edições e rodadas de testes dentro deste diretório isolado.
+2. Um diretório isolado é criado em `.piwerness/sandboxes/RUN-xxx/` associado à branch temporária.
+3. O agente executa todas as edições e subprocessos confinados na bolha da sandbox.
 4. Se o teste e a validação do contrato passarem com sucesso, o commit é integrado ao branch principal.
-5. Em seguida, `cleanupGitWorktreeSandbox` remove limpo a worktree e a branch temporária.
+5. Em seguida, `cleanupGitWorktreeSandbox` remove a worktree e a branch temporária.
 
----
 
 ## 9. Fila Assíncrona de Revisão Humana (AFK)
 

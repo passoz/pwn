@@ -1,8 +1,9 @@
 
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isDirectEntry } from './entry-guard.js';
 
 import { validateTasksDetailed, type TaskAnalysis } from "./validate_tasks.js";
 import { listWorks, loadManifest, resolvePlanTarget } from "./work-manifest.js";
@@ -465,6 +466,4 @@ export function main(argv = process.argv.slice(2)): number {
   return 0;
 }
 
-const isDirect = process.argv[1]
-  && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
-if (isDirect) process.exitCode = main();
+if (isDirectEntry(import.meta.url)) process.exitCode = main();

@@ -1,7 +1,8 @@
 
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isDirectEntry } from './entry-guard.js';
 
 export const LEGACY_TASK_CONTRACT_VERSION = 1;
 export const PREVIOUS_TASK_CONTRACT_VERSION = 2;
@@ -856,6 +857,4 @@ export function main(argv: string[] = process.argv.slice(2)): number {
   return 0;
 }
 
-const isDirect = process.argv[1]
-  && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
-if (isDirect) process.exitCode = main();
+if (isDirectEntry(import.meta.url)) process.exitCode = main();

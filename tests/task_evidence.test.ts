@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -160,4 +160,47 @@ test("allows incidental RED in legacy v1/v2 plans but warns", () => {
   const legacyResult = run(cwd, "red", "--work", "0001", "--task", "1.1", "--expect", "cannot find main module", "--", process.execPath, "test-app.mjs");
   assert.equal(legacyResult.status, 0, "RED must be accepted for v2 plan even if output is incidental");
   assert.match(legacyResult.stderr, /WARNING: RED accepted due to legacy contract/i);
+});
+
+test("detects corrupted or tampered evidence chain", () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-chain-"));
+  git(cwd, "init", "-q");
+  git(cwd, "config", "user.email", "test@example.invalid");
+  git(cwd, "config", "user.name", "Test");
+
+  const implementation = path.join(cwd, "app.js");
+  const tests = path.join(cwd, "test-app.mjs");
+  writeFileSync(implementation, "export const value = 'old';\n");
+  writeFileSync(tests, "");
+  commit(cwd, "baseline");
+
+  assert.equal(run(cwd, "baseline", "--work", "0001", "--task", "1.1", "--implementation", "app.js", "--tests", "test-app.mjs").status, 0);
+  writeFileSync(tests, "import { value } from './app.js';\nif (value !== 'new') throw new Error('fail');\n");
+  assert.equal(run(cwd, "red", "--work", "0001", "--task", "1.1", "--expect", "fail", "--", process.execPath, "test-app.mjs").status, 0);
+
+  writeFileSync(implementation, "export const value = 'new';\n");
+  assert.equal(run(cwd, "green", "--work", "0001", "--task", "1.1", "--", process.execPath, "test-app.mjs").status, 0);
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1").status, 0);
+
+  const planDirectory = path.join(cwd, ".todo");
+  writeFileSync(path.join(planDirectory, "0001-tasks.md"), "# Tasks\n### [x] [1.1] T\n**ACs:**\n- [ ] `node test-app.mjs` — exit 0.\n", "utf8");
+  assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", process.execPath, "test-app.mjs").status, 0);
+  assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "REGRESSION", "--", process.execPath, "test-app.mjs").status, 0);
+
+  // Cadeia intacta: candidate passa com status 0
+  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.1").status, 0);
+
+  // Agora adulteramos o arquivo de cadeia (altera um campo no histórico)
+  const chainFile = path.join(cwd, ".todo/evidence/0001/1.1-chain.jsonl");
+  assert.equal(existsSync(chainFile), true);
+  const chainLines = readFileSync(chainFile, "utf8").trim().split("\n");
+  const first = JSON.parse(chainLines[0]);
+  first.exit_code = 99; // forja o código de saída no histórico
+  chainLines[0] = JSON.stringify(first);
+  writeFileSync(chainFile, chainLines.join("\n") + "\n", "utf8");
+
+  // candidate DEVE rejeitar a cadeia corrompida
+  const candidateResult = run(cwd, "candidate", "--work", "0001", "--task", "1.1");
+  assert.equal(candidateResult.status, 2);
+  assert.match(candidateResult.stderr, /cadeia de evidências/);
 });

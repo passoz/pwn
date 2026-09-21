@@ -4,6 +4,7 @@ import { handleValidateCommand, handleSelfCheckCommand } from './commands/valida
 import { handleQueueCommand } from './commands/queue.js';
 import { handleTargetCommand } from './commands/target.js';
 import { handleMetricsCommand } from './commands/metrics.js';
+import { assertLawsPinned } from './core/validator.js';
 
 const VERSION = '0.1.0';
 
@@ -47,6 +48,7 @@ EXEMPLOS:
 }
 
 export function main(): void {
+  assertLawsPinned();
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {

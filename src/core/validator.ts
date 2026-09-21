@@ -1,11 +1,56 @@
 import { Ajv, type ValidateFunction } from 'ajv';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Schemas live at the harness install root, not at the caller's cwd.
-const SCHEMA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../schemas');
+import evidenceSchema from '../../schemas/evidence.schema.json' with { type: 'json' };
+import pipelineSchema from '../../schemas/pipeline.schema.json' with { type: 'json' };
+import planSchema from '../../schemas/plan.schema.json' with { type: 'json' };
+import policySchema from '../../schemas/policy.schema.json' with { type: 'json' };
+import prdSchema from '../../schemas/prd.schema.json' with { type: 'json' };
+import systemSchema from '../../schemas/system.schema.json' with { type: 'json' };
+import tasksSchema from '../../schemas/tasks.schema.json' with { type: 'json' };
 
+/**
+ * Conjunto de leis do harness, **embutido no bundle**.
+ *
+ * Import de JSON é resolvido na construção: sob `bun src/cli.ts` o arquivo é
+ * lido do disco a cada execução; sob `bun build --compile` a cópia congelada vai
+ * dentro do binário. Em nenhum dos dois casos o caminho do módulo entra na
+ * decisão — é isso que permite rodar o verificador fora da árvore do repo (o
+ * mesmo binário, movido para outro diretório, continua validando contra as
+ * mesmas leis).
+ */
+const EMBEDDED_SCHEMAS: Record<string, unknown> = {
+  'evidence.schema.json': evidenceSchema,
+  'pipeline.schema.json': pipelineSchema,
+  'plan.schema.json': planSchema,
+  'policy.schema.json': policySchema,
+  'prd.schema.json': prdSchema,
+  'system.schema.json': systemSchema,
+  'tasks.schema.json': tasksSchema,
+};
+
+/** Nomes das leis conhecidas pelo verificador. */
+export const LAW_NAMES: string[] = Object.keys(EMBEDDED_SCHEMAS);
+
+let cachedLawsDigest: string | null = null;
+
+/**
+ * Hash determinístico de todas as leis embutidas no verificador (SHA256).
+ * Qualquer alteração em qualquer schema embutido altera este hash.
+ */
+export function lawsDigest(): string {
+  if (cachedLawsDigest !== null) return cachedLawsDigest;
+  const hasher = crypto.createHash('sha256');
+  for (const name of LAW_NAMES) {
+    hasher.update(name);
+    hasher.update(JSON.stringify(EMBEDDED_SCHEMAS[name]));
+  }
+  cachedLawsDigest = hasher.digest('hex').slice(0, 16);
+  return cachedLawsDigest;
+}
 const ajv = new Ajv({ allErrors: true, strict: false, formats: { date: true, 'date-time': true } });
 
 export interface ValidationResult {
@@ -17,11 +62,13 @@ export interface ValidationResult {
 const compileCache: Record<string, ValidateFunction> = {};
 
 function compile(schemaFile: string): ValidateFunction {
-  if (!compileCache[schemaFile]) {
-    const schema = JSON.parse(fs.readFileSync(path.join(SCHEMA_DIR, schemaFile), 'utf8'));
-    compileCache[schemaFile] = ajv.compile(schema);
-  }
-  return compileCache[schemaFile];
+  const cached = compileCache[schemaFile];
+  if (cached) return cached;
+  const schema = EMBEDDED_SCHEMAS[schemaFile];
+  if (!schema) throw new Error(`unknown schema: ${schemaFile} (conhecidas: ${LAW_NAMES.join(', ')})`);
+  const compiled = ajv.compile(structuredClone(schema));
+  compileCache[schemaFile] = compiled;
+  return compiled;
 }
 
 function schemaNameFromDoc(data: unknown): string | null {
@@ -37,9 +84,78 @@ function ajvErrors(validate: ValidateFunction, data: unknown): string[] {
   return (validate.errors ?? []).map((err) => `${err.instancePath || '/'} ${err.message ?? 'invalid'}`);
 }
 
+// ── Pinning das leis ───────────────────────────────────────────────
+
+/**
+ * Candidatos de diretório para as cópias em disco dos schemas: ao lado do
+ * módulo (interpretador) e ao lado do executável (binário compilado).
+ */
+function schemaDirs(): string[] {
+  return [
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../schemas'),
+    path.join(path.dirname(process.execPath), 'schemas'),
+  ];
+}
+
+/** Diretório com cópias em disco, se algum acompanhar o verificador; senão `null`. */
+function diskSchemaDir(): string | null {
+  for (const dir of schemaDirs()) {
+    try {
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+/**
+ * Leis cujo arquivo em disco divergiu da cópia embutida.
+ *
+ * A cópia embutida é a que o verificador aplica. O disco é só revisável/diffável:
+ * se divergir, alguém editou a lei sem reconstruir o verificador — cenário em que
+ * editar `schemas/*.json` viraria bypass de gate.
+ */
+export function findLawDrift(): string[] {
+  const dir = diskSchemaDir();
+  if (dir === null) return [];
+
+  const drifted: string[] = [];
+  for (const name of LAW_NAMES) {
+    const file = path.join(dir, name);
+    if (!fs.existsSync(file)) {
+      drifted.push(`${name} (ausente no disco)`);
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      drifted.push(`${name} (JSON inválido)`);
+      continue;
+    }
+    if (JSON.stringify(parsed) !== JSON.stringify(EMBEDDED_SCHEMAS[name])) {
+      drifted.push(name);
+    }
+  }
+  return drifted;
+}
+
+/** Aborta quando as leis em disco divergem das embutidas (ver {@link findLawDrift}). */
+export function assertLawsPinned(): void {
+  const drifted = findLawDrift();
+  if (drifted.length === 0) return;
+  console.error(`[pwn] leis embutidas divergem de schemas/ no disco: ${drifted.join(', ')}`);
+  console.error('     A cópia embutida é a que vale. Reconstrua o harness para adotar a edição, ou reverta o arquivo.');
+  process.exit(1);
+}
+
+// ── Validação ──────────────────────────────────────────────────────
+
 /**
  * Validate a single normative document against its JSON Schema (when declared).
- * Documents without a declared schema are checked only for parseability.
+ * Documents without a declared schema are checked only for parseability; a
+ * declared schema that the verifier does not carry is an error, never a pass.
  */
 export function validateNormativeDocument(filePath: string, rootDir: string = process.cwd()): ValidationResult {
   const absolute = path.resolve(rootDir, filePath);
@@ -57,12 +173,17 @@ export function validateNormativeDocument(filePath: string, rootDir: string = pr
   }
 
   const schemaFile = schemaNameFromDoc(data);
-  if (schemaFile && fs.existsSync(path.join(SCHEMA_DIR, schemaFile))) {
-    const errors = ajvErrors(compile(schemaFile), data);
-    return { valid: errors.length === 0, file: relative, errors };
+  if (!schemaFile) return { valid: true, file: relative, errors: [] };
+  if (!(schemaFile in EMBEDDED_SCHEMAS)) {
+    return {
+      valid: false,
+      file: relative,
+      errors: [`Schema não verificável: ${schemaFile} (conhecidas: ${LAW_NAMES.join(', ')})`],
+    };
   }
 
-  return { valid: true, file: relative, errors: [] };
+  const errors = ajvErrors(compile(schemaFile), data);
+  return { valid: errors.length === 0, file: relative, errors };
 }
 
 /**

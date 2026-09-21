@@ -133,10 +133,16 @@ export class PolicyEngine {
       network: overrides?.network ?? { ...DEFAULT_NETWORK_POLICY },
     };
   }
+  get networkPolicy(): Readonly<NetworkPolicy> {
+    return this.config.network;
+  }
+
+  get policyConfig(): Readonly<PolicyConfig> {
+    return this.config;
+  }
 
   /**
    * Evaluate a proposed operation against the policy.
-   * Returns ALLOW or DENY with a human-readable reason.
    */
   evaluate(operation: AgentOperation): PolicyDecision {
     switch (operation.type) {

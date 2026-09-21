@@ -7,13 +7,13 @@ import {
   closeSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { isDirectEntry } from './entry-guard.js';
 
 export const WORK_MANIFEST_VERSION = 1;
 export const WORK_ID = /^\d{4}$/;
@@ -451,5 +451,4 @@ export function main(argv: string[] = process.argv.slice(2)): number {
   }
 }
 
-const currentFile = fileURLToPath(import.meta.url);
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(currentFile)) process.exitCode = main();
+if (isDirectEntry(import.meta.url)) process.exitCode = main();
