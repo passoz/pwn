@@ -21,7 +21,7 @@ test('scaffoldWork cria uma cadeia completa e válida nos schemas', () => {
   try {
     const result = scaffoldWork({ rootDir: root, title: 'Módulo de Pagamentos PIX' });
     assert.equal(result.workId, '0001');
-    const workDir = path.join(root, '.piwerness', 'work', '0001');
+    const workDir = path.join(root, '.pwn', 'work', '0001');
 
     for (const file of ['discovery.json', 'requirements.json', 'prd.json', 'spec.json', 'plan.json', 'CTR-001.json', 'traceability-matrix.json']) {
       assert.ok(existsSync(path.join(workDir, file)), `faltou ${file}`);
@@ -42,7 +42,7 @@ test('scaffoldWork passa nos 5 gates e no validador v3 do plano', () => {
   const root = fixture();
   try {
     scaffoldWork({ rootDir: root, title: 'Módulo de Pagamentos PIX' });
-    const workDir = path.join(root, '.piwerness', 'work', '0001');
+    const workDir = path.join(root, '.pwn', 'work', '0001');
 
     const gates = [
       evaluateGateDiscReq('0001', workDir),

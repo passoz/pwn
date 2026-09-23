@@ -86,7 +86,7 @@
     {
       "id": "T-003",
       "title": "Marco 3 — Baseline de artefatos e revisões de Work (Fase 3)",
-      "description": "Estabelecer artefatos sob .piwerness/work/<work-id>/, matriz de rastreabilidade e gates determinísticos GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC",
+      "description": "Estabelecer artefatos sob .pwn/work/<work-id>/, matriz de rastreabilidade e gates determinísticos GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC",
       "status": "done",
       "priority": "high",
       "agent": "strong",

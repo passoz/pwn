@@ -1,9 +1,9 @@
-# Plano de Ajuste — Piwerness (pwn)
+# Plano de Ajuste — PWN (pwn)
 
 **Data:** 2026-09-10
-**Versão avaliada:** 0.1.0 (`/home/passoz/dev/piwerness`)
-**Origem do diagnóstico:** teste ponta-a-ponta em projeto real (`pwn-ledger`, em `/home/passoz/dev/teste-piwerness`)
-**Evidências:** `teste-piwerness/BENCHMARK.md`, `teste-piwerness/bench/phase-timings.tsv`, `teste-piwerness/.todo/evidence/0001/`, `teste-piwerness/.todo/attestations/0001/`
+**Versão avaliada:** 0.1.0 (`/home/passoz/dev/pwn`)
+**Origem do diagnóstico:** teste ponta-a-ponta em projeto real (`pwn-ledger`, em `/home/passoz/dev/teste-pwn`)
+**Evidências:** `teste-pwn/BENCHMARK.md`, `teste-pwn/bench/phase-timings.tsv`, `teste-pwn/.todo/evidence/0001/`, `teste-pwn/.todo/attestations/0001/`
 
 ---
 
@@ -18,7 +18,7 @@ sobre um app real, com 9 testes verdes e 3 tasks auditadas com evidência hash-e
 | **Enforcement em runtime** (sandbox, diff guard, policy, budget, tool API) | **Implementado, não integrado.** ~1.587 linhas sem chamador em produção |
 | **Produto/operacional** (distribuição, validação, scripts, docs) | **Imaturo.** Duas trilhas de artefatos, entrypoints quebrados, stubs que reportam sucesso |
 
-**Conclusão:** hoje o Piwerness entrega o *pipeline documental auditável*. A promessa de
+**Conclusão:** hoje o PWN entrega o *pipeline documental auditável*. A promessa de
 *pipeline executável com isolamento e diff guard* ainda não está ligada ao caminho de execução.
 
 Progresso medido: **44 invocações `pwn` em 6.675 ms**. Custo de auditoria TDD ≈ 2,2 s por Work de 3 tasks.
@@ -110,9 +110,9 @@ barato e honesto do que reescrever todos os specifiers de import.
 
 | ID | Causa-raiz | Mudança | Aceite | Esf. |
 |---|---|---|---|---|
-| **F1.1** | Duas trilhas concorrentes: `.piwerness/work/<id>/plan.json` (consumida pelos gates) e `.todo/NNNN-tasks.md` (consumida por plan/status/audit). O operador mantém o mesmo plano em dois formatos à mão | Novo `src/core/plan-renderer.ts`: `plan.json` + `CTR-*.json` → markdown v3 determinístico. `pwn work plan` passa a **gerar e validar** num único passo, idempotente | O `plan.json` do Work 0001 regenera o markdown atual sem diff; `pwn work plan` continua PASS; segunda execução é no-op | **L** (3-5d) |
+| **F1.1** | Duas trilhas concorrentes: `.pwn/work/<id>/plan.json` (consumida pelos gates) e `.todo/NNNN-tasks.md` (consumida por plan/status/audit). O operador mantém o mesmo plano em dois formatos à mão | Novo `src/core/plan-renderer.ts`: `plan.json` + `CTR-*.json` → markdown v3 determinístico. `pwn work plan` passa a **gerar e validar** num único passo, idempotente | O `plan.json` do Work 0001 regenera o markdown atual sem diff; `pwn work plan` continua PASS; segunda execução é no-op | **L** (3-5d) |
 | **F1.2** | `task_evidence.js` (`taskAuditRequirements`) lê o markdown para descobrir a contagem de ACs | `work audit` deriva ACs/task de `plan.json` | `candidate` passa sem planilha manual mantida em paralelo | M |
-| **F1.3** | `src/core/validator.ts:65-70` só checa *presença* de campos; `package.json` não tem dependências; README alega "JSON Schema Draft 2020-12" | Validador real (ajv) contra `schemas/*.schema.json` + `pwn validate --work NNNN` sobre `.piwerness/work/**` | `prd.json` inválido reprova apontando o campo e o caminho | M |
+| **F1.3** | `src/core/validator.ts:65-70` só checa *presença* de campos; `package.json` não tem dependências; README alega "JSON Schema Draft 2020-12" | Validador real (ajv) contra `schemas/*.schema.json` + `pwn validate --work NNNN` sobre `.pwn/work/**` | `prd.json` inválido reprova apontando o campo e o caminho | M |
 | **F1.4** | Nada detecta drift entre as trilhas | `work run` compara hash do markdown renderizado contra `plan.json` | Editar o markdown à mão → `work run` bloqueia com exit 1 | S |
 
 ---
@@ -123,7 +123,7 @@ barato e honesto do que reescrever todos os specifiers de import.
 
 | ID | Causa-raiz | Mudança | Aceite | Esf. |
 |---|---|---|---|---|
-| **F2.1** | `src/commands/work.ts:146` e `src/commands/task.ts:11` chamam só `unattended_exec.js` (wrapper de timeout). `initRunContext` (`runner.ts:91`) não tem chamador | Novo `src/core/run-orchestrator.ts`: `initRunContext` → execução mediada → `verifyDiff` → `finalizeRun` | `work run` cria `.piwerness/sandboxes/RUN-*` e remove ao final | **L** |
+| **F2.1** | `src/commands/work.ts:146` e `src/commands/task.ts:11` chamam só `unattended_exec.js` (wrapper de timeout). `initRunContext` (`runner.ts:91`) não tem chamador | Novo `src/core/run-orchestrator.ts`: `initRunContext` → execução mediada → `verifyDiff` → `finalizeRun` | `work run` cria `.pwn/sandboxes/RUN-*` e remove ao final | **L** |
 | **F2.2** | `createDefaultContractV4` só aparece em `src/commands/task.ts:24`; o run não carrega `CTR-*.json` | Loader único `loadTaskContract(workId, taskId)` — **compartilhado com F3.1** | Execução usa risco L2 e `tdd-strict` do `CTR-001.json` | M |
 | **F2.3** | `checkDiffAgainstContract` (`contract-guard.ts:68`) nunca é invocado | `git diff --name-only` no sandbox após execução → check → rollback + exit 1 + enqueue | Violar `write_deny` (ex.: `package.json`) → bloqueio e arquivo revertido | M |
 | **F2.4** | `ToolAPI` (`tool-api.ts:114`, 461 l.) e `BudgetController.checkBudget` (`contract-engine.ts:254`) inertes | Mediar shell/filesystem pelo ToolAPI; contabilizar chamadas e aplicar budget | Estourar `max_shell_executions` → run abortada com motivo explícito | **L** |
@@ -158,8 +158,8 @@ barato e honesto do que reescrever todos os specifiers de import.
 
 | ID | Causa-raiz | Mudança | Aceite | Esf. |
 |---|---|---|---|---|
-| **F4.1** | `packs/software-engineering/install.sh` só cria symlinks de skills/prompts do Pi; os scripts do harness não são instalados | `pwn init [--dir]`: vendoriza em `.piwerness/harness/` (fora do scan do `bun test`), renomeia `validate_system_spec.js` (casa com `*_spec.js` do Bun e faz `bun test` sair com exit 2) e cria `bunfig.toml` com `[test] root` | Projeto novo roda `work run/audit` sem symlink nem workaround manual | M |
-| **F4.2** | `src/core/runner.ts:43` resolve `<cwd>/packs/software-engineering/scripts` | Ordem de resolução: `.piwerness/harness/scripts` → instalação do CLI → `<cwd>/packs` (legado) + erro acionável | Remover `packs/` do projeto-alvo e continuar funcionando | M |
+| **F4.1** | `packs/software-engineering/install.sh` só cria symlinks de skills/prompts do Pi; os scripts do harness não são instalados | `pwn init [--dir]`: vendoriza em `.pwn/harness/` (fora do scan do `bun test`), renomeia `validate_system_spec.js` (casa com `*_spec.js` do Bun e faz `bun test` sair com exit 2) e cria `bunfig.toml` com `[test] root` | Projeto novo roda `work run/audit` sem symlink nem workaround manual | M |
+| **F4.2** | `src/core/runner.ts:43` resolve `<cwd>/packs/software-engineering/scripts` | Ordem de resolução: `.pwn/harness/scripts` → instalação do CLI → `<cwd>/packs` (legado) + erro acionável | Remover `packs/` do projeto-alvo e continuar funcionando | M |
 | **F4.3** | `src/core/validator.ts:65-70` valida o repo do framework, não o projeto | Separar `pwn self-check` (framework) de `pwn validate` (normativos do projeto) | `pwn validate` no projeto-alvo não reporta 0/4 | S |
 
 ---
@@ -203,11 +203,11 @@ graph TD
 
 ## 11. Critério de aceite do plano
 
-Repetir o teste em `teste-piwerness` e obter os achados **invertidos**:
+Repetir o teste em `teste-pwn` e obter os achados **invertidos**:
 
 | Achado | Estado atual | Estado alvo | Como verificar |
 |---|---|---|---|
-| A4 | `package.json` violado, exit 0, sem `.piwerness/sandboxes/` | Bloqueio + rollback + enqueue | `work run -- bash -c '… >> package.json; bun test'` → exit 1 e arquivo restaurado |
+| A4 | `package.json` violado, exit 0, sem `.pwn/sandboxes/` | Bloqueio + rollback + enqueue | `work run -- bash -c '… >> package.json; bun test'` → exit 1 e arquivo restaurado |
 | A5 | Capsule L1 / `src/**` / regression-guarded | L2 / `src/ledger.ts` / tdd-strict | `diff` entre capsule e `CTR-001.json` → vazio |
 | A2 | 210 pass / 5 fail | 215 pass / 0 fail | `bun test` da raiz |
 | A3 | symlink + `bunfig` + `packs/` obrigatório | `pwn init` resolve | Projeto novo sem `packs/` roda `work run` |
@@ -243,7 +243,7 @@ Repetir o teste em `teste-piwerness` e obter os achados **invertidos**:
 
 Cada fase vira um Work real no próprio repositório, reusando a cadeia já validada
 (`work init` → `spec.json` → `plan.json` → `CTR-*` → gates → auditoria TDD com mutation check).
-Os gates do Piwerness passam a julgar as correções do Piwerness.
+Os gates do PWN passam a julgar as correções do PWN.
 
 | Work | Escopo | Depende de |
 |---|---|---|
@@ -315,8 +315,8 @@ suspensão L4 retornava exit 0; `work contract` era um alias enganoso do validad
 ## Apêndice — Reprodução do teste que originou o diagnóstico
 
 ```bash
-cd /home/passoz/dev/teste-piwerness
-PWN=/home/passoz/dev/piwerness/bin/pwn.js
+cd /home/passoz/dev/teste-pwn
+PWN=/home/passoz/dev/pwn/bin/pwn.js
 
 # cadeia de governanca
 bun "$PWN" work gate GATE-DISC-REQ --work 0001
@@ -329,15 +329,15 @@ cp package.json /tmp/pkg.bak
 bun "$PWN" work run --no-gate --work 0001 --timeout-seconds 60 \
   -- bash -c 'printf "\n// VIOLACAO\n" >> package.json; bun test'
 git status --porcelain          # package.json aparece modificado
-ls .piwerness/sandboxes         # nao existe
+ls .pwn/sandboxes         # nao existe
 cp /tmp/pkg.bak package.json
 
 # prova de que a capsule ignora o contrato congelado (achado A5)
 bun "$PWN" task capsule T-001 0001   # L1 / src/** / regression-guarded
-cat .piwerness/work/0001/CTR-001.json # L2 / tdd-strict / src/ledger.ts
+cat .pwn/work/0001/CTR-001.json # L2 / tdd-strict / src/ledger.ts
 
 # baseline do proprio framework (achado A1)
-cd /home/passoz/dev/piwerness && npm run validate   # ERR_MODULE_NOT_FOUND
+cd /home/passoz/dev/pwn && npm run validate   # ERR_MODULE_NOT_FOUND
 bun test                                            # 210 pass / 5 fail
 cd packs/software-engineering && bun test           # 5 fail -> desaparecem no cwd correto
 ```

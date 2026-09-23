@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://piwerness.dev/schemas/prd.schema.json",
-  "title": "Piwerness PRD Schema",
+  "$id": "https://pwn.dev/schemas/prd.schema.json",
+  "title": "PWN PRD Schema",
   "description": "Schema para Product Requirements Documents — documentos normativos validáveis",
   "type": "object",
   "required": ["meta", "id", "title", "status", "problem", "solution", "decisions"],

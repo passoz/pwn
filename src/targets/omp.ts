@@ -19,8 +19,8 @@ export function materializeOmpTarget(outDir: string, context?: TargetContractCon
   // 1. Generate omp.json
   const ompConfig = {
     version: "1.0",
-    name: "piwerness-omp",
-    systemPrompt: `Você é um assistente omp operando sob contratos de engenharia do Piwerness.${scopeBlock}`,
+    name: "pwn-omp",
+    systemPrompt: `Você é um assistente omp operando sob contratos de engenharia do PWN.${scopeBlock}`,
     capabilities: {
       toolCalling: false,
       contractV4: false

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://piwerness.dev/schemas/plan.schema.json",
-  "title": "Piwerness Plan Schema",
+  "$id": "https://pwn.dev/schemas/plan.schema.json",
+  "title": "PWN Plan Schema",
   "description": "Plano canonico de tarefas de um Work — fonte unica renderizada para o markdown v3",
   "type": "object",
   "required": ["work_id", "title", "components", "global_gates", "tasks"],

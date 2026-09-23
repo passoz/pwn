@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "piwerness",
+      "name": "pwn",
       "dependencies": {
         "ajv": "^8.20.0",
       },

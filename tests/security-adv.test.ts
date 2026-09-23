@@ -1,5 +1,5 @@
 /**
- * Adversarial Security Test Suite — Piwerness Enforcement
+ * Adversarial Security Test Suite — PWN Enforcement
  *
  * Based on docs/SECURITY-TEST-PLAN.md
  *
@@ -98,21 +98,21 @@ test('§3.1 FS: src/foo/../../secret.txt é DENY', () => {
 
 // ── §3.2 Caminho Absoluto ────────────────────────────────────────────
 
-test('§3.2 FS: /etc/piwerness-test é DENY', () => {
+test('§3.2 FS: /etc/pwn-test é DENY', () => {
   const { dir, tools } = makeSandbox();
   try {
-    const result = tools.writeFile('/etc/piwerness-test', 'owned');
+    const result = tools.writeFile('/etc/pwn-test', 'owned');
     assert.equal(result.success, false);
-    assert.ok(!existsSync('/etc/piwerness-test'));
+    assert.ok(!existsSync('/etc/pwn-test'));
   } finally { cleanup(dir); }
 });
 
-test('§3.2 FS: /tmp/piwerness-test é DENY', () => {
+test('§3.2 FS: /tmp/pwn-test é DENY', () => {
   const { dir, tools } = makeSandbox();
   try {
-    const result = tools.writeFile('/tmp/piwerness-test-sec', 'owned');
+    const result = tools.writeFile('/tmp/pwn-test-sec', 'owned');
     assert.equal(result.success, false);
-    assert.ok(!existsSync('/tmp/piwerness-test-sec'));
+    assert.ok(!existsSync('/tmp/pwn-test-sec'));
   } finally { cleanup(dir); }
 });
 
@@ -721,5 +721,58 @@ test('§CONCURRENCY: duas operações simultâneas — política aplicada a amba
     assert.equal(results[1].success, false);
     assert.ok(existsSync(path.join(dir, 'src', 'ok.ts')));
     assert.ok(!existsSync(path.join(dir, 'outside.ts')));
+  } finally { cleanup(dir); }
+});
+
+// ── §3.5 Symlink em diretório-pai (criação de arquivo novo) ──────────
+
+test('§3.5 FS: symlink no DIRETÓRIO-PAI não permite criar arquivo fora do sandbox', () => {
+  const { dir, tools } = makeSandbox();
+  try {
+    // O diretório-pai é um symlink; o arquivo de destino ainda NÃO existe.
+    const outsideDir = mkdtempSync(path.join(tmpdir(), 'pwn-parent-escape-'));
+    symlinkSync(outsideDir, path.join(dir, 'src', 'linked'));
+
+    const write = tools.writeFile('src/linked/newfile.txt', 'owned');
+    assert.equal(write.success, false, 'criação através de diretório-pai symlinkado deve ser DENY');
+    assert.ok(!existsSync(path.join(outsideDir, 'newfile.txt')), 'arquivo NÃO pode ser criado fora do sandbox');
+
+    const dirResult = tools.createDir('src/linked/newdir');
+    assert.equal(dirResult.success, false, 'mkdir através de diretório-pai symlinkado deve ser DENY');
+    assert.ok(!existsSync(path.join(outsideDir, 'newdir')));
+
+    // Rename para dentro do diretório symlinkado também precisa ser negado.
+    writeFileSync(path.join(dir, 'src', 'orig.txt'), 'x', 'utf8');
+    const rename = tools.renameFile('src/orig.txt', 'src/linked/moved.txt');
+    assert.equal(rename.success, false, 'rename para diretório-pai symlinkado deve ser DENY');
+    assert.ok(!existsSync(path.join(outsideDir, 'moved.txt')));
+
+    rmSync(outsideDir, { recursive: true, force: true });
+  } finally { cleanup(dir); }
+});
+
+test('§3.5 FS: escrita válida dentro do sandbox continua permitida', () => {
+  const { dir, tools } = makeSandbox();
+  try {
+    const result = tools.writeFile('src/ok.txt', 'conteudo');
+    assert.equal(result.success, true);
+    assert.equal(fs.readFileSync(path.join(dir, 'src', 'ok.txt'), 'utf8'), 'conteudo');
+  } finally { cleanup(dir); }
+});
+
+test('§3.5 FS: symlink PENDENTE na folha não cria arquivo fora do sandbox', () => {
+  const { dir, tools } = makeSandbox(['**'], []);
+  try {
+    // Alvo do link ainda não existe: `existsSync` (que segue links) diria "não existe"
+    // e a escrita criaria o destino do link fora do sandbox.
+    const outsideTarget = path.join(dir, '..', `pwn-dangling-${process.pid}.txt`);
+    rmSync(outsideTarget, { force: true });
+    symlinkSync(outsideTarget, path.join(dir, 'dangling'));
+
+    const result = tools.writeFile('dangling', 'owned');
+    assert.equal(result.success, false, 'symlink pendente deve ser recusado');
+    assert.ok(!existsSync(outsideTarget), 'destino do link NÃO pode ser criado fora do sandbox');
+
+    rmSync(outsideTarget, { force: true });
   } finally { cleanup(dir); }
 });

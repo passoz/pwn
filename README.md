@@ -1,4 +1,4 @@
-# 🛡️ Piwerness (`pwn`)
+# 🛡️ PWN — Policy Work Norms (`pwn`)
 
 > **Contract-Governed Agent Harness CLI** — Harness autônomo governado por contratos normativos em JSON, validação determinística de portões (*gates*), execução isolada em sandboxes Git Worktree e suporte multialvo de runtimes (Pi, OpenCode, omp).
 
@@ -11,7 +11,7 @@
 
 ## 📌 Visão Geral
 
-O **Piwerness** (`pwn`) é uma plataforma de engenharia de software autônoma e um harness de agentes de IA governado por **contratos formais e determinísticos**. Ele substitui prompts genéricos por pipelines orientadas a artefatos e contratos rígidos de 7 dimensões, garantindo que executores de IA não violem o escopo, a arquitetura ou os invariantes do projeto.
+O **PWN** (`pwn`) é uma plataforma de engenharia de software autônoma e um harness de agentes de IA governado por **contratos formais e determinísticos**. Ele substitui prompts genéricos por pipelines orientadas a artefatos e contratos rígidos de 7 dimensões, garantindo que executores de IA não violem o escopo, a arquitetura ou os invariantes do projeto.
 
 ### 🌟 Principais Recursos
 
@@ -20,19 +20,19 @@ O **Piwerness** (`pwn`) é uma plataforma de engenharia de software autônoma e 
 - **Diff Guard (Guarda Mecânica de Escrita):** Bloqueio automático por `git diff` caso o executor modifique arquivos fora da `write_allow` ou dentro de `write_deny`.
 - **Portões Determinísticos (Gates):** Transições de fases (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`) avaliadas nativamente via TypeScript.
 - **Roteamento por Papéis e Escalação:** Roteamento econômico de agentes (`cheap` para execução rápida, `strong` para raciocínio complexo, `plan` para planejamento, `review` para auditoria).
-- **Sandboxes em Git Worktree:** Isolamento de execução de tarefas sob `.piwerness/sandboxes/<run-id>` sem sujar o branch de trabalho principal.
+- **Sandboxes em Git Worktree:** Isolamento de execução de tarefas sob `.pwn/sandboxes/<run-id>` sem sujar o branch de trabalho principal.
 - **Fila Assíncrona AFK (`queue/review/`):** Suspensão graciosa de tarefas de alto risco (L4) ou escaladas para aprovação/rejeição humana via CLI.
 - **Matriz de Capacidades Multialvo:** Adapters nativos de materialização para os runtimes **Pi**, **OpenCode** e **omp** sem degradação silenciosa.
 - **Editor Visual (`pwn-gui`):** Utilitário web standalone em `file://` (`tools/pipeline-editor/index.html`) para edição e visualização de pipelines em tempo real.
-- **Telemetria & Teach Skills:** Métrica de tokens/custo em JSONL (`.piwerness/metrics.jsonl`) com recomendações de otimização de routing e aprendizado contínuo (`.piwerness/learnings.json`).
+- **Telemetria & Teach Skills:** Métrica de tokens/custo em JSONL (`.pwn/metrics.jsonl`) com recomendações de otimização de routing e aprendizado contínuo (`.pwn/learnings.json`).
 - **Relatório Completo de Gates (`gate --all`):** Roda os 5 gates numa passada e devolve todos os findings agrupados, em vez de parar no primeiro bloqueio.
-- **Cache de Veredicto de Gate:** Verdicts cacheados por hash dos inputs (`.piwerness/gate-cache/`), versionados por `gate_version`/`harness_version` — cache de outra versão nunca é servido.
+- **Cache de Veredicto de Gate:** Verdicts cacheados por hash dos inputs (`.pwn/gate-cache/`), versionados por `gate_version`/`harness_version` — cache de outra versão nunca é servido.
 - **Pré-voo de Execução (`run --dry-run`):** Lista *todos* os impedimentos (gates + contratos) antes de criar sandbox ou executar qualquer comando.
 - **Cobertura do Work (`status --coverage`):** Relatório determinístico requisitos → capabilities → tasks → contratos → ACs, com exit code por lacuna.
 - **Mutation Testing dos Gates (`self-check --mutate`):** Quebra artefatos de propósito e verifica se o gate correspondente realmente bloqueia — revela gates decorativos.
 - **Auditoria TDD com Exit Codes por Classe:** `2` = **incompleto** (falta evidência) distinto de `1` = **violação**, para automação AFK não confundir os dois.
 - **`--expect-literal`:** Exige que o texto do `--expect` do RED exista literalmente nos arquivos de teste congelados, eliminando falso RED/GREEN por substring acidental.
-- **Política Declarativa (`.piwerness/policy.json`):** Keywords de risco, thresholds, allowlist de shell e domínios de rede num arquivo revisável e diffável, validado por schema (opcional; sem ele valem os defaults).
+- **Política Declarativa (`.pwn/policy.json`):** Keywords de risco, thresholds, allowlist de shell e domínios de rede num arquivo revisável e diffável, validado por schema (opcional; sem ele valem os defaults).
 - **Tetos Declarados nos Schemas:** `complexity` como enum fechado e limites de itens (ACs, steps, componentes, tasks) — o schema recusa e força decompor.
 - **Atestação Versionada:** A atestação de aceitação grava `harness_version`/`gate_version` (`version: 2`), e `readAttestation` informa compatibilidade — evidência antiga nunca é aceita em silêncio.
 
@@ -49,8 +49,8 @@ O **Piwerness** (`pwn`) é uma plataforma de engenharia de software autônoma e 
 
 ```bash
 # Clonar o repositório
-git clone https://github.com/seu-usuario/piwerness.git
-cd piwerness
+git clone https://github.com/passoz/pwn.git
+cd pwn
 
 # Runtime obrigatório: Bun (>= 1.4). Node não é suportado.
 bun --version
@@ -81,6 +81,12 @@ bun run check
 > suspenso. A separação entre `1` e `2` permite que automação distinga "procedimento errado"
 > de "procedimento ainda não concluído".
 
+> **Comando após `--` é obrigatório em `verify`, `green` e `candidate`:** o comando RED
+> gravado em `.todo/evidence/<work>/state/<task>.json` **nunca** é executado por conta
+> própria — ele serve apenas de conferência cruzada. O estado é um artefato do repositório
+> e, num repo hostil, executá-lo equivaleria a execução arbitrária de código. Exigir o
+> comando na CLI mantém o controle com o operador.
+
 ---
 
 ## 🛠️ Guia de Comandos do CLI (`pwn`)
@@ -102,7 +108,7 @@ bun bin/pwn.js work gate GATE-DISC-REQ         # Executa gate no último Work ID
 bun bin/pwn.js work gate GATE-REQ-PRD --work 0001
 bun bin/pwn.js work gate --all --work 0001     # Roda os 5 gates e devolve TODOS os findings numa passada
 bun bin/pwn.js work gate --no-cache --work 0001 # Ignora leitura/escrita do cache de veredictos
-bun bin/pwn.js work gate --clear-cache         # Remove o cache de veredictos (.piwerness/gate-cache/)
+bun bin/pwn.js work gate --clear-cache         # Remove o cache de veredictos (.pwn/gate-cache/)
 bun bin/pwn.js work specify --work 0001        # Especifica mudanças no baseline (valida o prompt-change.md)
 bun bin/pwn.js work contract --work 0001       # Valida os contratos V4 congelados (CTR-*.json) do Work
 bun bin/pwn.js work scaffold --title "..."     # Cria um Work novo com cadeia completa e válida (discovery→prd→spec→plan+CTR)
@@ -117,9 +123,11 @@ bun bin/pwn.js work run --dry-run --work 0001 -- bun test  # Pré-voo: lista TOD
 bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test   # Exige a cadeia de 5 gates + executa em sandbox com diff guard
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test    # Pula gates; enforcement continua
 bun bin/pwn.js work run --no-isolation --work 0001 -- bun test          # Pula sandbox; política continua (escape registrado em metrics.jsonl)
-bun bin/pwn.js work audit --work 0001 --task 1.1                        # Verifica evidência TDD (assume verify)
+bun bin/pwn.js work audit --work 0001 --task 1.1 -- bun test            # Verifica evidência TDD (assume verify; comando obrigatório após --)
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." -- bun test   # Registra RED via CLI
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "..." --expect-literal -- bun test  # Exige --expect literal nos testes congelados
+bun bin/pwn.js work audit green --work 0001 --task 1.1 -- bun test      # Registra GREEN (comando deve ser idêntico ao do RED)
+bun bin/pwn.js work audit candidate --work 0001 --task 1.1 -- bun test  # Gera a atestação de aceitação
 
 # Cápsula de Contexto de Tarefas (contrato V4 congelado)
 bun bin/pwn.js task capsule 1.1 0001           # Lê o CTR congelado (não gera default genérico)
@@ -157,13 +165,13 @@ PWN_DIR=../meu-projeto ./scripts/prepare-greenfield-work.sh "Nova feature"
 ```
 
 > Os scripts só produzem um **esqueleto** com placeholders; o plano
-> (`.piwerness/work/<id>/plan.json`) precisa ser detalhado antes de implementar. Para adequar um
+> (`.pwn/work/<id>/plan.json`) precisa ser detalhado antes de implementar. Para adequar um
 > projeto que já usa o layout v3 (`.work/`, `.todo/`, `.prompts/`, `.sources/`, `.specs/`) ao
-> piwerness, use `pwn work import --all --gate-chain`.
+> pwn, use `pwn work import --all --gate-chain`.
 
 ---
 
-## ⚙️ Política Declarativa (`.piwerness/policy.json`)
+## ⚙️ Política Declarativa (`.pwn/policy.json`)
 
 Constantes de decisão ficam num arquivo revisável e diffável, separadas do motor que as aplica. O arquivo é **opcional**: sem ele valem os defaults embutidos (comportamento idêntico ao anterior).
 
@@ -190,7 +198,7 @@ Validado contra `schemas/policy.schema.json`; um arquivo inválido gera aviso e 
 |---|---|
 | `pwn work gate --all` | Roda os 5 gates numa passada e agrupa **todos** os findings (em vez de parar no primeiro bloqueio) |
 | `pwn work gate <GATE>` | Avalia um gate; usa cache por hash dos inputs (mostra `(cache)` no hit); `--no-cache` desliga |
-| `pwn work gate --clear-cache` | Limpa `.piwerness/gate-cache/` |
+| `pwn work gate --clear-cache` | Limpa `.pwn/gate-cache/` |
 | `pwn work run --dry-run` | Lista **todos** os impedimentos (gates + contratos) sem criar sandbox nem executar |
 | `pwn work status --coverage` | Cobertura requisitos → capabilities → tasks → contratos → ACs, com exit code por lacuna |
 | `pwn self-check --mutate` | Mutation testing dos gates: quebra artefatos de propósito e verifica se o gate bloqueia |
@@ -201,7 +209,7 @@ Validado contra `schemas/policy.schema.json`; um arquivo inválido gera aviso e 
 
 ## 🎨 Editor Visual de Pipelines (`pwn-gui`)
 
-O Piwerness inclui um editor visual de pipelines autocontido em HTML/CSS/JS que funciona 100% offline via `file://`:
+O PWN inclui um editor visual de pipelines autocontido em HTML/CSS/JS que funciona 100% offline via `file://`:
 
 - **Arquivo:** `tools/pipeline-editor/index.html`
 - **Recursos:** Edição JSON dual-pane, renderização gráfica de estágios com badges de portões e papéis, validação em tempo real e exportação.
@@ -219,7 +227,7 @@ open tools/pipeline-editor/index.html
 ## 📁 Estrutura do Repositório
 
 ```
-piwerness/
+pwn/
 ├── bin/                       # Binário do CLI (pwn.js)
 ├── src/
 │   ├── cli.ts                 # Ponto de entrada do CLI

@@ -12,7 +12,7 @@ function run(cwd: string, args: string[]) {
 }
 
 function makeWork(cwd: string, workId: string, files: Record<string, unknown>) {
-  const dir = path.join(cwd, '.piwerness', 'work', workId);
+  const dir = path.join(cwd, '.pwn', 'work', workId);
   mkdirSync(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(path.join(dir, name), `${JSON.stringify(content, null, 2)}\n`, 'utf8');

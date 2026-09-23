@@ -41,7 +41,7 @@ function sampleOutput(gate: string, inputVersions: Record<string, string>): Gate
 }
 
 function cacheFilePath(workDir: string, gate: string, inputVersions: Record<string, string>): string {
-  return path.join(workDir, '.piwerness', 'gate-cache', `${gate}-${gateCacheKey(gate, inputVersions)}.json`);
+  return path.join(workDir, '.pwn', 'gate-cache', `${gate}-${gateCacheKey(gate, inputVersions)}.json`);
 }
 
 describe('gate-cache', () => {

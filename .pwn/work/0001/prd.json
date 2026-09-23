@@ -11,7 +11,7 @@
   "status": "draft",
   "scenario": "brownfield",
   "problem": {
-    "statement": "O Work 0001 registra o baseline de artefatos e os gates de revisão do Piwerness, criado antes da padronização dos schemas normativos JSON."
+    "statement": "O Work 0001 registra o baseline de artefatos e os gates de revisão do PWN, criado antes da padronização dos schemas normativos JSON."
   },
   "solution": {
     "statement": "Manter o PRD mínimo do baseline alinhado ao schema formal, preservando a rastreabilidade do requisito FR-001."

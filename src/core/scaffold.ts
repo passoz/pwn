@@ -251,7 +251,7 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
     generated,
     skipped,
     review: [
-      `Revise ${path.join('.piwerness/work', workId, 'plan.json')}: files/implementation_files/test_files são placeholders ("src/", "tests/").`,
+      `Revise ${path.join('.pwn/work', workId, 'plan.json')}: files/implementation_files/test_files são placeholders ("src/", "tests/").`,
       `Revise ${relativeMarkdown}: a task 1.1 é um esqueleto e precisa ser detalhada antes de implementar.`,
       `O risco congelado é ${risk}; ajuste com --risk se a mudança for mais sensível.`,
     ],

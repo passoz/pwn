@@ -141,6 +141,12 @@ interface VerifyArgs {
   action: "verify" | "candidate";
   work: string;
   task: string;
+  /**
+   * Comando do operador (após `--`). Nunca é lido do arquivo de estado: o estado é
+   * um artefato do repositório e, num repo hostil, executá-lo seria execução
+   * arbitrária. O comando persistido serve apenas como conferência cruzada.
+   */
+  command: string[];
 }
 
 type ParsedArgs = BaselineArgs | RedArgs | GreenArgs | CheckArgs | VerifyArgs;
@@ -579,7 +585,7 @@ function green(args: GreenArgs): number {
   const implementationChanges = changed(state.baseline_implementation, implementationNow);
   if (!implementationChanges.length) throw new Error("GREEN invalid: no implementation file changed since baseline");
 
-  const command = args.command?.length ? args.command : redCommand;
+  const command = args.command;
   if (JSON.stringify(command) !== JSON.stringify(redCommand)) throw new Error("GREEN invalid: command differs from RED command");
   const result = run(command);
   const relevant = !args.expect || result.output.includes(args.expect);
@@ -611,7 +617,16 @@ function verify(args: VerifyArgs): number {
   if (!greenImplementation || !greenTests) {
     return reportIncomplete([`GREEN (GREEN evidence not found for task ${args.task})`]);
   }
-  const redCommand = state.red_command!;
+  const redCommand = state.red_command;
+  if (!redCommand || !redCommand.length) {
+    return reportIncomplete([`RED (comando RED não registrado no estado da task ${args.task})`]);
+  }
+  // O comando executado vem do operador (CLI). O comando gravado no estado é
+  // apenas conferência: se divergir, a evidência não corresponde ao que se está
+  // reexecutando — e um estado forjado não consegue executar nada.
+  if (JSON.stringify(args.command) !== JSON.stringify(redCommand)) {
+    throw new Error(`verification invalidated: command differs from RED command (estado: ${shellQuote(redCommand.join(" "))}; operador: ${shellQuote(args.command.join(" "))})`);
+  }
   const redExpect = state.red_expect!;
   const testChanges = changed(greenTests, snapshot(state.test_files));
   const implementationChanges = changed(greenImplementation, snapshot(state.implementation_files));
@@ -622,11 +637,11 @@ function verify(args: VerifyArgs): number {
     throw new Error(`verification invalidated: ${details.join("; ")}`);
   }
 
-  const result = run(redCommand);
+  const result = run(args.command);
   const relevant = !state.green_expect || result.output.includes(state.green_expect);
   const assertionRan = !result.output.includes(redExpect);
   const verdict = result.exitCode === 0 && relevant && assertionRan ? "PASS" : "FAIL";
-  const log = writeLog(args.task, "VERIFY", redCommand, result.exitCode, result.output, verdict);
+  const log = writeLog(args.task, "VERIFY", args.command, result.exitCode, result.output, verdict);
   if (verdict === "FAIL") {
     console.error(`FAIL: current focused test no longer passes; evidence: ${log}`);
     return 1;
@@ -808,10 +823,11 @@ function takeFlag(tokens: string[], name: string): boolean {
 function usage(): void {
   console.error("usage: task_evidence.js baseline --work NNNN|legacy --task ID --implementation PATH... --tests PATH...");
   console.error("       task_evidence.js red --work NNNN|legacy --task ID --expect TEXT [--expect-literal] -- COMMAND...");
-  console.error("       task_evidence.js green --work NNNN|legacy --task ID [--expect TEXT] [-- COMMAND...]");
-  console.error("       task_evidence.js verify --work NNNN|legacy --task ID");
+  console.error("       task_evidence.js green --work NNNN|legacy --task ID [--expect TEXT] -- COMMAND...");
+  console.error("       task_evidence.js verify --work NNNN|legacy --task ID -- COMMAND...");
   console.error("       task_evidence.js check --work NNNN|legacy --task ID --name NAME [--expect TEXT] [--expect-literal] -- COMMAND...");
-  console.error("       task_evidence.js candidate --work NNNN|legacy --task ID");
+  console.error("       task_evidence.js candidate --work NNNN|legacy --task ID -- COMMAND...");
+  console.error("O comando após `--` é sempre obrigatório: o comando RED gravado no estado nunca é executado por conta própria.");
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -840,6 +856,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   if (action === "green") {
     const expect = takeOption(options, "--expect");
     if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
+    if (!command.length) throw new Error("GREEN command is required after --");
     return { action, work, task, expect, command };
   }
   if (action === "check") {
@@ -849,8 +866,13 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
     return { action, work, task, name, expect, expectLiteral, command };
   }
-  if (options.length || command.length) throw new Error(`unexpected arguments: ${[...options, ...command].join(" ")}`);
-  return { action, work, task };
+  if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
+  // verify/candidate também exigem o comando do operador: o estado persistido é
+  // conferência cruzada, nunca a fonte do que vai ser executado.
+  if (!command.length) {
+    throw new Error(`${action.toUpperCase()} command is required after -- (o comando RED gravado no estado não é executado)`);
+  }
+  return { action, work, task, command };
 }
 
 export function main(argv: string[] = process.argv.slice(2)): number {

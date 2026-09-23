@@ -36,10 +36,10 @@ afterEach(() => {
 });
 
 describe('policyFilePath', () => {
-  test('aponta para .piwerness/policy.json', () => {
+  test('aponta para .pwn/policy.json', () => {
     const root = tempRoot();
-    expect(policyFilePath(root)).toBe(path.join(root, '.piwerness', 'policy.json'));
-    expect(policyFilePath()).toBe(path.join(process.cwd(), '.piwerness', 'policy.json'));
+    expect(policyFilePath(root)).toBe(path.join(root, '.pwn', 'policy.json'));
+    expect(policyFilePath()).toBe(path.join(process.cwd(), '.pwn', 'policy.json'));
   });
 });
 
@@ -134,7 +134,7 @@ describe('resolvePolicy — arquivos rejeitados', () => {
       expect(value.resolved.source).toBe('defaults');
       expect(value.resolved.risk_keywords.l3).toContain('auth');
       expect(warnings.length).toBeGreaterThan(0);
-      expect(warnings.every((warning) => warning.includes(path.join('.piwerness', 'policy.json')))).toBe(true);
+      expect(warnings.every((warning) => warning.includes(path.join('.pwn', 'policy.json')))).toBe(true);
     }
   });
 });

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://piwerness.dev/schemas/evidence.schema.json",
-  "title": "Piwerness Evidence Schema",
+  "$id": "https://pwn.dev/schemas/evidence.schema.json",
+  "title": "PWN Evidence Schema",
   "description": "Schema para registros de evidência — provas observáveis de conclusão de tarefas",
   "type": "object",
   "required": ["meta", "task_id", "status", "red", "green"],

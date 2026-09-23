@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { initRunContext, finalizeRun, verifyDiff, saveRunEvents, type RunContext } from './runner.js';
@@ -10,6 +11,8 @@ import { recordMetrics } from './metrics.js';
 import { enqueueReview } from './queue.js';
 import { selectForRisk } from './router.js';
 import { addLearning } from './learnings.js';
+import { invalidScopePattern } from './contract-guard.js';
+import { resolveGitDir } from './sandbox.js';
 
 export interface OrchestratedOptions {
   workId: string;
@@ -34,14 +37,6 @@ export interface OrchestratedResult {
  * Distinct from 0 so unattended automation cannot mistake "never ran" for success.
  */
 export const EXIT_SUSPENDED = 3;
-
-/**
- * Paths injected into the sandbox by the harness itself (see `prepareSandbox`).
- * They are implementation plumbing, not agent writes, and must never be counted
- * by the diff guard. `node_modules` is a symlink, so a `.gitignore` entry like
- * `node_modules/` (the canonical form) does NOT hide it from `git status`.
- */
-const HARNESS_INJECTED_PATHS = new Set(['node_modules', 'bunfig.toml']);
 
 const RISK_ORDER: RiskLevel[] = ['L0', 'L1', 'L2', 'L3', 'L4'];
 
@@ -75,7 +70,7 @@ function buildShellPolicy(contract: TaskContractV4): PolicyConfig['shell'] {
 /**
  * Overrides de política da run (shell/rede).
  *
- * Sem `.piwerness/policy.json` (`source: 'defaults'`) o comportamento histórico é
+ * Sem `.pwn/policy.json` (`source: 'defaults'`) o comportamento histórico é
  * PRESERVADO: allowlist derivada dos comandos de aceitação do contrato e denylist
  * padrão do PolicyEngine. Com arquivo válido, a política declarada o substitui.
  */
@@ -85,41 +80,141 @@ function buildPolicyOverrides(contract: TaskContractV4, rootDir: string): Partia
   return { shell: buildShellPolicy(contract) };
 }
 
-export function modifiedFiles(sandboxPath: string): string[] {
-  const proc = spawnSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+/** Resultado do inventário de mudanças: falha de detecção nunca é confundida com "sem mudanças". */
+export type ModifiedFilesResult = { ok: true; files: string[] } | { ok: false; reason: string };
+
+/** Artefatos criados pelo harness no sandbox: caminho relativo → assinatura em `prepareSandbox`. */
+export type HarnessArtifacts = Record<string, string>;
+
+/**
+ * Inventaria as mudanças dentro do sandbox.
+ *
+ * `expectedGitDir` é o `git rev-parse --absolute-git-dir` registrado na criação do
+ * sandbox. Sem essa âncora, apagar o arquivo `.git` do worktree faz o Git subir a
+ * árvore e resolver o repositório-**pai**: o `git status` então "funciona" e descreve
+ * outro repositório — tipicamente vazio, porque `.pwn/` costuma estar no
+ * `.gitignore` — enquanto a escrita fora de escopo fica invisível. Um `git init`
+ * dentro do sandbox produz o mesmo efeito por outro caminho.
+ *
+ * `injected` são os artefatos que o próprio harness criou (`prepareSandbox`), com a
+ * assinatura de cada um. Um caminho só é desconsiderado enquanto a assinatura
+ * continuar batendo: se o comando substituir o artefato, ele volta ao inventário.
+ */
+export function modifiedFiles(
+  sandboxPath: string,
+  expectedGitDir: string,
+  injected: HarnessArtifacts = {},
+): ModifiedFilesResult {
+  const gitDir = resolveGitDir(sandboxPath);
+  if (!gitDir) {
+    return { ok: false, reason: `worktree ${sandboxPath} não resolve para um repositório Git` };
+  }
+  if (path.resolve(gitDir) !== path.resolve(expectedGitDir)) {
+    return {
+      ok: false,
+      reason: `worktree ${sandboxPath} aponta para ${gitDir}, não para o repositório do sandbox (${expectedGitDir}) — árvore substituída durante a execução`,
+    };
+  }
+
+  // `-z` desativa o C-quoting do Git: um nome de arquivo pode conter `"`, ` -> ` ou
+  // espaços, e interpretar a saída texto livre deixaria a escrita real sem auditoria.
+  const proc = spawnSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
     cwd: sandboxPath,
     encoding: 'utf8',
   });
-  if (proc.status !== 0) return [];
-  return proc.stdout
-    .split('\n')
-    .filter((line) => line.length > 3)
-    .map((line) => {
-      const entry = line.slice(3).trim();
-      // Renames read as "R  old -> new"; the destination is the effective write.
-      const parts = entry.split(' -> ');
-      return parts[parts.length - 1].trim();
-    })
-    .filter((entry) => entry.length > 0 && !HARNESS_INJECTED_PATHS.has(entry));
+  // Fail-closed: um `git status` que falha (worktree corrompido, índice travado, git
+  // ausente) significa que NÃO sabemos o que foi escrito. Devolver uma lista vazia
+  // faria o diff guard aprovar um run que ninguém inspecionou.
+  if (proc.status !== 0) {
+    const detail = (proc.stderr || proc.error?.message || '').trim().split('\n')[0] || `git status exited with code ${proc.status}`;
+    return { ok: false, reason: `inventário de mudanças indisponível em ${sandboxPath}: ${detail}` };
+  }
+
+  const isHarnessArtifact = (filePath: string): boolean =>
+    Object.hasOwn(injected, filePath) && injected[filePath] === pathFingerprint(path.join(sandboxPath, filePath));
+
+  const tokens = (proc.stdout ?? '').split('\0');
+  const files: string[] = [];
+  const record = (filePath: string): void => {
+    if (filePath.length > 0 && !isHarnessArtifact(filePath)) files.push(filePath);
+  };
+
+  for (let i = 0; i < tokens.length; i++) {
+    const entry = tokens[i];
+    if (entry.length < 4) continue;
+    const status = entry.slice(0, 2);
+    // Renomeações/cópias trazem o caminho de origem no token seguinte: mover um
+    // arquivo para fora do escopo também é escrita fora do escopo, e omitir a
+    // origem esconderia a remoção.
+    if (status[0] === 'R' || status[0] === 'C') {
+      record(entry.slice(3));
+      i++;
+      record(tokens[i] ?? '');
+      continue;
+    }
+    record(entry.slice(3));
+  }
+
+  // Ponto cego do `git status`: ele não reporta um caminho ignorado nem a remoção de
+  // uma entrada que nunca foi rastreada — apagar ou trocar um artefato do harness
+  // some do relatório. Reconferir a assinatura de cada um fecha esse buraco.
+  for (const [filePath, signature] of Object.entries(injected)) {
+    if (signature !== pathFingerprint(path.join(sandboxPath, filePath)) && !files.includes(filePath)) {
+      files.push(filePath);
+    }
+  }
+
+  return { ok: true, files };
 }
 
 /**
- * Prepara o worktree sandbox para rodar o comando de aceitação:
+ * Assinatura do que existe no caminho: tipo do inode e, para link simbólico, o alvo;
+ * para arquivo, tamanho + hash do conteúdo. Filtrar artefatos do harness **por nome**
+ * dá passe livre permanente: o comando pode apagar o link criado pelo harness, pôr um
+ * arquivo no lugar e continuar invisível. Comparar a assinatura faz a substituição
+ * aparecer como mudança real.
+ */
+function pathFingerprint(target: string): string {
+  try {
+    const stats = fs.lstatSync(target);
+    if (stats.isSymbolicLink()) return `link:${fs.readlinkSync(target)}`;
+    if (stats.isDirectory()) return 'dir';
+    if (stats.isFile()) {
+      const digest = crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex').slice(0, 16);
+      return `file:${stats.size}:${digest}`;
+    }
+    return 'other';
+  } catch {
+    return 'absent';
+  }
+}
+
+/**
+ * Preparado o worktree sandbox para rodar o comando de aceitação:
  * - linka node_modules do diretório principal (evita reinstalação);
  * - copia bunfig.toml quando não versionado.
+ *
+ * Devolve a assinatura de **cada** caminho que o harness criou, para que o diff
+ * guard desconsidere esses artefatos e somente eles.
  */
-export function prepareSandbox(sandboxPath: string, rootDir: string): void {
+export function prepareSandbox(sandboxPath: string, rootDir: string): HarnessArtifacts {
+  const injected: HarnessArtifacts = {};
+
   const nmSource = path.join(rootDir, 'node_modules');
   const nmTarget = path.join(sandboxPath, 'node_modules');
   if (fs.existsSync(nmSource) && !fs.existsSync(nmTarget)) {
     fs.symlinkSync(nmSource, nmTarget, 'dir');
+    injected.node_modules = pathFingerprint(nmTarget);
   }
 
   const bunfigSource = path.join(rootDir, 'bunfig.toml');
   const bunfigTarget = path.join(sandboxPath, 'bunfig.toml');
   if (fs.existsSync(bunfigSource) && !fs.existsSync(bunfigTarget)) {
     fs.copyFileSync(bunfigSource, bunfigTarget);
+    injected['bunfig.toml'] = pathFingerprint(bunfigTarget);
   }
+
+  return injected;
 }
 
 function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: number, rootDir: string, agentRole: 'cheap' | 'strong' | 'review' | 'plan'): void {
@@ -165,6 +260,17 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     return { status: 1, stdout: '', stderr: `[CONTRACT ERROR] ${contracts.error}`, runId, diffViolations: [], suspended: false };
   }
   const contract = aggregateContracts(options.workId, options.taskId ?? 'WORK', contracts);
+  const invalidPattern = invalidScopePattern(contract.scope_contract.write_allow, contract.scope_contract.write_deny);
+  if (invalidPattern) {
+    return {
+      status: 1,
+      stdout: '',
+      stderr: `[CONTRACT ERROR] padrão de escopo inválido em write_allow/write_deny: ${JSON.stringify(invalidPattern)}`,
+      runId,
+      diffViolations: [],
+      suspended: false,
+    };
+  }
   const agentRole = selectForRisk(contract.risk.level).role;
 
   // F2.5: L4 suspende e enfileira na revisão humana, sem executar.
@@ -233,7 +339,7 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     return { status: 1, stdout: '', stderr: (err as Error).message, runId, diffViolations: [], suspended: false };
   }
 
-  prepareSandbox(ctx.sandbox!.worktreePath, rootDir);
+  const harnessInjected = prepareSandbox(ctx.sandbox!.worktreePath, rootDir);
 
   const execResult = ctx.tools.exec(options.command[0], options.command.slice(1), options.timeoutSeconds * 1000);
 
@@ -248,9 +354,28 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
     stderr = execResult.data?.stderr ?? '';
     status = execResult.data?.status ?? 1;
     success = status === 0;
+  } else {
+    stderr = execResult.error ?? 'Execução negada pela política ou orçamento.';
+  }
 
-    // F2.3: Diff Guard sobre os arquivos modificados dentro do sandbox.
-    const report = verifyDiff(ctx, modifiedFiles(ctx.sandbox!.worktreePath));
+  // F2.3: Diff Guard sobre os arquivos modificados dentro do sandbox.
+  // Roda SEMPRE — inclusive quando o comando falhou, foi negado pela política ou
+  // estourou o timeout: nesses casos o processo já escreveu o que escreveu antes de
+  // morrer, e ignorar a árvore transformaria o guard em no-op para quem falha de propósito.
+  const inventory = modifiedFiles(ctx.sandbox!.worktreePath, ctx.sandbox!.gitDir, harnessInjected);
+  if (!inventory.ok) {
+    diffViolations = [inventory.reason];
+    status = 1;
+    success = false;
+    addLearning({
+      category: 'gotcha',
+      title: 'Diff guard não conseguiu inventariar a árvore do sandbox',
+      description: `Run ${runId}: ${inventory.reason}`,
+      sourceTaskId: options.taskId,
+      tags: ['diff-guard', 'scope'],
+    }, rootDir);
+  } else {
+    const report = verifyDiff(ctx, inventory.files);
     if (!report.passed) {
       diffViolations = report.violations.map((v) => `${v.file}: ${v.reason ?? v.violationType}`);
       status = 1;
@@ -263,12 +388,10 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
         tags: ['diff-guard', 'scope'],
       }, rootDir);
     }
-  } else {
-    stderr = execResult.error ?? 'Execução negada pela política ou orçamento.';
   }
 
   finalizeRun(ctx, success);
-  saveRunEvents(ctx, path.join(rootDir, '.piwerness'));
+  saveRunEvents(ctx, path.join(rootDir, '.pwn'));
   recordMetrics({
     timestamp: new Date().toISOString(),
     runId,

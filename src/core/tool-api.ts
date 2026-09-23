@@ -64,6 +64,35 @@ function detectShellInjection(args: string[]): string | null {
 // ── Path Containment ───────────────────────────────────────────────
 
 /**
+ * Caminho existente mais próximo de `target` (o próprio, se já existir).
+ * Usado para resolver symlinks em diretórios-pai antes de criar um arquivo novo.
+ *
+ * Usa `lstat` (não segue links): um symlink **pendente** conta como entrada
+ * existente, então a resolução falha e a escrita é recusada em vez de criar o
+ * destino do link fora do sandbox.
+ */
+function deepestExistingAncestor(target: string): string {
+  let current = target;
+  for (;;) {
+    try {
+      fs.lstatSync(current);
+      return current;
+    } catch {
+      // não existe (ou não é acessível): sobe um nível
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return current;
+    current = parent;
+  }
+}
+
+/** `true` quando `candidate` está contido em `root` (ambos já resolvidos por realpath). */
+function isContained(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+/**
  * Resolve a relative path within the sandbox and verify it stays inside.
  * Returns the resolved absolute path or throws if the path escapes.
  *
@@ -71,7 +100,9 @@ function detectShellInjection(args: string[]): string | null {
  * 1. Resolve relative to cwd (sandbox)
  * 2. Normalize (collapses ../)
  * 3. Verify the resolved path is within the sandbox
- * 4. If the path exists and is a symlink, resolve to realpath and re-check
+ * 4. Resolve symlinks on the deepest existing ancestor (the path itself, or the
+ *    nearest existing parent directory when the target does not exist yet) and
+ *    re-check containment — a symlinked parent must not let a *new* file escape.
  */
 function resolveSandboxPath(cwd: string, filePath: string): { ok: true; fullPath: string } | { ok: false; reason: string } {
   const resolved = path.resolve(cwd, filePath);
@@ -86,24 +117,25 @@ function resolveSandboxPath(cwd: string, filePath: string): { ok: true; fullPath
     };
   }
 
-  // If the file exists, check for symlink escape
-  if (fs.existsSync(resolved)) {
-    try {
-      const real = fs.realpathSync(resolved);
-      const realRelative = path.relative(normalizedCwd, real);
-      if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
-        return {
-          ok: false,
-          reason: `Symlink escape detectado: "${filePath}" resolve para "${real}" que está fora do sandbox`,
-        };
-      }
-    } catch {
-      // realpath failed — file may be a broken symlink, treat as escape
-      return {
-        ok: false,
-        reason: `Symlink quebrado ou não resolvido: "${filePath}"`,
-      };
-    }
+  // Resolve symlinks: o alvo pode não existir ainda, então resolvemos o ancestral
+  // existente mais próximo (que cobre o caso do próprio alvo quando ele existe).
+  let realCwd: string;
+  let realAncestor: string;
+  try {
+    realCwd = fs.realpathSync(normalizedCwd);
+    realAncestor = fs.realpathSync(deepestExistingAncestor(resolved));
+  } catch {
+    return {
+      ok: false,
+      reason: `Symlink quebrado ou não resolvido: "${filePath}"`,
+    };
+  }
+  if (!isContained(realCwd, realAncestor)) {
+    const kind = fs.existsSync(resolved) ? 'Symlink escape' : 'Symlink escape no diretório-pai';
+    return {
+      ok: false,
+      reason: `${kind} detectado: "${filePath}" resolve para "${realAncestor}" que está fora do sandbox (${realCwd})`,
+    };
   }
 
   return { ok: true, fullPath: resolved };

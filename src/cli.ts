@@ -10,7 +10,7 @@ const VERSION = '0.1.0';
 
 function showHelp(): void {
   console.log(`
-Piwerness CLI (pwn) v${VERSION} — Contract-Governed Agent Harness
+PWN — Policy Work Norms CLI (pwn) v${VERSION} — Contract-Governed Agent Harness
 
 USO:
   pwn <comando> <subcomando> [opções]

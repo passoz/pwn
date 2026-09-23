@@ -58,7 +58,7 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
           process.exit(0);
         } catch (err) {
           console.error(`✗ Não foi possível gerar a cápsula: ${(err as Error).message}`);
-          console.error('  O contrato V4 deve estar congelado em .piwerness/work/<id>/<contract_id>.json.');
+          console.error('  O contrato V4 deve estar congelado em .pwn/work/<id>/<contract_id>.json.');
           process.exit(1);
         }
       }

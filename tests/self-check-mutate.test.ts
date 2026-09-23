@@ -8,7 +8,7 @@ import { describeBaseline, mutationCases, runMutations } from '../src/core/self_
 
 /** Escreve um Work mínimo porém válido (todos os gates passam antes das mutações). */
 function writeValidWork(rootDir: string, workId = '0001'): string {
-  const workDir = path.join(rootDir, '.piwerness', 'work', workId);
+  const workDir = path.join(rootDir, '.pwn', 'work', workId);
   fs.mkdirSync(workDir, { recursive: true });
   const artifacts: Record<string, unknown> = {
     'discovery.json': {

@@ -7,7 +7,7 @@ export function handleMetricsCommand(subcommand: string, args: string[]): void {
       {
         const entries = readMetrics();
         if (entries.length === 0) {
-          console.log('Nenhuma métrica registrada em .piwerness/metrics.jsonl ainda.');
+          console.log('Nenhuma métrica registrada em .pwn/metrics.jsonl ainda.');
         } else {
           let totalCost = 0;
           let totalTokens = 0;

@@ -64,19 +64,32 @@ const compileCache: Record<string, ValidateFunction> = {};
 function compile(schemaFile: string): ValidateFunction {
   const cached = compileCache[schemaFile];
   if (cached) return cached;
-  const schema = EMBEDDED_SCHEMAS[schemaFile];
-  if (!schema) throw new Error(`unknown schema: ${schemaFile} (conhecidas: ${LAW_NAMES.join(', ')})`);
+  // `hasOwn` impede que nomes herdados de Object.prototype ("constructor", "__proto__", …)
+  // sejam resolvidos como leis embutidas.
+  const schema = Object.hasOwn(EMBEDDED_SCHEMAS, schemaFile) ? EMBEDDED_SCHEMAS[schemaFile] : undefined;
+  if (!schema || typeof schema !== 'object') {
+    throw new Error(`unknown schema: ${schemaFile} (conhecidas: ${LAW_NAMES.join(', ')})`);
+  }
   const compiled = ajv.compile(structuredClone(schema));
   compileCache[schemaFile] = compiled;
   return compiled;
 }
 
-function schemaNameFromDoc(data: unknown): string | null {
-  if (data && typeof data === 'object' && '$schema' in (data as Record<string, unknown>)) {
-    const value = (data as Record<string, unknown>).$schema;
-    if (typeof value === 'string') return path.basename(value);
+/**
+ * Distingue "sem `$schema`" de "`$schema` declarado mas sem nome utilizável".
+ * A diferença importa: o primeiro caso é um documento validado pelos gates, o
+ * segundo é um schema anunciado que o verificador não consegue resolver — e isso
+ * precisa falhar, não passar.
+ */
+function declaredSchemaName(data: unknown): { declared: boolean; file: string | null } {
+  if (!data || typeof data !== 'object' || !('$schema' in (data as Record<string, unknown>))) {
+    return { declared: false, file: null };
   }
-  return null;
+  const value = (data as Record<string, unknown>).$schema;
+  if (typeof value !== 'string') return { declared: true, file: null };
+  // `path.basename('')` e `path.basename('/')` devolvem '' — schema declarado sem nome.
+  const name = path.basename(value);
+  return { declared: true, file: name.length > 0 ? name : null };
 }
 
 function ajvErrors(validate: ValidateFunction, data: unknown): string[] {
@@ -172,9 +185,19 @@ export function validateNormativeDocument(filePath: string, rootDir: string = pr
     return { valid: false, file: relative, errors: [`JSON Syntax Error: ${(err as Error).message}`] };
   }
 
-  const schemaFile = schemaNameFromDoc(data);
-  if (!schemaFile) return { valid: true, file: relative, errors: [] };
-  if (!(schemaFile in EMBEDDED_SCHEMAS)) {
+  const declared = declaredSchemaName(data);
+  if (!declared.declared) return { valid: true, file: relative, errors: [] };
+  // Declarar `$schema` e não entregar um nome utilizável (vazio, não-string) antes
+  // passava como "sem schema declarado" — ou seja, o documento escapava da validação.
+  if (!declared.file) {
+    return {
+      valid: false,
+      file: relative,
+      errors: [`Schema não verificável: "$schema" declarado sem nome de schema utilizável (conhecidas: ${LAW_NAMES.join(', ')})`],
+    };
+  }
+  const schemaFile = declared.file;
+  if (!Object.hasOwn(EMBEDDED_SCHEMAS, schemaFile)) {
     return {
       valid: false,
       file: relative,
@@ -191,7 +214,7 @@ export function validateNormativeDocument(filePath: string, rootDir: string = pr
  * Documents without a matching schema are validated structurally by the gates.
  */
 export function validateWorkDocuments(workId: string, rootDir: string = process.cwd()): ValidationResult[] {
-  const workDir = path.resolve(rootDir, '.piwerness/work', workId);
+  const workDir = path.resolve(rootDir, '.pwn/work', workId);
   const docSchemas: Record<string, string> = {
     'prd.json': 'prd.schema.json',
     'plan.json': 'plan.schema.json',

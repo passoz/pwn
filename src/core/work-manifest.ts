@@ -27,7 +27,7 @@ const ARTIFACT_PATTERNS: Array<[string, RegExp]> = [
 ];
 
 /** Canonical Work ID directory track, shared with the CLI (`pwn work init`). */
-const WORK_ID_DIRECTORY = path.join(".piwerness", "work");
+const WORK_ID_DIRECTORY = path.join(".pwn", "work");
 
 /**
  * Single source of truth for the manifest `state` vocabulary.
@@ -129,7 +129,7 @@ function listIds(root: string): string[] {
       if (match) ids.add(match[1]);
     }
   }
-  // `.piwerness/work/<NNNN>/` shares the Work ID space: a Work initialised by the
+  // `.pwn/work/<NNNN>/` shares the Work ID space: a Work initialised by the
   // CLI must not be re-assigned by the manifest track (and vice versa). Empty
   // directories are not Works and must not shift the numbering.
   const workRoot = path.join(root, WORK_ID_DIRECTORY);
@@ -288,7 +288,7 @@ export function resolvePlanTarget(root: string = process.cwd(), target?: string)
   if (!legacy) {
     if (!workId) throw new Error(`canonical plan target requires a Work ID: ${target}`);
     // O manifest v3 e opcional no layout canonico: `work init` e `work scaffold`
-    // criam .piwerness/work/<NNNN>/ e o plano derivado em .todo/, sem manifest.
+    // criam .pwn/work/<NNNN>/ e o plano derivado em .todo/, sem manifest.
     // Quando o manifest existe, o plano declarado nele precisa concordar.
     const manifestAbsolute = assertRepositoryPath(repositoryRoot, manifestPath(workId));
     if (existsSync(manifestAbsolute)) {

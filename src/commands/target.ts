@@ -31,7 +31,7 @@ export function handleTargetCommand(subcommand: string, args: string[]): void {
         const workId = (workIdx !== -1 && args[workIdx + 1] && !args[workIdx + 1].startsWith('--')) ? args[workIdx + 1] : null;
 
         const outIdx = args.indexOf('--out');
-        const outDir = (outIdx !== -1 && args[outIdx + 1]) ? args[outIdx + 1] : path.resolve(process.cwd(), `.piwerness/targets/${targetName}`);
+        const outDir = (outIdx !== -1 && args[outIdx + 1]) ? args[outIdx + 1] : path.resolve(process.cwd(), `.pwn/targets/${targetName}`);
 
         console.log(`=== [pwn target materialize] Materializando artefatos para ${targetName.toUpperCase()} ===`);
 

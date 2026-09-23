@@ -14,23 +14,51 @@ export interface SandboxSession {
   worktreePath: string;
   branchName: string;
   created: boolean;
+  /**
+   * `git rev-parse --absolute-git-dir` do worktree no momento da criação.
+   * Identifica o repositório exato: sem isso, apagar o `.git` do sandbox faz o
+   * Git subir para o repositório-pai e o inventário do diff guard passa a
+   * descrever outra árvore (ou nenhuma).
+   */
+  gitDir: string;
+}
+
+/** Diretório git absoluto de `cwd`, ou `null` quando não há repositório válido. */
+export function resolveGitDir(cwd: string): string | null {
+  const proc = spawnSync('git', ['rev-parse', '--absolute-git-dir'], { cwd, encoding: 'utf8' });
+  if (proc.status !== 0) return null;
+  const gitDir = (proc.stdout ?? '').trim();
+  return gitDir.length > 0 ? gitDir : null;
 }
 
 export function createGitWorktreeSandbox(runId: string, rootDir: string = process.cwd()): SandboxSession {
   const sanitizeId = runId.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const worktreeDir = path.resolve(rootDir, '.piwerness/sandboxes', sanitizeId);
+  const worktreeDir = path.resolve(rootDir, '.pwn/sandboxes', sanitizeId);
   const branchName = `pwn-sandbox-${sanitizeId}`;
 
-  if (!fs.existsSync(path.resolve(rootDir, '.piwerness/sandboxes'))) {
-    fs.mkdirSync(path.resolve(rootDir, '.piwerness/sandboxes'), { recursive: true });
+  if (!fs.existsSync(path.resolve(rootDir, '.pwn/sandboxes'))) {
+    fs.mkdirSync(path.resolve(rootDir, '.pwn/sandboxes'), { recursive: true });
   }
 
   if (fs.existsSync(worktreeDir)) {
+    // Run id previsível pode colidir com uma sobra de execução anterior. Reusar um
+    // diretório que NÃO é um worktree faria o comando rodar em qualquer lugar — e o
+    // diff guard inventariaria outra árvore. Recusa em vez de adotar.
+    const existingGitDir = resolveGitDir(worktreeDir);
+    if (!existingGitDir) {
+      throw new SandboxError(
+        `[SANDBOX ABORT] ${worktreeDir} já existe e não é um worktree Git válido (${runId}). ` +
+        `Remova o diretório antes de reexecutar.`,
+        runId,
+        'pre-existing path is not a git worktree',
+      );
+    }
     return {
       runId,
       worktreePath: worktreeDir,
       branchName,
       created: true,
+      gitDir: existingGitDir,
     };
   }
 
@@ -51,11 +79,21 @@ export function createGitWorktreeSandbox(runId: string, rootDir: string = proces
     );
   }
 
+  const gitDir = resolveGitDir(worktreeDir);
+  if (!gitDir) {
+    throw new SandboxError(
+      `[SANDBOX ABORT] Worktree recém-criado em ${worktreeDir} não resolve para um repositório Git (${runId}).`,
+      runId,
+      'git worktree add succeeded but rev-parse failed',
+    );
+  }
+
   return {
     runId,
     worktreePath: worktreeDir,
     branchName,
     created: true,
+    gitDir,
   };
 }
 
@@ -133,7 +171,7 @@ export function wrapWithBwrap(
   }
 
   // Mascarar a chave do verificador se existir dentro da árvore de trabalho
-  const verifierKeyPath = path.join(realCwd, '.piwerness', '.verifier_key');
+  const verifierKeyPath = path.join(realCwd, '.pwn', '.verifier_key');
   if (fs.existsSync(verifierKeyPath)) {
     bwrapArgs.push('--ro-bind', '/dev/null', verifierKeyPath);
   }

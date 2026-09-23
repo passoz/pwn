@@ -10,7 +10,7 @@ function fixture() {
   return mkdtempSync(path.join(tmpdir(), 'pwn-metrics-test-'));
 }
 
-test('recordMetrics e readMetrics gravam e lêem métricas JSONL em .piwerness/metrics.jsonl', () => {
+test('recordMetrics e readMetrics gravam e lêem métricas JSONL em .pwn/metrics.jsonl', () => {
   const root = fixture();
   try {
     recordMetrics({

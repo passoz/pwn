@@ -1,4 +1,4 @@
-# Decisões Arquiteturais — Piwerness
+# Decisões Arquiteturais — PWN
 
 Este documento registra decisões arquiteturais significativas do projeto. Decisões aqui sobrepõem decisões anteriores em `SPEC.md` quando há conflito.
 
@@ -26,7 +26,7 @@ Markdown é legível para humanos, mas é "texto solto" — estrutura é conven�
 
 **Decisão:**
 
-Adotar **JSON** como formato para todos os documentos normativos do Piwerness:
+Adotar **JSON** como formato para todos os documentos normativos do PWN:
 
 | Tipo | Formato | Schema |
 |------|---------|--------|

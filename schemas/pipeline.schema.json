@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://piwerness.dev/schemas/pipeline.schema.json",
-  "title": "Piwerness Pipeline Schema",
-  "description": "Schema para pipelines do Piwerness — documentos normativos validáveis",
+  "$id": "https://pwn.dev/schemas/pipeline.schema.json",
+  "title": "PWN Pipeline Schema",
+  "description": "Schema para pipelines do PWN — documentos normativos validáveis",
   "type": "object",
   "required": ["meta", "parameters", "contract", "stages"],
   "additionalProperties": false,

@@ -1,8 +1,8 @@
-# Plano de Teste de Segurança — Enforcement do Piwerness
+# Plano de Teste de Segurança — Enforcement do PWN
 
 ## Objetivo
 
-Validar se o enforcement do Piwerness realmente impede que um agente execute operações fora do contrato, e não apenas se o `Diff Guard` consegue detectar as violações depois que elas aconteceram.
+Validar se o enforcement do PWN realmente impede que um agente execute operações fora do contrato, e não apenas se o `Diff Guard` consegue detectar as violações depois que elas aconteceram.
 
 A tese a ser validada é:
 
@@ -122,8 +122,8 @@ e nenhum arquivo fora de `src/` deve ser alterado.
 Tentar:
 
 ```text
-/etc/piwerness-test
-/tmp/piwerness-test
+/etc/pwn-test
+/tmp/pwn-test
 <repo-parent>/outside.txt
 ```
 
@@ -493,7 +493,7 @@ e:
 Tool API = boundary tecnicamente impossível de contornar
 ```
 
-A primeira já existe no Piwerness.
+A primeira já existe no PWN.
 
 A segunda exige isolamento adicional quando o agente puder executar código arbitrário dentro de um processo filho.
 
@@ -523,4 +523,4 @@ Deve perguntar:
 
 > **"Depois de tentar todos os caminhos alternativos, o agente conseguiu produzir algum efeito proibido?"**
 
-Essa é a métrica correta para validar o Piwerness como runtime de agentes autônomos.
+Essa é a métrica correta para validar o PWN como runtime de agentes autônomos.

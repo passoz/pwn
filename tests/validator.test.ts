@@ -7,7 +7,7 @@ import { validateNormativeDocument, validateWorkDocuments } from '../src/core/va
 
 function workFixture(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-validate-'));
-  mkdirSync(path.join(dir, '.piwerness', 'work', '0001'), { recursive: true });
+  mkdirSync(path.join(dir, '.pwn', 'work', '0001'), { recursive: true });
   return dir;
 }
 
@@ -49,7 +49,7 @@ const validPrd = {
 test('validateWorkDocuments valida plan.json conforme schema', () => {
   const dir = workFixture();
   try {
-    writeFileSync(path.join(dir, '.piwerness/work/0001/plan.json'), JSON.stringify(validPlan), 'utf8');
+    writeFileSync(path.join(dir, '.pwn/work/0001/plan.json'), JSON.stringify(validPlan), 'utf8');
     const results = validateWorkDocuments('0001', dir);
     const plan = results.find((r) => r.file.endsWith('plan.json'));
     assert.ok(plan, 'plan.json deve ser validado');
@@ -62,7 +62,7 @@ test('validateWorkDocuments valida plan.json conforme schema', () => {
 test('validateWorkDocuments reprova prd.json inválido apontando o campo', () => {
   const dir = workFixture();
   try {
-    writeFileSync(path.join(dir, '.piwerness/work/0001/prd.json'), JSON.stringify({ id: 'PRD-0001' }), 'utf8');
+    writeFileSync(path.join(dir, '.pwn/work/0001/prd.json'), JSON.stringify({ id: 'PRD-0001' }), 'utf8');
     const results = validateWorkDocuments('0001', dir);
     const prd = results.find((r) => r.file.endsWith('prd.json'));
     assert.ok(prd);
@@ -77,11 +77,11 @@ test('validateNormativeDocument reprova documento que declara schema desconhecid
   const dir = workFixture();
   try {
     writeFileSync(
-      path.join(dir, '.piwerness/work/0001/plan.json'),
-      JSON.stringify({ ...validPlan, $schema: 'https://piwerness.dev/schemas/inexistente.schema.json' }),
+      path.join(dir, '.pwn/work/0001/plan.json'),
+      JSON.stringify({ ...validPlan, $schema: 'https://pwn.dev/schemas/inexistente.schema.json' }),
       'utf8',
     );
-    const result = validateNormativeDocument('.piwerness/work/0001/plan.json', dir);
+    const result = validateNormativeDocument('.pwn/work/0001/plan.json', dir);
     assert.equal(result.valid, false, 'documento com schema declarado e indisponível nunca pode passar');
     assert.ok(
       result.errors.some((e) => e.includes('inexistente.schema.json')),
@@ -95,11 +95,50 @@ test('validateNormativeDocument reprova documento que declara schema desconhecid
 test('validateWorkDocuments aceita prd.json conforme schema', () => {
   const dir = workFixture();
   try {
-    writeFileSync(path.join(dir, '.piwerness/work/0001/prd.json'), JSON.stringify(validPrd), 'utf8');
+    writeFileSync(path.join(dir, '.pwn/work/0001/prd.json'), JSON.stringify(validPrd), 'utf8');
     const results = validateWorkDocuments('0001', dir);
     const prd = results.find((r) => r.file.endsWith('prd.json'));
     assert.ok(prd);
     assert.equal(prd.valid, true, prd.errors.join('\n'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('rejeita $schema que resolve para a cadeia de protótipos em vez de uma lei embutida', () => {
+  // Regressão: `schemaFile in EMBEDDED_SCHEMAS` aceitava chaves herdadas de
+  // Object.prototype, então `"constructor"`/`"toString"` passavam sem validação
+  // alguma e `"__proto__"`/`"valueOf"` derrubavam o CLI com TypeError.
+  const dir = workFixture();
+  try {
+    const target = path.join(dir, 'evidencia.json');
+    for (const key of ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty', 'name']) {
+      writeFileSync(target, JSON.stringify({ $schema: key, conteudo: 'qualquer coisa' }), 'utf8');
+      const result = validateNormativeDocument(target, dir);
+      assert.equal(result.valid, false, `$schema=${key} não pode ser aceito como lei embutida`);
+      assert.match(result.errors.join('\n'), /não verificável|unknown schema/i);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('rejeita $schema declarado sem nome de schema utilizável', () => {
+  // Regressão: `"$schema": ""` (ou null/42/{}/[]) era tratado como "sem schema
+  // declarado" e o documento passava sem validação nenhuma.
+  const dir = workFixture();
+  try {
+    const target = path.join(dir, 'evidencia.json');
+    for (const declared of ['', '/', 42, null, true, {}, []]) {
+      writeFileSync(target, JSON.stringify({ $schema: declared, conteudo: 'qualquer coisa' }), 'utf8');
+      const result = validateNormativeDocument(target, dir);
+      assert.equal(result.valid, false, `$schema=${JSON.stringify(declared)} não pode escapar da validação`);
+      assert.match(result.errors.join('\n'), /não verificável/i);
+    }
+
+    // Ausência de `$schema` continua sendo documento validado pelos gates, não erro.
+    writeFileSync(target, JSON.stringify({ conteudo: 'sem schema' }), 'utf8');
+    assert.equal(validateNormativeDocument(target, dir).valid, true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

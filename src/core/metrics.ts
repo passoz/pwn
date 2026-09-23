@@ -28,7 +28,7 @@ export interface OptimizationSuggestion {
 }
 
 export function getMetricsFilePath(rootDir: string = process.cwd()): string {
-  const dir = path.resolve(rootDir, '.piwerness');
+  const dir = path.resolve(rootDir, '.pwn');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }

@@ -2,7 +2,7 @@
   "$schema": "schemas/system.schema.json",
 
   "meta": {
-    "title": "Technical Specification: Piwerness — Contract-Governed Agent Harness",
+    "title": "Technical Specification: PWN — Contract-Governed Agent Harness",
     "version": 1,
     "last_reconciled": "2026-08-26",
     "scope": "framework CLI-first (pwn) para governança de agentes por contratos executáveis. Modela intenções, limites e riscos para executores baratos ou locais, com validação determinística e políticas de escalação. Targets: Pi, OpenCode, omp. Pack oficial: software-engineering."
@@ -30,7 +30,7 @@
       "Runtimes Pi, OpenCode e omp (camada 2) — consumidos via adapters CLI headless",
       "Providers de modelos LLM (Anthropic, OpenAI, modelos locais)",
       "Repositório original ai-engineering-skills — permanece separado e independente",
-      "Servidores web, bancos de dados ou GUIs de servidor — Piwerness é CLI-first e arquivo local"
+      "Servidores web, bancos de dados ou GUIs de servidor — PWN é CLI-first e arquivo local"
     ]
   },
 
@@ -62,7 +62,7 @@
     {
       "id": "ACT-005",
       "name": "Repositório ai-engineering-skills",
-      "description": "origem independente do port, nunca alterado pelo Piwerness",
+      "description": "origem independente do port, nunca alterado pelo PWN",
       "evidence": "decisão explícita do usuário (SPEC.md §10.1, §2.10)"
     }
   ],

@@ -9,7 +9,7 @@ test('Editor de pipeline estático tools/pipeline-editor/index.html existe e pos
 
   const content = fs.readFileSync(htmlPath, 'utf8');
   assert.match(content, /<!DOCTYPE html>/i);
-  assert.match(content, /Piwerness Pipeline/);
+  assert.match(content, /PWN Pipeline/);
   assert.match(content, /Roteamento de Modelos/);
   assert.match(content, /pipeline\.schema\.json/);
   assert.match(content, /json-input/);

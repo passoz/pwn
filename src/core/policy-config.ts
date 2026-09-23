@@ -1,5 +1,5 @@
 /**
- * Policy Config — política declarativa OPCIONAL em `.piwerness/policy.json`.
+ * Policy Config — política declarativa OPCIONAL em `.pwn/policy.json`.
  *
  * O arquivo nunca é obrigatório: ausente, malformado ou fora do schema ⇒ os
  * defaults do harness valem (aviso em `console.warn`, jamais lança). Quando
@@ -27,7 +27,7 @@ import {
   type ShellPolicy,
 } from './policy-engine.js';
 
-const POLICY_RELATIVE_PATH = path.join('.piwerness', 'policy.json');
+const POLICY_RELATIVE_PATH = path.join('.pwn', 'policy.json');
 
 export interface PolicyConfigFile {
   risk_keywords?: { l3?: string[]; l1?: string[] };
@@ -74,7 +74,7 @@ let compiledValidator: ValidateFunction | null = null;
 
 /**
  * Compila (uma vez) o schema de política, **embutido no bundle**. Não depende do
- * disco: o binário movido para outro diretório valida `.piwerness/policy.json`
+ * disco: o binário movido para outro diretório valida `.pwn/policy.json`
  * contra a mesma lei.
  */
 function policyValidator(): ValidateFunction {
@@ -148,7 +148,7 @@ function normalizePolicyFile(raw: Record<string, unknown>): PolicyConfigFile {
   return out;
 }
 
-/** Lê e valida `.piwerness/policy.json`. Retorna null se ausente/inválido (nunca lança). */
+/** Lê e valida `.pwn/policy.json`. Retorna null se ausente/inválido (nunca lança). */
 export function loadPolicyFile(rootDir: string = process.cwd()): PolicyConfigFile | null {
   const filePath = policyFilePath(rootDir);
   if (!fs.existsSync(filePath)) return null;

@@ -10,7 +10,7 @@ import { loadPlan } from './plan-renderer.js';
 export function loadTaskContract(workId: string, taskId: string, rootDir: string = process.cwd()): TaskContractV4 {
   const plan = loadPlan(workId, rootDir);
   if (!plan) {
-    throw new Error(`plan.json não encontrado para o Work ${workId} em .piwerness/work/${workId}/`);
+    throw new Error(`plan.json não encontrado para o Work ${workId} em .pwn/work/${workId}/`);
   }
 
   const task = plan.tasks.find((t) => t.id === taskId);
@@ -21,7 +21,7 @@ export function loadTaskContract(workId: string, taskId: string, rootDir: string
     throw new Error(`Task ${taskId} não vincula contract_id no plano do Work ${workId}`);
   }
 
-  const contractPath = path.resolve(rootDir, '.piwerness/work', workId, `${task.contract_id}.json`);
+  const contractPath = path.resolve(rootDir, '.pwn/work', workId, `${task.contract_id}.json`);
   if (!fs.existsSync(contractPath)) {
     throw new Error(`Contrato ${task.contract_id} não encontrado em ${contractPath}`);
   }

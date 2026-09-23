@@ -100,8 +100,8 @@ export const RISK_EXECUTION_POLICY: Record<RiskLevel, ExecutionPolicy> = {
 export function getRoutingTable(rootDir: string = process.cwd()): Record<AgentRole, ModelRoutingConfig> {
   const table = JSON.parse(JSON.stringify(DEFAULT_ROUTING_TABLE)) as Record<AgentRole, ModelRoutingConfig>;
 
-  // 1. Ler arquivo .piwerness/routing.json se existir
-  const configPath = path.resolve(rootDir, '.piwerness/routing.json');
+  // 1. Ler arquivo .pwn/routing.json se existir
+  const configPath = path.resolve(rootDir, '.pwn/routing.json');
   if (fs.existsSync(configPath)) {
     try {
       const fileData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -151,12 +151,12 @@ export function saveRoutingConfig(
   newConfig: Partial<Record<AgentRole, Partial<ModelRoutingConfig>>>,
   rootDir: string = process.cwd(),
 ): void {
-  const piwernessDir = path.resolve(rootDir, '.piwerness');
-  if (!fs.existsSync(piwernessDir)) {
-    fs.mkdirSync(piwernessDir, { recursive: true });
+  const pwnDir = path.resolve(rootDir, '.pwn');
+  if (!fs.existsSync(pwnDir)) {
+    fs.mkdirSync(pwnDir, { recursive: true });
   }
 
-  const configPath = path.join(piwernessDir, 'routing.json');
+  const configPath = path.join(pwnDir, 'routing.json');
   const currentTable = getRoutingTable(rootDir);
 
   const roles: AgentRole[] = ['cheap', 'strong', 'review', 'plan'];

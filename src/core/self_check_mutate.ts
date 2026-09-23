@@ -139,9 +139,9 @@ function canonicalArtifacts(workId: string): Record<string, unknown> {
   };
 }
 
-/** Diretório do Work (`<root>/.piwerness/work/<id>`) ou o próprio root quando ele já é o Work. */
+/** Diretório do Work (`<root>/.pwn/work/<id>`) ou o próprio root quando ele já é o Work. */
 function resolveWorkDir(workId: string, rootDir: string): string | null {
-  const nested = path.join(rootDir, '.piwerness', 'work', workId);
+  const nested = path.join(rootDir, '.pwn', 'work', workId);
   try {
     if (fs.statSync(nested).isDirectory()) return nested;
   } catch {
@@ -319,7 +319,7 @@ export function runMutations(options: { workId: string; rootDir?: string }): Mut
   const missing = source ? missingArtifacts(source) : [...REQUIRED_ARTIFACTS];
   const useCanonical = missing.length > 0;
 
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'piwerness-mut-'));
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pwn-mut-'));
   const baselineDir = path.join(tempRoot, 'baseline');
   fs.mkdirSync(baselineDir, { recursive: true });
 

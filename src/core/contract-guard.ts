@@ -65,6 +65,23 @@ export function checkFileAgainstScope(filePath: string, writeAllow: string[], wr
   };
 }
 
+/**
+ * Compila todos os padrões de escopo do contrato e devolve o primeiro inválido
+ * (ou `null`). `minimatch` lança em padrão malformado — um `write_deny` que não
+ * casa nada seria uma proteção inexistente —, então o contrato precisa ser
+ * conferido ANTES de criar sandbox ou executar qualquer coisa.
+ */
+export function invalidScopePattern(writeAllow: string[], writeDeny: string[]): string | null {
+  for (const pattern of [...writeAllow, ...writeDeny]) {
+    try {
+      minimatch('', pattern);
+    } catch {
+      return pattern;
+    }
+  }
+  return null;
+}
+
 export function checkDiffAgainstContract(modifiedFiles: string[], writeAllow: string[], writeDeny: string[]): ContractDiffCheckReport {
   const violations: FileDiffCheckResult[] = [];
 

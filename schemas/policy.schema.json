@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://piwerness.dev/schemas/policy.schema.json",
-  "title": "Piwerness Policy Schema",
-  "description": "Política declarativa OPCIONAL (`.piwerness/policy.json`). Ausente, malformada ou inválida ⇒ o harness usa os defaults internos. Cada seção é opcional e é mesclada sobre os defaults.",
+  "$id": "https://pwn.dev/schemas/policy.schema.json",
+  "title": "PWN Policy Schema",
+  "description": "Política declarativa OPCIONAL (`.pwn/policy.json`). Ausente, malformada ou inválida ⇒ o harness usa os defaults internos. Cada seção é opcional e é mesclada sobre os defaults.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

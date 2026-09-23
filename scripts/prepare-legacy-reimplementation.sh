@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Piwerness (pwn) — Preparação de Work de Reimplementação de Sistema Legado
+# PWN (pwn) — Preparação de Work de Reimplementação de Sistema Legado
 # ==============================================================================
 # Cria a cadeia completa e VÁLIDA de um Work a partir de uma spec legada
 # (discovery → requirements → PRD → spec → plan + contrato V4 congelado),
 # aprova os 5 gates determinísticos, valida os schemas e exibe a cápsula.
-# A spec legada é copiada para `.piwerness/work/<id>/legacy-spec.md`.
+# A spec legada é copiada para `.pwn/work/<id>/legacy-spec.md`.
 #
 # USO:
 #   ./prepare-legacy-reimplementation.sh <caminho-para-spec.md> [work-id]
@@ -52,7 +52,7 @@ cd "$TARGET_DIR"
 TITLE="Reimplementação do legado $(basename "$LEGACY_SPEC")"
 
 echo "================================================================================"
-echo "🚀 [PIWERNESS LEGADO] $TITLE"
+echo "🚀 [PWN LEGADO] $TITLE"
 echo "   Origem: $LEGACY_SPEC_ABS"
 echo "   Alvo:   $TARGET_DIR"
 echo "   CLI:    $PWN"
@@ -95,7 +95,7 @@ echo "==========================================================================
 echo "✅ [PRÉ-IMPLEMENTAÇÃO CONCLUÍDA]"
 echo "================================================================================"
 echo "👉 Próximos passos:"
-echo "   1. Detalhe .piwerness/work/$RESOLVED_ID/plan.json usando legacy-spec.md como fonte."
+echo "   1. Detalhe .pwn/work/$RESOLVED_ID/plan.json usando legacy-spec.md como fonte."
 echo "   2. Regenerar o markdown:  $PWN work plan --work $RESOLVED_ID --force"
 echo "   3. Executar sob sandbox:  $PWN work run --work $RESOLVED_ID --task 1.1 -- bun test"
 echo "================================================================================"

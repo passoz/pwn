@@ -77,15 +77,15 @@ test("previews and explicitly applies a legacy layout migration", () => {
   assert.equal(listWorks(root)[0].state, "planned");
 });
 
-test("listWorks ignora diretórios .piwerness/work vazios e compartilha o espaço de IDs", () => {
+test("listWorks ignora diretórios .pwn/work vazios e compartilha o espaço de IDs", () => {
   const root = fixture();
-  const workRoot = path.join(root, ".piwerness", "work");
+  const workRoot = path.join(root, ".pwn", "work");
   try {
     // Diretório vazio não é um Work: não desloca a numeração.
     mkdirSync(path.join(workRoot, "0001"), { recursive: true });
     assert.equal(reserveWork(root).work_id, "0001");
 
-    // Work real da trilha .piwerness/work ocupa o ID no espaço compartilhado.
+    // Work real da trilha .pwn/work ocupa o ID no espaço compartilhado.
     mkdirSync(path.join(workRoot, "0002"), { recursive: true });
     writeFileSync(path.join(workRoot, "0002", "intake.json"), "{}\n");
     assert.equal(reserveWork(root).work_id, "0003");
@@ -106,8 +106,8 @@ test("lists a legacy plan explicitly without assigning a number silently", () =>
 test("resolves a canonical Work that has no v3 manifest", () => {
   const root = fixture();
   try {
-    mkdirSync(path.join(root, ".piwerness", "work", "0001"), { recursive: true });
-    writeFileSync(path.join(root, ".piwerness", "work", "0001", "plan.json"), "{}\n");
+    mkdirSync(path.join(root, ".pwn", "work", "0001"), { recursive: true });
+    writeFileSync(path.join(root, ".pwn", "work", "0001", "plan.json"), "{}\n");
     mkdirSync(path.join(root, ".todo"), { recursive: true });
     writeFileSync(path.join(root, ".todo", "0001-tasks.md"), "# Tasks: canonical\n");
 
@@ -140,7 +140,7 @@ test("keeps the plan check when the manifest exists", () => {
 test("lists a canonical Work without manifest instead of calling it invalid", () => {
   const root = fixture();
   try {
-    const workRoot = path.join(root, ".piwerness", "work");
+    const workRoot = path.join(root, ".pwn", "work");
     mkdirSync(path.join(workRoot, "0001"), { recursive: true });
     writeFileSync(path.join(workRoot, "0001", "plan.json"), "{}\n");
     mkdirSync(path.join(root, ".todo"), { recursive: true });

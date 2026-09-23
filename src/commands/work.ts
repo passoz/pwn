@@ -57,7 +57,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         if (args.includes('--clear-cache')) {
           console.log('=== [pwn work gate] Limpando cache de gates ===');
           const removed = clearGateCache(rootDir);
-          console.log(`✓ ${removed} arquivo(s) de cache removido(s) de .piwerness/gate-cache/.`);
+          console.log(`✓ ${removed} arquivo(s) de cache removido(s) de .pwn/gate-cache/.`);
           process.exit(0);
         }
 
@@ -129,7 +129,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         const workId = flagValue(args, '--work') ?? getLatestWorkId();
         const plan = loadPlan(workId);
         if (!plan) {
-          console.error(`Nenhum plan.json encontrado em .piwerness/work/${workId}/. Rode 'pwn work init ${workId}' e defina as tasks antes de validar os contratos.`);
+          console.error(`Nenhum plan.json encontrado em .pwn/work/${workId}/. Rode 'pwn work init ${workId}' e defina as tasks antes de validar os contratos.`);
           process.exit(1);
         }
 
@@ -196,7 +196,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           console.log(`── Work ${workId} ──`);
           try {
             const result = importV3Work({ rootDir, workId, force, risk, gateChain });
-            console.log(`✓ ${result.generated.length} artefato(s) em .piwerness/work/${workId}/: ${result.generated.join(', ')}`);
+            console.log(`✓ ${result.generated.length} artefato(s) em .pwn/work/${workId}/: ${result.generated.join(', ')}`);
             for (const skip of result.skipped) console.log(`  · ignorado ${skip.file}: ${skip.reason}`);
             for (const warning of result.warnings) console.warn(`  ! ${warning}`);
             const mapped = result.capabilityMapping.filter((entry) => entry.score > 0);
@@ -294,7 +294,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         }
 
         if (!pathArg) {
-          console.error(`Nenhum plan.json encontrado para o Work ${workId}. Rode 'pwn work init' e crie .piwerness/work/${workId}/plan.json, ou informe um caminho de plano markdown.`);
+          console.error(`Nenhum plan.json encontrado para o Work ${workId}. Rode 'pwn work init' e crie .pwn/work/${workId}/plan.json, ou informe um caminho de plano markdown.`);
           process.exit(1);
         }
         process.exit(validateTasksMain([pathArg]));
@@ -510,17 +510,17 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     default:
       console.error(`Subcomando desconhecido para 'pwn work': ${subcommand}`);
       console.log('\nUso:');
-      console.log('  pwn work init <id>  Inicializa diretório de artefatos sob .piwerness/work/<id>/');
+      console.log('  pwn work init <id>  Inicializa diretório de artefatos sob .pwn/work/<id>/');
       console.log('  pwn work import    Importa Works do layout v3 (.work/, .todo/) para o layout canônico');
       console.log('  pwn work scaffold  Cria um Work novo com cadeia completa (discovery→prd→spec→plan+CTR)');
       console.log('  pwn work gate <id>  Executa gate determinístico (GATE-DISC-REQ, GATE-REQ-PRD, GATE-PRD-SPEC)');
       console.log('  pwn work gate --all [--work NNNN] [--no-cache]  Executa os 5 gates e resume por gate');
-      console.log('  pwn work gate --clear-cache  Remove o cache de veredictos (.piwerness/gate-cache/)');
+      console.log('  pwn work gate --clear-cache  Remove o cache de veredictos (.pwn/gate-cache/)');
       console.log('  pwn work specify   Especifica mudanças no baseline');
-      console.log('  pwn work contract  Valida os contratos V4 congelados (.piwerness/work/<id>/CTR-*.json)');
+      console.log('  pwn work contract  Valida os contratos V4 congelados (.pwn/work/<id>/CTR-*.json)');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
       console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync, --dry-run)');
-      console.log('  pwn work audit     Audita aceitação e evidência TDD');
+      console.log('  pwn work audit     Audita aceitação e evidência TDD (comando após -- é obrigatório)');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');
       process.exit(1);

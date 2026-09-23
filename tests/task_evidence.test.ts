@@ -64,7 +64,7 @@ test("enforces immutable RED/GREEN evidence", () => {
   assert.match(greenLog, /MUTATION_EXIT:/);
   assert.match(greenLog, /MUTATION_VERDICT: PASS/);
   assert.equal(readFileSync(implementation, "utf8"), "export const value = 'new';\n");
-  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2").status, 0);
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2", "--", process.execPath, "test-app.mjs").status, 0);
   const planDirectory = path.join(cwd, ".todo");
   writeFileSync(path.join(planDirectory, "0001-tasks.md"), `# Tasks: evidence fixture
 
@@ -77,20 +77,20 @@ test("enforces immutable RED/GREEN evidence", () => {
 
 **Documentation:** N/A
 `, "utf8");
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2").status, 2);
+  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2", "--", process.execPath, "test-app.mjs").status, 2);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "AC-1", "--", process.execPath, "test-app.mjs").status, 0);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "REGRESSION", "--", process.execPath, "test-app.mjs").status, 0);
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2").status, 0);
+  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2", "--", process.execPath, "test-app.mjs").status, 0);
   const candidate = JSON.parse(readFileSync(path.join(cwd, ".todo/attestations/0001/1.2-candidate.json"), "utf8"));
   assert.equal(candidate.work_id, "0001");
   assert.equal(candidate.task_id, "1.2");
   assert.equal(candidate.result, "pass");
 
   writeFileSync(implementation, "export const value = 'broken-after-green';\n");
-  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2").status, 1);
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2", "--", process.execPath, "test-app.mjs").status, 1);
   writeFileSync(implementation, "export const value = 'new';\n");
   writeFileSync(tests, "// changed after green\n");
-  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2").status, 1);
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2", "--", process.execPath, "test-app.mjs").status, 1);
 });
 
 test("supports a new implementation file during mutation checking", () => {
@@ -180,7 +180,7 @@ test("detects corrupted or tampered evidence chain", () => {
 
   writeFileSync(implementation, "export const value = 'new';\n");
   assert.equal(run(cwd, "green", "--work", "0001", "--task", "1.1", "--", process.execPath, "test-app.mjs").status, 0);
-  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1").status, 0);
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1", "--", process.execPath, "test-app.mjs").status, 0);
 
   const planDirectory = path.join(cwd, ".todo");
   writeFileSync(path.join(planDirectory, "0001-tasks.md"), "# Tasks\n### [x] [1.1] T\n**ACs:**\n- [ ] `node test-app.mjs` — exit 0.\n", "utf8");
@@ -188,7 +188,7 @@ test("detects corrupted or tampered evidence chain", () => {
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "REGRESSION", "--", process.execPath, "test-app.mjs").status, 0);
 
   // Cadeia intacta: candidate passa com status 0
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.1").status, 0);
+  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", process.execPath, "test-app.mjs").status, 0);
 
   // Agora adulteramos o arquivo de cadeia (altera um campo no histórico)
   const chainFile = path.join(cwd, ".todo/evidence/0001/1.1-chain.jsonl");
@@ -200,7 +200,41 @@ test("detects corrupted or tampered evidence chain", () => {
   writeFileSync(chainFile, chainLines.join("\n") + "\n", "utf8");
 
   // candidate DEVE rejeitar a cadeia corrompida
-  const candidateResult = run(cwd, "candidate", "--work", "0001", "--task", "1.1");
+  const candidateResult = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", process.execPath, "test-app.mjs");
   assert.equal(candidateResult.status, 2);
   assert.match(candidateResult.stderr, /cadeia de evidências/);
+});
+
+test("estado de evidência forjado não executa nada sem o comando do operador", () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-forged-"));
+  git(cwd, "init", "-q");
+  git(cwd, "config", "user.email", "test@example.invalid");
+  git(cwd, "config", "user.name", "Test");
+
+  const marker = path.join(cwd, "PWNED.txt");
+  const payload = `require('fs').writeFileSync(${JSON.stringify(marker)}, 'x')`;
+  const stateDir = path.join(cwd, ".todo/evidence/0001/state");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(path.join(stateDir, "1.1.json"), JSON.stringify({
+    task: "1.1",
+    test_files: [],
+    implementation_files: [],
+    green_implementation: {},
+    green_tests: {},
+    red_command: [process.execPath, "-e", payload],
+    red_expect: "never-present-string-xyz",
+    green_expect: null,
+  }, null, 2), "utf8");
+
+  // Sem comando do operador: uso inválido, nada executa.
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1").status, 1);
+  assert.equal(existsSync(marker), false, "o comando gravado no estado NÃO pode ser executado sozinho");
+
+  // Comando diferente do gravado: recusado, nada executa.
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1", "--", process.execPath, "-e", "0").status, 1);
+  assert.equal(existsSync(marker), false, "comando divergente do estado não pode ser aceito");
+
+  // O mesmo payload, agora declarado explicitamente pelo operador, executa.
+  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1", "--", process.execPath, "-e", payload).status, 0);
+  assert.equal(existsSync(marker), true);
 });

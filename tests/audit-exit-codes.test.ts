@@ -39,14 +39,14 @@ describe('códigos de saída do audit de evidências', () => {
   });
 
   test('verify sem baseline devolve EXIT_INCOMPLETE em vez de violação', () => {
-    const { code, stderr } = runInEmptyDir(['verify', '--work', '9999', '--task', '9.9']);
+    const { code, stderr } = runInEmptyDir(['verify', '--work', '9999', '--task', '9.9', '--', 'echo', 'ok']);
     expect(code).toBe(EXIT_INCOMPLETE);
     expect(stderr).toContain('INCOMPLETO: faltam 1 evidência(s):');
     expect(stderr).toContain('baseline not found for task 9.9');
   });
 
   test('green sem baseline devolve EXIT_INCOMPLETE', () => {
-    const { code } = runInEmptyDir(['green', '--work', '9999', '--task', '9.9']);
+    const { code } = runInEmptyDir(['green', '--work', '9999', '--task', '9.9', '--', 'echo', 'ok']);
     expect(code).toBe(EXIT_INCOMPLETE);
   });
 

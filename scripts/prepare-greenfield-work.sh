@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Piwerness (pwn) — Preparação de Work Greenfield (sem spec legada)
+# PWN (pwn) — Preparação de Work Greenfield (sem spec legada)
 # ==============================================================================
 # Cria a cadeia completa e VÁLIDA de um Work novo (discovery → requirements →
 # PRD → spec → plan + contrato V4 congelado), aprova os 5 gates determinísticos,
@@ -44,7 +44,7 @@ fi
 cd "$TARGET_DIR"
 
 echo "================================================================================"
-echo "🚀 [PIWERNESS GREENFIELD] $TITLE"
+echo "🚀 [PWN GREENFIELD] $TITLE"
 echo "   Alvo: $TARGET_DIR"
 echo "   CLI:  $PWN"
 echo "================================================================================"
@@ -86,7 +86,7 @@ echo "==========================================================================
 echo "✅ [PRÉ-IMPLEMENTAÇÃO CONCLUÍDA]"
 echo "================================================================================"
 echo "👉 Próximos passos:"
-echo "   1. Detalhe .piwerness/work/$RESOLVED_ID/plan.json (files, steps, ACs reais)."
+echo "   1. Detalhe .pwn/work/$RESOLVED_ID/plan.json (files, steps, ACs reais)."
 echo "   2. Regenerar o markdown:  $PWN work plan --work $RESOLVED_ID --force"
 echo "   3. Executar sob sandbox:  $PWN work run --work $RESOLVED_ID --task 1.1 -- bun test"
 echo "================================================================================"

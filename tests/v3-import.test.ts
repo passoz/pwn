@@ -250,7 +250,7 @@ test('importV3Work gera plan.json e contratos sem tocar nos artefatos v3', () =>
   const root = fixture();
   try {
     const result = importV3Work({ rootDir: root, workId: '0004' });
-    const workDir = path.join(root, '.piwerness', 'work', '0004');
+    const workDir = path.join(root, '.pwn', 'work', '0004');
 
     assert.ok(existsSync(path.join(workDir, 'plan.json')));
     assert.ok(existsSync(path.join(workDir, 'CTR-001.json')));
@@ -277,7 +277,7 @@ test('importV3Work --gate-chain produz uma cadeia que passa nos 5 gates', () => 
   const root = fixture();
   try {
     const result = importV3Work({ rootDir: root, workId: '0004', gateChain: true, force: true });
-    const workDir = path.join(root, '.piwerness', 'work', '0004');
+    const workDir = path.join(root, '.pwn', 'work', '0004');
     for (const name of ['discovery.json', 'requirements.json', 'prd.json', 'spec.json', 'traceability-matrix.json']) {
       assert.ok(result.generated.includes(name), `faltou ${name}`);
     }
@@ -352,10 +352,10 @@ test('importV3Work --risk auto congela risco por task nos contratos', () => {
     assert.equal(result.riskMapping.length, 2);
     assert.deepEqual(result.riskMapping.map((entry) => entry.risk), ['L3', 'L3']);
 
-    const ctr = JSON.parse(readFileSync(path.join(root, '.piwerness', 'work', '0004', 'CTR-001.json'), 'utf8'));
+    const ctr = JSON.parse(readFileSync(path.join(root, '.pwn', 'work', '0004', 'CTR-001.json'), 'utf8'));
     assert.equal(ctr.risk.level, 'L3');
 
-    const plan = JSON.parse(readFileSync(path.join(root, '.piwerness', 'work', '0004', 'plan.json'), 'utf8'));
+    const plan = JSON.parse(readFileSync(path.join(root, '.pwn', 'work', '0004', 'plan.json'), 'utf8'));
     for (const task of plan.tasks) {
       assert.ok(task.spec_reference, 'spec_reference não pode ser vazio');
     }

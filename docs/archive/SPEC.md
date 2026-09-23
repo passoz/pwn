@@ -1,4 +1,4 @@
-# Technical Specification: Piwerness — Contract-Governed Agent Harness
+# Technical Specification: PWN — Contract-Governed Agent Harness
 
 **Document Status:** Approved for Planning
 **Version:** 1.2
@@ -14,7 +14,7 @@
 
 **Problema:** O usuário já possui um ecossistema maduro de engenharia assistida por IA (Pi, OpenCode, omp, `ai-engineering-skills` e extensions), mas os recursos de harness e governança estão espalhados entre runtimes, diretórios globais, links simbólicos e repositórios separados. O TDD estrito dá previsibilidade a modelos baratos, porém aplica cerimônia e custo mesmo quando um contrato executável mais leve seria suficiente. Não existe um framework unificado que limite o espaço de decisão dos executores, imponha escopo e orçamento mecanicamente, selecione validação proporcional ao risco e escale para modelos fortes ou humanos somente quando necessário.
 
-**Solução:** Piwerness é um framework CLI-first (`pwn`) para governança de agentes por contratos executáveis. Modelos fortes definem intenção, riscos e limites; modelos baratos ou locais executam tarefas reduzidas; validadores determinísticos verificam o resultado; políticas declarativas decidem quando escalar. O framework compõe **Profiles**, **Skills**, **Rules**, **Contracts**, **Risk Policies**, **Pipelines**, **Sub-agents**, **Hooks**, **Evidence** e **Metrics**. Pi, OpenCode e omp são targets primários. O `ai-engineering-skills` é portado para este repositório como o pack oficial `software-engineering`, sem remover ou alterar automaticamente o repositório original.
+**Solução:** PWN é um framework CLI-first (`pwn`) para governança de agentes por contratos executáveis. Modelos fortes definem intenção, riscos e limites; modelos baratos ou locais executam tarefas reduzidas; validadores determinísticos verificam o resultado; políticas declarativas decidem quando escalar. O framework compõe **Profiles**, **Skills**, **Rules**, **Contracts**, **Risk Policies**, **Pipelines**, **Sub-agents**, **Hooks**, **Evidence** e **Metrics**. Pi, OpenCode e omp são targets primários. O `ai-engineering-skills` é portado para este repositório como o pack oficial `software-engineering`, sem remover ou alterar automaticamente o repositório original.
 
 **Impacto:** O usuário passa a ter um harness proprietário CLI-first que:
 - reduz custo usando modelos fortes nos pontos de decisão e modelos baratos na execução limitada;
@@ -43,7 +43,7 @@ A transcrição define quatro camadas progressivas:
 | **3 — Editor/IDE** | Ambiente visual com arquivos, terminal | Runtime + IDE | VS Code + Cloud Code extension |
 | **4 — Harness Proprietário** | Seu sistema: orquestrador, skills, rules, MCPs, hooks, memória | **Você** | Lion Claw, OpenClaw, Hermes |
 
-**Piwerness opera na camada 4.** Ele não substitui o Pi, Cloud Code ou qualquer runtime — ele senta em cima deles e fornece a infraestrutura para o harness proprietário.
+**PWN opera na camada 4.** Ele não substitui o Pi, Cloud Code ou qualquer runtime — ele senta em cima deles e fornece a infraestrutura para o harness proprietário.
 
 ### O que o usuário já tem
 
@@ -76,11 +76,11 @@ A transcrição define quatro camadas progressivas:
 
 ### 2.1 CLI-first, não webapp
 
-Piwerness é operado via CLI e arquivos. Nenhum servidor web, banco de dados ou interface gráfica é requerido. Toda configuração é um arquivo legível em um editor de texto. Pipes e composição Unix são cidadãos de primeira classe.
+PWN é operado via CLI e arquivos. Nenhum servidor web, banco de dados ou interface gráfica é requerido. Toda configuração é um arquivo legível em um editor de texto. Pipes e composição Unix são cidadãos de primeira classe.
 
 ### 2.2 Runtime-agnostic
 
-Piwerness não é um fork do Pi, não é um plugin do Pi, e não compete com o Pi. Ele gera artefatos (system prompts, configs, skill manifests) que são consumidos pelos três runtimes primários:
+PWN não é um fork do Pi, não é um plugin do Pi, e não compete com o Pi. Ele gera artefatos (system prompts, configs, skill manifests) que são consumidos pelos três runtimes primários:
 - **Pi** (via SYSTEM.md, extensions, prompts, skills) — target completo
 - **OpenCode** (via AGENTS.md, opencode.jsonc, agents, skills, prompts) — target completo com sub-agents
 - **omp** (via config.yml, agents/*.md, model roles) — target completo com sub-agents nativos
@@ -104,7 +104,7 @@ O pipeline YAML é o orquestrador. O caminho feliz, os sub-agents, as condiçõe
 
 ### 2.7 Profile por projeto
 
-Cada projeto usa um profile geral, resolvido automaticamente de `.piwerness/profile.yaml` sobre o profile global. Especializações de backend, frontend, revisão ou correção pertencem aos sub-agents selecionados pelos steps do pipeline; o operador não precisa trocar de profile durante uma execução fullstack.
+Cada projeto usa um profile geral, resolvido automaticamente de `.pwn/profile.yaml` sobre o profile global. Especializações de backend, frontend, revisão ou correção pertencem aos sub-agents selecionados pelos steps do pipeline; o operador não precisa trocar de profile durante uma execução fullstack.
 
 ### 2.8 Contratos antes de liberdade
 
@@ -116,7 +116,7 @@ TDD estrito permanece disponível e obrigatório para risco alto ou crítico. Ta
 
 ### 2.10 Independência entre porta e origem
 
-O `ai-engineering-skills` original permanece um repositório independente e operacional. Piwerness recebe uma cópia portada com proveniência registrada e evolui sua própria linhagem. Não há symlink, submodule, sincronização bidirecional automática nem expectativa de que mudanças feitas aqui sejam devolvidas à origem. Atualizações futuras da origem são operações explícitas de comparação e port, nunca merge silencioso.
+O `ai-engineering-skills` original permanece um repositório independente e operacional. PWN recebe uma cópia portada com proveniência registrada e evolui sua própria linhagem. Não há symlink, submodule, sincronização bidirecional automática nem expectativa de que mudanças feitas aqui sejam devolvidas à origem. Atualizações futuras da origem são operações explícitas de comparação e port, nunca merge silencioso.
 
 ### 2.11 Separação entre intenção de produto e instrução técnica
 
@@ -138,10 +138,10 @@ Caminhos não felizes e ambiguidades são questionados de forma cética. Toda re
 
 ## 3. Arquitetura
 
-### 3.1 Estrutura do repositório Piwerness
+### 3.1 Estrutura do repositório PWN
 
 ```text
-piwerness/
+pwn/
 ├── packages/
 │   ├── cli/                         # Executável pwn
 │   ├── core/                        # Profiles, pipelines, queue e artifacts
@@ -176,7 +176,7 @@ piwerness/
 ### 3.2 Diretório operacional
 
 ```text
-~/.piwerness/                         # ou $PIWERNESS_HOME
+~/.pwn/                         # ou $PWN_HOME
 ├── config.yaml                       # Config global (defaults, paths)
 ├── profiles/
 │   ├── default.yaml                  # Profile ativo
@@ -199,7 +199,7 @@ piwerness/
 │   ├── security.md                   # Regras de segurança operacional
 │   ├── code-quality.md               # Regras de qualidade de código
 │   └── per-project/
-│       └── piwerness.md              # Rules específicas de um projeto
+│       └── pwn.md              # Rules específicas de um projeto
 ├── sub-agents/
 │   ├── backend-dev.yaml              # Sub-agent para backend
 │   ├── frontend-dev.yaml             # Sub-agent para frontend
@@ -241,7 +241,7 @@ piwerness/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     PIWERNESS CLI (`pwn`)                    │
+│                     PWN CLI (`pwn`)                    │
 │  profile | skill | rule | pipeline | agent | queue | metrics │
 │  target  | validate                                          │
 └─────────────────────────┬───────────────────────────────────┘
@@ -442,7 +442,7 @@ memory:
 
 ### 4.5 Skill
 
-Skills são unidades de conhecimento ativável. Piwerness é compatível com o formato Agent Skills existente (SKILL.md + references/) e adiciona extensões para teach skills e skills com estado.
+Skills são unidades de conhecimento ativável. PWN é compatível com o formato Agent Skills existente (SKILL.md + references/) e adiciona extensões para teach skills e skills com estado.
 
 ```yaml
 # skills/local/api-design-interview/skill.yaml
@@ -698,7 +698,7 @@ No target Pi, a invocação usa o CLI comprovado (`pi --print`) com `--model`, `
 
 ### 4.9 Hook
 
-Hooks são scripts executados em eventos do ciclo de vida. Semelhante às extensions do Pi, mas declarados no Piwerness e independentes de runtime.
+Hooks são scripts executados em eventos do ciclo de vida. Semelhante às extensions do Pi, mas declarados no PWN e independentes de runtime.
 
 ```bash
 #!/bin/bash
@@ -709,7 +709,7 @@ Hooks são scripts executados em eventos do ciclo de vida. Semelhante às extens
 git stash create > /dev/null 2>&1 && echo "checkpoint created"
 
 # Log
-echo "[$(date -Iseconds)] PRE-TASK: step=$PWN_STEP agent=$PWN_AGENT" >> ~/.piwerness/metrics/hooks.log
+echo "[$(date -Iseconds)] PRE-TASK: step=$PWN_STEP agent=$PWN_AGENT" >> ~/.pwn/metrics/hooks.log
 ```
 
 ```bash
@@ -717,7 +717,7 @@ echo "[$(date -Iseconds)] PRE-TASK: step=$PWN_STEP agent=$PWN_AGENT" >> ~/.piwer
 # hooks/post-task.sh
 
 # Coleta métricas
-echo "[$(date -Iseconds)] POST-TASK: step=$PWN_STEP tokens=$PWN_TOKENS_USED cost=$PWN_COST_USD duration=$PWN_DURATION_SEC" >> ~/.piwerness/metrics/hooks.log
+echo "[$(date -Iseconds)] POST-TASK: step=$PWN_STEP tokens=$PWN_TOKENS_USED cost=$PWN_COST_USD duration=$PWN_DURATION_SEC" >> ~/.pwn/metrics/hooks.log
 ```
 
 Variáveis de ambiente injetadas em hooks:
@@ -734,7 +734,7 @@ Variáveis de ambiente injetadas em hooks:
 | `PWN_PIPELINE` | Pipeline sendo executado |
 | `PWN_PROJECT` | Caminho do projeto |
 
-Uma extension dedicada do Pi, `pwn-metrics.ts`, coleta `usage` em eventos de turno e escreve um contrato JSONL estável consumido pelo Piwerness. Os adapters de OpenCode e omp expõem o mesmo contrato interno a partir dos mecanismos de sessão/estatísticas de cada runtime. A indisponibilidade de uma métrica produz `N/A`, nunca um valor inventado.
+Uma extension dedicada do Pi, `pwn-metrics.ts`, coleta `usage` em eventos de turno e escreve um contrato JSONL estável consumido pelo PWN. Os adapters de OpenCode e omp expõem o mesmo contrato interno a partir dos mecanismos de sessão/estatísticas de cada runtime. A indisponibilidade de uma métrica produz `N/A`, nunca um valor inventado.
 
 ### 4.10 Memory
 
@@ -914,8 +914,8 @@ optimization_hints:
 
 ```
 pwn                                   # Status geral
-pwn init                              # Inicializa ~/.piwerness/ com estrutura base
-pwn init --project                    # Inicializa .piwerness/ no projeto (overrides locais)
+pwn init                              # Inicializa ~/.pwn/ com estrutura base
+pwn init --project                    # Inicializa .pwn/ no projeto (overrides locais)
 
 # Profiles
 pwn profile list                      # Lista profiles disponíveis
@@ -1016,11 +1016,11 @@ pwn validate pipeline <name>          # Valida um pipeline
 
 ### 5.2 Project-level overrides
 
-Um projeto pode ter um diretório `.piwerness/` local que sobrepõe configs globais:
+Um projeto pode ter um diretório `.pwn/` local que sobrepõe configs globais:
 
 ```
 my-project/
-├── .piwerness/
+├── .pwn/
 │   ├── profile.yaml           # Override de profile para este projeto
 │   ├── rules/
 │   │   └── project.md         # Rules específicas do projeto
@@ -1030,8 +1030,8 @@ my-project/
 ```
 
 Resolução de precedência:
-1. `.piwerness/` do projeto (mais alta)
-2. `~/.piwerness/` global
+1. `.pwn/` do projeto (mais alta)
+2. `~/.pwn/` global
 3. packs internos explicitamente habilitados
 4. skills externas linkadas
 
@@ -1041,7 +1041,7 @@ Conflito de nome entre origens bloqueia a materialização até que o profile qu
 
 ## 6. Target Materializer — Detalhe
 
-O materializer é a ponte entre o Piwerness (camada 4) e os runtimes (camada 2). Ele lê o profile ativo com todos os seus componentes e gera artefatos nativos.
+O materializer é a ponte entre o PWN (camada 4) e os runtimes (camada 2). Ele lê o profile ativo com todos os seus componentes e gera artefatos nativos.
 
 ### 6.1 Target: Pi
 
@@ -1051,7 +1051,7 @@ pwn target pi
 
 Produz:
 
-| Artefato gerado | Fonte no Piwerness |
+| Artefato gerado | Fonte no PWN |
 |------------------|--------------------|
 | `targets/pi/SYSTEM.md` | Composição de: identity + rules (na ordem do profile) |
 | `targets/pi/prompts/*.md` | Skills com triggers que mapeiam para /adapters |
@@ -1061,7 +1061,7 @@ Produz:
 O usuário pode então:
 ```bash
 # Copiar manualmente
-cp -r ~/.piwerness/targets/pi/* ~/.pi/agent/
+cp -r ~/.pwn/targets/pi/* ~/.pi/agent/
 
 # Ou via link
 pwn target pi --link    # Cria symlinks
@@ -1078,14 +1078,14 @@ pwn target opencode
 
 Produz:
 
-| Artefato gerado | Fonte no Piwerness |
+| Artefato gerado | Fonte no PWN |
 |------------------|--------------------|
 | `targets/opencode/AGENTS.md` | Identity + rules concatenadas |
 | `targets/opencode/opencode.jsonc` | Modelo, permissions, plugins, agents e skill paths |
 | `targets/opencode/skills/<agent>/SKILL.md` | Prompt rico e skills de cada sub-agent |
 | `targets/opencode/prompts/*.md` | Adapters materializáveis |
 
-Sub-agents são registrados em `agent: {}` com `mode: "subagent"`, descrição e permissions. Como o contrato nativo observado é mais limitado que o do Piwerness, o prompt rico de cada agent é materializado como skill associada, sem omitir silenciosamente campos não representáveis.
+Sub-agents são registrados em `agent: {}` com `mode: "subagent"`, descrição e permissions. Como o contrato nativo observado é mais limitado que o do PWN, o prompt rico de cada agent é materializado como skill associada, sem omitir silenciosamente campos não representáveis.
 
 ### 6.3 Target: omp
 
@@ -1095,7 +1095,7 @@ pwn target omp
 
 Produz:
 
-| Artefato gerado | Fonte no Piwerness |
+| Artefato gerado | Fonte no PWN |
 |------------------|--------------------|
 | `targets/omp/config.yml` | Modelo default e model roles (`smol`, `slow`, `plan`, `task`) |
 | `targets/omp/system-prompt.md` | Identity + rules concatenadas |
@@ -1265,7 +1265,7 @@ Análise baseada em 47 runs do profile 'code-backend':
 
 ## 9. Visualizador e Editor Gráfico de Pipelines (`pwn-gui`)
 
-O Piwerness inclui um utilitário visual independente (fora do runtime de execução) para inspecionar, desenhar e editar pipelines, sub-agents e contratos sem exigir edição manual de YAML.
+O PWN inclui um utilitário visual independente (fora do runtime de execução) para inspecionar, desenhar e editar pipelines, sub-agents e contratos sem exigir edição manual de YAML.
 
 ### 9.1 Fronteira e distribuição
 
@@ -1324,7 +1324,7 @@ O conteúdo do repositório `ai-engineering-skills` será portado para `packs/so
 
 O port obedece às seguintes regras:
 
-1. o repositório original não é removido, alterado ou redirecionado pelo Piwerness;
+1. o repositório original não é removido, alterado ou redirecionado pelo PWN;
 2. a primeira importação preserva comportamento, contratos, testes e documentação antes de evoluir funcionalidades;
 3. `PORTED_FROM.md` registra URL/path de origem, commit exato, data, inventário e diferenças intencionais;
 4. os arquivos portados passam a ter evolução própria neste repositório;
@@ -1390,7 +1390,7 @@ Leitura adicional pode ser solicitada com justificativa registrada. Escrita adic
 
 ### 10.6 Namespace independente dos adapters `pwn-*`
 
-O repositório original conserva exclusivamente seus adapters `/make-*`. A porta no Piwerness instala adapters próprios sob `/pwn-*`, permitindo que os dois sistemas coexistam sem sobrescrita, redirecionamento ou ambiguidade:
+O repositório original conserva exclusivamente seus adapters `/make-*`. A porta no PWN instala adapters próprios sob `/pwn-*`, permitindo que os dois sistemas coexistam sem sobrescrita, redirecionamento ou ambiguidade:
 
 ```text
 /pwn-spec   → pwn work specify
@@ -1403,7 +1403,7 @@ O repositório original conserva exclusivamente seus adapters `/make-*`. A porta
 /pwn-doc    → pwn work docs
 ```
 
-Os nomes `/make-*` nunca são criados, removidos ou alterados pelo instalador do Piwerness. A skill ou workflow interno continua sendo fonte do processo; adapters apenas repassam argumentos. Pi, OpenCode e omp recebem adapters `pwn-*` próprios conforme o mecanismo suportado.
+Os nomes `/make-*` nunca são criados, removidos ou alterados pelo instalador do PWN. A skill ou workflow interno continua sendo fonte do processo; adapters apenas repassam argumentos. Pi, OpenCode e omp recebem adapters `pwn-*` próprios conforme o mecanismo suportado.
 
 ### 10.7 Skills externas continuam importáveis
 
@@ -1414,14 +1414,14 @@ pwn skill discover ~/.agents/skills/
 pwn skill link <name> <path>
 ```
 
-Skills com mesmo nome da cópia portada exigem seleção explícita de origem; o Piwerness não escolhe silenciosamente entre pack interno e instalação externa.
+Skills com mesmo nome da cópia portada exigem seleção explícita de origem; o PWN não escolhe silenciosamente entre pack interno e instalação externa.
 
 ### 10.8 Artefatos de planejamento e rastreabilidade
 
-Para Works que nascem de uma ideia ou requisito ainda não estabilizado, o pack `software-engineering` governa a cadeia anterior à execução. Artefatos versionados vivem sob `.piwerness/work/<work-id>/`:
+Para Works que nascem de uma ideia ou requisito ainda não estabilizado, o pack `software-engineering` governa a cadeia anterior à execução. Artefatos versionados vivem sob `.pwn/work/<work-id>/`:
 
 ```text
-.piwerness/work/<work-id>/
+.pwn/work/<work-id>/
 ├── intake.md
 ├── discovery.md
 ├── requirements.md
@@ -1597,7 +1597,7 @@ A autoridade (`approved_reference` vs `directional_reference`) é declarada por 
 
 ### 11.1 Stack decidida
 
-Piwerness será implementado em **TypeScript sobre Bun**. A escolha mantém compatibilidade com as extensions TypeScript do Pi, os scripts JavaScript das skills existentes e o ecossistema de plugins dos runtimes. O CLI roda diretamente com Bun durante desenvolvimento e pode ser distribuído como executável standalone por `bun build --compile` quando a entrega exigir.
+PWN será implementado em **TypeScript sobre Bun**. A escolha mantém compatibilidade com as extensions TypeScript do Pi, os scripts JavaScript das skills existentes e o ecossistema de plugins dos runtimes. O CLI roda diretamente com Bun durante desenvolvimento e pode ser distribuído como executável standalone por `bun build --compile` quando a entrega exigir.
 
 A implementação deve:
 - expor o executável `pwn`;
@@ -1619,7 +1619,7 @@ A implementação deve:
 - comprovar que contratos v3, Works e evidência continuam semanticamente válidos sob adapters novos `pwn-*`;
 - não remover nem modificar o repositório de origem.
 
-**Entrega:** Piwerness contém uma distribuição independente e funcional do `ai-engineering-skills` v3.
+**Entrega:** PWN contém uma distribuição independente e funcional do `ai-engineering-skills` v3.
 
 #### Fase 2 — CLI `pwn` sobre o pack v3
 
@@ -1637,7 +1637,7 @@ A implementação deve:
 
 **Objetivo:** Estabelecer os artefatos e gates que alimentam o Contract Engine antes de congelar qualquer contrato.
 
-- artefatos de Work (`intake`, `discovery`, `requirements`, `prd`, `technical-decisions`, `spec`, `enrichment`, `work-governance`, `plan`, `progress`) sob `.piwerness/work/<work-id>/`;
+- artefatos de Work (`intake`, `discovery`, `requirements`, `prd`, `technical-decisions`, `spec`, `enrichment`, `work-governance`, `plan`, `progress`) sob `.pwn/work/<work-id>/`;
 - matriz de rastreabilidade canônica e IDs estáveis;
 - gates `GATE-DISC-REQ`, `GATE-REQ-PRD` e `GATE-PRD-SPEC` com formato de saída estruturado;
 - enriquecimento cético e registro de decisões técnicas;
@@ -1738,14 +1738,14 @@ A implementação deve:
 
 ---
 
-## 13. O que Piwerness NÃO é
+## 13. O que PWN NÃO é
 
 - **Não é um webapp** — nenhum server, nenhum frontend, nenhum banco.
 - **Não é um runtime de modelo** — não implementa inferência nem chama providers diretamente; orquestra Pi, OpenCode e omp via seus CLIs.
 - **Não é um fork do Pi** — não modifica o Pi, apenas gera artefatos para ele.
 - **Não substitui nem controla o repositório original `ai-engineering-skills`** — mantém uma porta independente e evolutiva no pack oficial.
 - **Não é um MCP** — não expõe tools para agentes. É infraestrutura para o operador humano.
-- **Não impõe stack aos projetos trabalhados** — TypeScript/Bun é a stack do Piwerness, não uma convenção global para os projetos.
+- **Não impõe stack aos projetos trabalhados** — TypeScript/Bun é a stack do PWN, não uma convenção global para os projetos.
 
 ---
 
@@ -1770,7 +1770,7 @@ A implementação deve:
 | **Memory** | Sistema de persistência de conhecimento (graph ou session) |
 | **Queue** | Fila de tarefas para execução AFK com review humano |
 | **Target** | Runtime de destino para materialização (Pi, OpenCode, omp ou Raw) |
-| **Materializer** | Componente que gera artefatos nativos de um target a partir da configuração Piwerness |
+| **Materializer** | Componente que gera artefatos nativos de um target a partir da configuração PWN |
 | **Metrics** | Dados coletados por execução: custo, tokens, tempo, loops, pass rate |
 | **Discovery** | Entendimento verificável do problema a partir do pedido bruto (problema, atores, objetivos, restrições) |
 | **Requirement** | Uso ou regra observável derivada do Discovery (story, regra, requisito funcional/não funcional) |
@@ -1796,7 +1796,7 @@ A implementação deve:
 | DEC-004 | Sandbox AFK | Git worktree por default; checkpoint local como fallback; Docker fora do default inicial. |
 | DEC-005 | Stack | TypeScript sobre Bun; compilação standalone opcional. |
 | DEC-006 | Teach state | `state/` gitignored; `learnings.yaml` destilado e versionado. |
-| DEC-007 | Repositório | Piwerness permanece separado do repositório original `ai-engineering-skills`. |
+| DEC-007 | Repositório | PWN permanece separado do repositório original `ai-engineering-skills`. |
 | DEC-008 | Orquestração | Pipeline YAML é o orquestrador; sem roteador LLM no MVP. |
 | DEC-009 | Profiles | Um profile por projeto; sub-agents fornecem as especializações por step. |
 | DEC-010 | Invocação de runtime | Adapters invocam CLIs headless; no Pi, `pi --print` com prompt/config materializados por step. |
@@ -1808,12 +1808,12 @@ A implementação deve:
 | DEC-016 | Compatibilidade de contrato | O workflow v3 estrito permanece executável; v4 é aditivo e não migra Works antigos automaticamente. |
 | DEC-017 | Governança econômica | Modelos fortes definem contratos e tratam escalações; modelos baratos executam dentro de limites impostos mecanicamente. |
 | DEC-018 | Validação proporcional | TDD estrito é obrigatório por risco/policy, não universal; outras tasks usam estratégias executáveis declaradas. |
-| DEC-019 | Namespace de adapters | O Piwerness instala somente `/pwn-*`; o repositório original conserva `/make-*`, e os dois podem coexistir. |
+| DEC-019 | Namespace de adapters | O PWN instala somente `/pwn-*`; o repositório original conserva `/make-*`, e os dois podem coexistir. |
 | DEC-020 | Editor visual de pipelines | O framework inclui utilitário gráfico autônomo (HTML/CSS/JS puros em `file://`) baseado em nós para visualização e edição de pipelines YAML. |
 | DEC-021 | Persistência do editor | Save direto depende de File System Access API e consentimento; fallback obrigatório é download, com diff antes de serialização canônica. |
 | DEC-022 | Discovery e PRD | Modelo híbrido: o pack `software-engineering` gera templates e valida imports; artefatos externos são validados e rastreados antes de virar contrato. |
 | DEC-023 | Aprovação humana | Obrigatória ao menos para PRD, decisões técnicas de alto risco, spec com lacunas materiais e mudança de contrato/escrita; proporcional ao risco e nunca implícita. |
-| DEC-024 | Localização dos artefatos | Artefatos v4 vivem em `.piwerness/work/<work-id>/`; Works v3 mantêm seus manifests sem migração automática. |
+| DEC-024 | Localização dos artefatos | Artefatos v4 vivem em `.pwn/work/<work-id>/`; Works v3 mantêm seus manifests sem migração automática. |
 | DEC-025 | Status do UX handoff | Declarado por Work (`approved_reference` ou `directional_reference`); default é `approved_reference` quando um handoff autorizado é fornecido. |
 | DEC-026 | Finding material não resolvido | Varia por risco: L0/L1 podem adiar com referência; L2+ bloqueiam ou exigem `accepted_risk` documentado; nunca resolução implícita. |
 | DEC-027 | Contrato dos gates | Gates produzem saída estruturada (`gate`, `work_id`, versões, `result`, findings com severidade e referências); LLM não marca PASS sozinho. |

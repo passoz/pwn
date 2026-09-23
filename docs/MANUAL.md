@@ -1,4 +1,4 @@
-# 📖 Manual Completo do Piwerness (`pwn`)
+# 📖 Manual Completo do PWN — Policy Work Norms (`pwn`)
 
 > **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
 > *Versão do Harness: 1.1 (Bun / TypeScript)*
@@ -27,9 +27,9 @@
 
 ## 1. Introdução & Filosofia
 
-O **Piwerness** (`pwn`) foi projetado para resolver o maior problema de agentes autônomos de desenvolvimento de software: **a degradação silenciosa e o desvio de escopo (scope drift)**.
+O **PWN** (`pwn`) foi projetado para resolver o maior problema de agentes autônomos de desenvolvimento de software: **a degradação silenciosa e o desvio de escopo (scope drift)**.
 
-Diferente de assistentes convencionais baseados unicamente em instruções genéricas em Markdown, o Piwerness opera sob o princípio de **Governança por Contratos Nativos**. Toda decisão de arquitetura, tarefa atômica e modificação no código-fonte deve ser respaldada por um contrato auditável e verificada deterministicamente por código TypeScript nativo.
+Diferente de assistentes convencionais baseados unicamente em instruções genéricas em Markdown, o PWN opera sob o princípio de **Governança por Contratos Nativos**. Toda decisão de arquitetura, tarefa atômica e modificação no código-fonte deve ser respaldada por um contrato auditável e verificada deterministicamente por código TypeScript nativo.
 
 ### Princípios Fundamentais:
 1. **Contratos antes da Execução:** Nenhum código é modificado sem um contrato congelado V4.
@@ -54,11 +54,11 @@ Conforme estabelecido pela **DEC-029**, todos os documentos que regem o comporta
 | **Pipeline** | `packs/core/pipeline-core.json` | `schemas/pipeline.schema.json` | Define estágios do fluxo e gates exigidos |
 | **Especificação do Sistema** | `.specs/system.json` | `schemas/system.schema.json` | Grava atores, capacidades e regras do sistema |
 | **Plano de Tarefas** | `todo.json` | `schemas/tasks.schema.json` | Armazena o plano de execução e progresso |
-| **Decisão de Produto (PRD)** | `.piwerness/work/<id>/prd.json` | `schemas/prd.schema.json` | Declara requisitos aceitos e não alvos |
-| **Evidências de Auditoria** | `.piwerness/work/<id>/evidence.json` | `schemas/evidence.schema.json` | Registra logs e provas de execução |
-| **Política do Projeto** (opcional) | `.piwerness/policy.json` | `schemas/policy.schema.json` | Keywords de risco, thresholds e allowlists de shell/rede |
+| **Decisão de Produto (PRD)** | `.pwn/work/<id>/prd.json` | `schemas/prd.schema.json` | Declara requisitos aceitos e não alvos |
+| **Evidências de Auditoria** | `.pwn/work/<id>/evidence.json` | `schemas/evidence.schema.json` | Registra logs e provas de execução |
+| **Política do Projeto** (opcional) | `.pwn/policy.json` | `schemas/policy.schema.json` | Keywords de risco, thresholds e allowlists de shell/rede |
 
-> **Política é dado, não código.** Constantes de decisão (keywords de risco, thresholds, allowlist de shell, domínios de rede) podem viver em `.piwerness/policy.json` — revisável e diffável — em vez de espalhadas pelo motor. O arquivo é **opcional**: ausente ou inválido, valem os defaults embutidos e o comportamento é idêntico ao anterior. Alterar política passa a ser um diff pequeno, não um patch em três arquivos.
+> **Política é dado, não código.** Constantes de decisão (keywords de risco, thresholds, allowlist de shell, domínios de rede) podem viver em `.pwn/policy.json` — revisável e diffável — em vez de espalhadas pelo motor. O arquivo é **opcional**: ausente ou inválido, valem os defaults embutidos e o comportamento é idêntico ao anterior. Alterar política passa a ser um diff pequeno, não um patch em três arquivos.
 
 ### Validação dos Documentos:
 Você pode validar a integridade de todos os documentos normativos do repositório a qualquer momento com:
@@ -85,7 +85,7 @@ verificador não carrega é **reprovado**, nunca aceito por falta de schema.
 
 ## 3. Contract Engine v4 & As 7 Dimensões Contratuais
 
-Cada tarefa executada pelo Piwerness possui um **Task Contract V4**. O contrato estrutura 7 dimensões essenciais para garantir que a IA execute exatamente o que foi solicitado:
+Cada tarefa executada pelo PWN possui um **Task Contract V4**. O contrato estrutura 7 dimensões essenciais para garantir que a IA execute exatamente o que foi solicitado:
 
 1. **Behavioral Contract (`behavioral_contract`):**
    - Cenários em formato Given/When/Then.
@@ -122,7 +122,7 @@ bun bin/pwn.js task capsule T-001 0001
 
 ## 4. Níveis de Risco (L0–L4) e Estratégias de Validação
 
-O Piwerness classifica as tarefas em 5 níveis formais de risco:
+O PWN classifica as tarefas em 5 níveis formais de risco:
 
 - **L0 (Trivial):** Ajustes de documentação, comentários ou typos. Validação por lint/parse.
 - **L1 (Low Risk):** Adição de funções puras ou novas habilidades com cobertura de testes unitários isolados.
@@ -169,9 +169,9 @@ bun bin/pwn.js work gate --all --work 0001
 
 ### Cache de veredicto de gate (Certificado Assinado por HMAC):
 
-Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.piwerness/gate-cache/<GATE>-<chave>.json`, envelopado em formato **v2** com `gate_version`, `harness_version`, `laws_sha256` (hash determinístico de todas as leis embutidas) e assinado com **HMAC-SHA256**.
+Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.pwn/gate-cache/<GATE>-<chave>.json`, envelopado em formato **v2** com `gate_version`, `harness_version`, `laws_sha256` (hash determinístico de todas as leis embutidas) e assinado com **HMAC-SHA256**.
 
-A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.piwerness/.verifier_key`. Qualquer adulteração manual em disco (ex: tentar alterar `result: "blocked"` para `"pass"`) quebra o HMAC e faz o cache ser **imediatamente rejeitado**, forçando a reavaliação limpa do gate. Da mesma forma, se qualquer schema embutido mudar, o `laws_sha256` invalida caches antigos.
+A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.pwn/.verifier_key`. Qualquer adulteração manual em disco (ex: tentar alterar `result: "blocked"` para `"pass"`) quebra o HMAC e faz o cache ser **imediatamente rejeitado**, forçando a reavaliação limpa do gate. Da mesma forma, se qualquer schema embutido mudar, o `laws_sha256` invalida caches antigos.
 
 ```bash
 bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia e assina; 2ª: (cache verificado)
@@ -236,7 +236,7 @@ Retorno JSON do Gate:
 
 ## 7. Roteamento Econômico por Papéis & Escalação
 
- O Piwerness reduz custos de LLM utilizando um sistema de **Roteamento por Papéis** (`src/core/router.ts`):
+ O PWN reduz custos de LLM utilizando um sistema de **Roteamento por Papéis** (`src/core/router.ts`):
 
 - **`cheap` (Agente Local / Econômico):** Utilizado por padrão para execução de código e tarefas atômicas (ex: `qwen3.5:27b`).
 - **`strong` (Agente de Alto Raciocínio):** Utilizado para arquitetura, resolução de conflitos em gates ou quando o agente `cheap` falha (ex: `claude-3-7-sonnet`).
@@ -253,17 +253,17 @@ Se um agente `cheap` estiver executando uma tarefa e:
 
 ## 8. Sandboxes em Git Worktree + Isolamento OS (Bubblewrap)
 
-Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o repositório principal, escapem para o sistema operacional ou façam exfiltração de dados via rede, o Piwerness combina dois níveis estritos de contenção:
+Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o repositório principal, escapem para o sistema operacional ou façam exfiltração de dados via rede, o PWN combina dois níveis estritos de contenção:
 
-1. **Isolamento de Árvore (Git Worktree):** O código é clonado para `.piwerness/sandboxes/RUN-xxx/` numa branch dedicada `pwn-sandbox-RUN-xxx`. Edições de arquivos e testes ocorrem apenas nessa árvore descartável.
+1. **Isolamento de Árvore (Git Worktree):** O código é clonado para `.pwn/sandboxes/RUN-xxx/` numa branch dedicada `pwn-sandbox-RUN-xxx`. Edições de arquivos e testes ocorrem apenas nessa árvore descartável.
 2. **Isolamento de Kernel (Bubblewrap / `bwrap`):** Todos os subprocessos invocados pelo agente são envelopados via `bwrap` (quando disponível no host Linux):
    - **Filesystem Read-Only:** Todo o SO (`/`) é montado em `--ro-bind` somente-leitura. Tentativas de escrever fora da sandbox (ex: `open('../escape.txt', 'w')`) falham com `Read-only file system` no nível do kernel.
    - **Isolamento de Rede:** Subprocessos rodam com `--unshare-net` (rede desconectada), exceto se expressamente autorizados pela política declarativa de rede.
    - **Namespace de Processos:** Rodam sob `--unshare-pid`, sem visão nem capacidade de sinalizar (`kill`, `ptrace`) processos do sistema.
 
 ### Ciclo de Vida:
-1. Ao iniciar a execução de uma run (`RUN-xxx`), o Piwerness invoca `createGitWorktreeSandbox('RUN-xxx')`.
-2. Um diretório isolado é criado em `.piwerness/sandboxes/RUN-xxx/` associado à branch temporária.
+1. Ao iniciar a execução de uma run (`RUN-xxx`), o PWN invoca `createGitWorktreeSandbox('RUN-xxx')`.
+2. Um diretório isolado é criado em `.pwn/sandboxes/RUN-xxx/` associado à branch temporária.
 3. O agente executa todas as edições e subprocessos confinados na bolha da sandbox.
 4. Se o teste e a validação do contrato passarem com sucesso, o commit é integrado ao branch principal.
 5. Em seguida, `cleanupGitWorktreeSandbox` remove a worktree e a branch temporária.
@@ -271,7 +271,7 @@ Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o
 
 ## 9. Fila Assíncrona de Revisão Humana (AFK)
 
-Quando o Piwerness é executado em modo não supervisionado (AFK - *Away From Keyboard*), tarefas de risco **L4** ou tarefas que falharam após escalação são pausadas e enviadas para a **Fila de Revisão Humana** (`src/core/queue.ts`).
+Quando o PWN é executado em modo não supervisionado (AFK - *Away From Keyboard*), tarefas de risco **L4** ou tarefas que falharam após escalação são pausadas e enviadas para a **Fila de Revisão Humana** (`src/core/queue.ts`).
 
 - **Diretório da Fila:** `queue/review/<run-id>.json`
 - **Sinal de suspensão:** a run sai com **exit code `3`** (não `0`), para que loops AFK não tratem
@@ -296,7 +296,7 @@ Quando o Piwerness é executado em modo não supervisionado (AFK - *Away From Ke
 
 ## 10. Materializador Multialvo (Pi, OpenCode, omp)
 
-O Piwerness é agnóstico de runtime de IA. O **Target Materializer** (`src/core/target-materializer.ts`) utiliza uma **Matriz de Capacidades** para transformar as especificações do Piwerness nos formatos nativos de cada ferramenta, sem perda silenciosa:
+O PWN é agnóstico de runtime de IA. O **Target Materializer** (`src/core/target-materializer.ts`) utiliza uma **Matriz de Capacidades** para transformar as especificações do PWN nos formatos nativos de cada ferramenta, sem perda silenciosa:
 
 | Target | Nome | System Prompt | Sub-agentes | Tool Calling | Contratos V4 | Sandboxes | Formato Gerado |
 |---|---|---|---|---|---|---|---|
@@ -318,7 +318,7 @@ bun bin/pwn.js target materialize --target opencode
 
 ## 11. Editor Visual Standalone (`pwn-gui`)
 
-O **pwn-gui** é o utilitário web visual do Piwerness para inspeção e edição gráfica de pipelines:
+O **pwn-gui** é o utilitário web visual do PWN para inspeção e edição gráfica de pipelines:
 
 - **Localização:** `tools/pipeline-editor/index.html`
 - **Sem Dependências de Servidor:** Funciona abrindo diretamente no navegador (`file://`).
@@ -334,7 +334,7 @@ O **pwn-gui** é o utilitário web visual do Piwerness para inspeção e ediçã
 ## 12. Telemetria de Métricas & Teach Skills
 
 ### Métricas de Execução (`src/core/metrics.ts`):
-Cada run grava uma linha em `.piwerness/metrics.jsonl`, com tokens de entrada/saída, custo estimado
+Cada run grava uma linha em `.pwn/metrics.jsonl`, com tokens de entrada/saída, custo estimado
 em USD, duração, tentativas, taxa de sucesso e o campo `isolated` — `true` para execuções em Git
 Worktree sandbox e `false` para escapes com `--no-isolation`, permitindo auditar depois quais runs
 rodaram sem isolamento.
@@ -350,7 +350,7 @@ bun bin/pwn.js metrics optimize
 > `Economia Estimada: 65%` (heurística declarativa, não medida)
 
 ### Teach Skills (`src/core/learnings.ts`):
-Guarda aprendizados e convenções descobertas durante execuções locais em `.piwerness/learnings.json` (gitignored), permitindo a consolidação contínua de lições de engenharia.
+Guarda aprendizados e convenções descobertas durante execuções locais em `.pwn/learnings.json` (gitignored), permitindo a consolidação contínua de lições de engenharia.
 
 ---
 
@@ -359,14 +359,14 @@ Guarda aprendizados e convenções descobertas durante execuções locais em `.p
 ### `pwn validate [--work <work-id>]`
 Valida os documentos normativos do projeto contra os JSON Schemas formais (ajv).
 Com `--work NNNN`, valida apenas aquele Work; sem argumento, valida todos os Works presentes em
-`.piwerness/work/`. Em um repositório sem Works, cai no fallback que valida o conjunto normativo core
+`.pwn/work/`. Em um repositório sem Works, cai no fallback que valida o conjunto normativo core
 (`spec.json`, `todo.json`, `.specs/system.json`, `packs/core/pipeline-core.json`) — o mesmo alvo de
 `pwn self-check`.
 
 > Um argumento posicional (ex.: `pwn validate spec.json`) **não** é interpretado como caminho.
 
 ### `pwn work init [work-id]`
-Inicializa a estrutura de artefatos de um novo Work em `.piwerness/work/<work-id>/`. Se `<work-id>` for omitido, o Piwerness calcula e atribui **automaticamente o próximo ID sequencial** (ex: `0001`, `0002`, `0003`...).
+Inicializa a estrutura de artefatos de um novo Work em `.pwn/work/<work-id>/`. Se `<work-id>` for omitido, o PWN calcula e atribui **automaticamente o próximo ID sequencial** (ex: `0001`, `0002`, `0003`...).
 
 ### `pwn work gate <gate-id> [--work <work-id>]`
 Executa a validação determinística de um portão (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`, `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`). Se `--work` for omitido, utiliza **automaticamente o último Work ID ativo**.
@@ -383,7 +383,7 @@ um **esqueleto** que o operador deve detalhar; o comando imprime exatamente o qu
 
 ### `pwn work import [--work NNNN | --all] [--dir PATH] [--gate-chain] [--force] [--risk Lx|auto]`
 Converte Works de um projeto que ainda usa o **layout v3** (`.work/NNNN.json`, `.todo/NNNN-tasks.md`,
-`.prompts/`, `.sources/`, `.specs/system.md`) para o layout canônico `.piwerness/work/NNNN/`:
+`.prompts/`, `.sources/`, `.specs/system.md`) para o layout canônico `.pwn/work/NNNN/`:
 `plan.json` (round-trip byte-a-byte com o markdown v3), `CTR-*.json` derivados de RED/ACs/Files reais
 e, com `--gate-chain`, também `discovery/requirements/prd/spec/traceability`. **Nunca** altera os
 artefatos v3. Sem `--force`, não sobrescreve artefatos já importados.
@@ -401,7 +401,7 @@ precisa ser decisão deliberada do operador. O comando imprime o mapa `task→ri
 
 ### `pwn work contract [--work <work-id>]`
 Valida os **contratos V4 congelados** do Work: carrega `plan.json`, resolve o `contract_id` de cada
-task e verifica `.piwerness/work/<id>/CTR-*.json` (versão 4.0, `risk.level`, `write_allow` não vazio e
+task e verifica `.pwn/work/<id>/CTR-*.json` (versão 4.0, `risk.level`, `write_allow` não vazio e
 `acceptance_contract.commands` não vazio — a política de shell é fail-closed). Sai com `0` (PASS) ou
 `1` (FAIL), listando cada task.
 
@@ -414,7 +414,7 @@ os arquivos modificados e grava telemetria.
 **Códigos de saída:** `0` sucesso · `1` falha (gate, contrato, política ou diff guard) ·
 `3` **suspenso para revisão humana** (risco L4, enfileirado em `queue/review/` sem executar).
 
-**Enforcement por default (fail-closed):** antes de executar qualquer comando, o `work run` avalia a **cadeia determinística completa de 5 gates** (`GATE-DISC-REQ` → `GATE-REQ-PRD` → `GATE-PRD-SPEC` → `GATE-SPEC-PLAN` → `GATE-PLAN-CONTRACT`) sobre os artefatos de `.piwerness/work/<work-id>/`. Se qualquer gate retornar `blocked` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`), a execução **é bloqueada com exit 1**. Modelos baratos não podem pular essa validação por decisão própria.
+**Enforcement por default (fail-closed):** antes de executar qualquer comando, o `work run` avalia a **cadeia determinística completa de 5 gates** (`GATE-DISC-REQ` → `GATE-REQ-PRD` → `GATE-PRD-SPEC` → `GATE-SPEC-PLAN` → `GATE-PLAN-CONTRACT`) sobre os artefatos de `.pwn/work/<work-id>/`. Se qualquer gate retornar `blocked` (incluindo artefato ausente — ex: `spec.json` ou `plan.json`), a execução **é bloqueada com exit 1**. Modelos baratos não podem pular essa validação por decisão própria.
 
 - `--work <work-id>`: Work a validar/executar (default: último Work ID ativo).
 - `--task <task-id>`: identifica a task no relatório de falha.
@@ -422,9 +422,15 @@ os arquivos modificados e grava telemetria.
 - `--no-isolation`: **contorna o sandbox** (executa no diretório de trabalho). A política de shell continua ativa e o escape fica registrado em `metrics.jsonl` (campo `isolated: false`). Use apenas quando o worktree não se aplica (ex: projeto sem git).
 - `--no-sync`: **não sincroniza** o manifest v3 `.work/NNNN.json` com o estado do panorama. Por padrão o `work run` atualiza o `state`/`updated_at` desse manifest; use `--no-sync` quando o `.work/` pertencer a outra ferramenta e não deva ser reescrito.
 
-> O Diff Guard ignora os artefatos que o próprio harness injeta no worktree (`node_modules` e
-> `bunfig.toml`); escrever em `node_modules` não é uma escrita do agente, mas continua fora do
-> `write_allow`.
+> O Diff Guard ignora **os artefatos que o próprio harness acabou de injetar** no worktree
+> (`node_modules` linkado e `bunfig.toml` copiado), identificados pela assinatura do que foi
+> criado — não pelo nome. Substituir o artefato (trocar o link por um arquivo, apontar o link
+> para outro lugar) devolve o caminho ao inventário. Um `bunfig.toml` versionado no
+> repositório não é injetado, então alterá-lo é reportado mesmo estando em `write_allow`.
+>
+> Renomeações são reportadas pelo **destino e pela origem**: mover um arquivo para fora do
+> escopo é escrita fora do escopo, e omitir a origem esconderia a remoção. Escrever em
+> `node_modules` continua fora do `write_allow`.
 
 ```bash
 # Executa apenas se a cadeia de 5 gates aprovar
@@ -434,15 +440,17 @@ bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 ```
 
-### `pwn work audit [verify|check|candidate] [--work <work-id>] [--task <task-id>] ...`
+### `pwn work audit [verify|check|candidate] [--work <work-id>] [--task <task-id>] -- <comando>...`
 Audita evidências e aceitação TDD via `task_evidence.js`. Sem ação explícita, assume `verify`. As ações válidas são `baseline`, `red`, `green`, `verify`, `check` e `candidate` (passadas adiante); qualquer outra opção na posição de ação é rejeitada pelo validador com mensagem clara.
+
+**O comando após `--` é obrigatório em `red`, `green`, `verify`, `check` e `candidate`.** O comando RED persistido em `.todo/evidence/<work>/state/<task>.json` é tratado como **conferência cruzada**, nunca como fonte do que será executado: o estado é um artefato versionado do repositório, e executá-lo sem confirmação do operador permitiria execução arbitrária de código a partir de um repositório hostil. Se o comando da CLI divergir do gravado, a auditoria é **violação** (`1`) e nada é executado.
 
 **Códigos de saída por classe** (para que automação não confunda os estados):
 
 | Código | Classe | Exemplos |
 |---|---|---|
 | `0` | Sucesso | RED/GREEN/verify capturados; atestação gerada |
-| `1` | **Violação** | implementação alterada antes do RED; teste mudou após o GREEN; `verification invalidated`; mutation check falhou; `--expect` não literal |
+| `1` | **Violação** | implementação alterada antes do RED; teste mudou após o GREEN; `verification invalidated`; comando divergente do RED; mutation check falhou; `--expect` não literal |
 | `2` | **Incompleto** | falta baseline/RED/GREEN; AC/REGRESSION ainda não observados; plano ausente |
 
 O código `2` imprime a lista **completa** do que falta (não para no primeiro item), o que permite corrigir tudo numa rodada.
@@ -451,10 +459,14 @@ O código `2` imprime a lista **completa** do que falta (não para no primeiro i
 
 ```bash
 # Verifica evidência da task 1.1 do Work 0001
-bun bin/pwn.js work audit --work 0001 --task 1.1
+bun bin/pwn.js work audit --work 0001 --task 1.1 -- node tests/calc.test.mjs
 
 # RED com a asserção amarrada ao arquivo de teste congelado
 bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" --expect-literal -- node tests/calc.test.mjs
+
+# GREEN e atestação (mesmo comando do RED)
+bun bin/pwn.js work audit green --work 0001 --task 1.1 -- node tests/calc.test.mjs
+bun bin/pwn.js work audit candidate --work 0001 --task 1.1 -- node tests/calc.test.mjs
 ```
 
 **Atestação versionada:** o `candidate` grava `version: 2` com `harness_version` e `gate_version` (além dos campos já existentes). `readAttestation(filePath)` lê o arquivo e informa `compatible` — atestações `v1` continuam legíveis, e uma `v2` sem `harness_version` é marcada incompatível em vez de aceita em silêncio.
@@ -487,7 +499,7 @@ Exibe estatísticas de consumo de tokens/custo ou gera sugestões de otimizaçã
 
 ## 14. Tutorial Passo a Passo: Criando um Work Greenfield
 
-Abaixo está o fluxo para iniciar uma nova funcionalidade no Piwerness, que pode ser feito de forma automática via script ou passo a passo via CLI:
+Abaixo está o fluxo para iniciar uma nova funcionalidade no PWN, que pode ser feito de forma automática via script ou passo a passo via CLI:
 
 ### Opção A: Modo Automatizado (Via Script Greenfield)
 Execute o script informando apenas o título ou ideia da funcionalidade (o Work ID é auto-incrementado).
@@ -519,7 +531,7 @@ bun bin/pwn.js work import --all --gate-chain
 ```bash
 bun bin/pwn.js work init
 ```
-O comando criará automaticamente a pasta sequencial (ex: `.piwerness/work/0002/`) com os arquivos iniciais:
+O comando criará automaticamente a pasta sequencial (ex: `.pwn/work/0002/`) com os arquivos iniciais:
 - `discovery.json`
 - `requirements.json`
 - `prd.json`
@@ -530,13 +542,13 @@ O comando criará automaticamente a pasta sequencial (ex: `.piwerness/work/0002/
 > `pwn work scaffold` (Opção A2).
 
 #### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
-Edite `.piwerness/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão (se omitido, `--work` usa o último Work ID):
+Edite `.pwn/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão (se omitido, `--work` usa o último Work ID):
 ```bash
 bun bin/pwn.js work gate GATE-DISC-REQ
 ```
 
 #### Passo 3: Consolidar o PRD e Rodar o Segundo Gate
-Vincule os requisitos aceitos em `.piwerness/work/0002/prd.json` e execute:
+Vincule os requisitos aceitos em `.pwn/work/0002/prd.json` e execute:
 ```bash
 bun bin/pwn.js work gate GATE-REQ-PRD
 ```

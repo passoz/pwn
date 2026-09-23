@@ -29,7 +29,7 @@ export function handleValidateCommand(args: string[]): void {
     console.log(`=== [pwn validate] Validador de Documentos do Work ${workId} ===\n`);
     const results = validateWorkDocuments(workId);
     if (results.length === 0) {
-      console.log(`Nenhum documento com schema encontrado em .piwerness/work/${workId}/.`);
+      console.log(`Nenhum documento com schema encontrado em .pwn/work/${workId}/.`);
       process.exit(0);
     }
     const errorsCount = printResults(results);
@@ -93,7 +93,7 @@ function handleMutationCheck(args: string[]): void {
   console.log('=== [pwn self-check --mutate] Mutation testing dos gates do harness ===\n');
 
   if (explicitWork && !getExistingWorkIds().includes(workId)) {
-    console.error(`Work ${workId} não encontrado em .piwerness/work/.`);
+    console.error(`Work ${workId} não encontrado em .pwn/work/.`);
     process.exit(1);
   }
 

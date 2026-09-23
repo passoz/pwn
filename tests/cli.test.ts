@@ -15,7 +15,7 @@ function runPwn(args: string[]) {
 test('pwn --help exibe ajuda principal com status 0', () => {
   const result = runPwn(['--help']);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /Piwerness CLI \(pwn\)/);
+  assert.match(result.stdout, /PWN — Policy Work Norms CLI \(pwn\)/);
   assert.match(result.stdout, /COMANDOS DISPONÍVEIS:/);
 });
 

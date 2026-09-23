@@ -2,7 +2,7 @@
   "$schema": "../schemas/system.schema.json",
 
   "meta": {
-    "title": "Piwerness — Contract-Governed Agent Harness",
+    "title": "PWN — Contract-Governed Agent Harness",
     "version": 1,
     "last_reconciled": "2026-08-26",
     "scope": "o harness proprietário de camada 4 descrito em SPEC.md v1.2 — profiles, skills, rules, contratos, risco, pipelines, sub-agents, hooks, evidência, métricas, fila AFK, materialização de targets e o pack software-engineering. Runtimes (Pi, OpenCode, omp) e providers de modelo são externos."
@@ -57,7 +57,7 @@
     {
       "id": "ACT-005",
       "name": "Repositório ai-engineering-skills",
-      "description": "origem independente do port, nunca alterado pelo Piwerness",
+      "description": "origem independente do port, nunca alterado pelo PWN",
       "evidence": "decisão explícita do usuário (SPEC.md §10.1, §2.10)"
     }
   ],

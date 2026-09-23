@@ -1,6 +1,6 @@
 # Revisão das Alterações — Fase 1 de Enforcement
 
-**Projeto:** Piwerness  
+**Projeto:** PWN  
 **Branch analisado:** `master`  
 **Escopo:** revisão das alterações implementadas após a auditoria técnica anterior  
 **Conclusão:** a direção está correta e houve evolução substancial, mas ainda existem pontos de segurança que devem ser corrigidos antes de considerar o enforcement pronto para execução AFK.
@@ -391,7 +391,7 @@ O ponto importante é que o risco determine não apenas o modelo, mas também a 
 
 # 12. Estado atual da arquitetura
 
-Depois dessas alterações, o Piwerness já possui uma arquitetura significativamente mais concreta:
+Depois dessas alterações, o PWN já possui uma arquitetura significativamente mais concreta:
 
 ```text
                     CONTRACT
@@ -482,4 +482,4 @@ O motivo principal é simples:
 
 O próximo grande marco deve ser tornar o Policy Engine uma boundary obrigatória e adotar fail-closed por padrão.
 
-Depois disso, o Piwerness estará muito mais próximo de ser um verdadeiro **runtime de engenharia para agentes autônomos**, e não apenas um orquestrador de chamadas de agentes.
+Depois disso, o PWN estará muito mais próximo de ser um verdadeiro **runtime de engenharia para agentes autônomos**, e não apenas um orquestrador de chamadas de agentes.

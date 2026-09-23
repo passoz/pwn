@@ -31,7 +31,7 @@ export function getVerifierKey(workDir: string): string {
   if (process.env.PWN_VERIFIER_KEY && process.env.PWN_VERIFIER_KEY.trim()) {
     return process.env.PWN_VERIFIER_KEY.trim();
   }
-  const keyPath = path.join(workDir, '.piwerness', '.verifier_key');
+  const keyPath = path.join(workDir, '.pwn', '.verifier_key');
   if (fs.existsSync(keyPath)) {
     try {
       const stats = fs.statSync(keyPath);
@@ -126,11 +126,11 @@ export function verifyVerdict(
 }
 
 /**
- * Diretório do cache de gates: `.piwerness/gate-cache/` sob o `workDir` informado.
- * O `workDir` é a raiz que contém `.piwerness/` (o mesmo `rootDir` dos demais comandos).
+ * Diretório do cache de gates: `.pwn/gate-cache/` sob o `workDir` informado.
+ * O `workDir` é a raiz que contém `.pwn/` (o mesmo `rootDir` dos demais comandos).
  */
 function cacheDir(workDir: string): string {
-  return path.join(workDir, '.piwerness', 'gate-cache');
+  return path.join(workDir, '.pwn', 'gate-cache');
 }
 
 /** Caminho determinístico do arquivo de cache para um par gate + hashes de input. */
@@ -249,14 +249,14 @@ function removeCacheDir(dir: string): number {
 /**
  * Remove o cache de gates. Com `workDir`, remove o cache daquele diretório; sem
  * argumento, remove o cache do diretório atual e de todos os Works sob
- * `.piwerness/work/*`. Devolve quantos arquivos removeu.
+ * `.pwn/work/*`. Devolve quantos arquivos removeu.
  */
 export function clearGateCache(workDir?: string): number {
   if (workDir) return removeCacheDir(cacheDir(workDir));
 
   const root = process.cwd();
   let removed = removeCacheDir(cacheDir(root));
-  const workRoot = path.join(root, '.piwerness', 'work');
+  const workRoot = path.join(root, '.pwn', 'work');
   try {
     if (fs.existsSync(workRoot)) {
       for (const entry of fs.readdirSync(workRoot, { withFileTypes: true })) {

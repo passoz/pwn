@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Piwerness Pipeline & Studio Dashboard (pwn-gui v3.0)</title>
+  <title>PWN Pipeline & Studio Dashboard (pwn-gui v3.0)</title>
   <style>
     :root {
       --bg-dark: #0B0F19;
@@ -564,7 +564,7 @@
     <div class="brand">
       <div class="brand-logo">P</div>
       <div class="brand-title">
-        <span>Piwerness Studio</span>
+        <span>PWN Studio</span>
         <span class="brand-badge">pwn-gui v3.0</span>
       </div>
     </div>
@@ -606,7 +606,7 @@
           <div class="editor-container">
             <textarea id="json-input" class="json-input-area" spellcheck="false"></textarea>
             <div class="validation-bar" id="routing-validation-bar">
-              ✓ Roteamento VÁLIDO para .piwerness/routing.json
+              ✓ Roteamento VÁLIDO para .pwn/routing.json
             </div>
           </div>
         </div>
@@ -747,7 +747,7 @@
     const DEFAULT_PIPELINE = {
       "$schema": "../../schemas/pipeline.schema.json",
       "pipeline_version": "4.0",
-      "name": "Pipeline Autônoma Piwerness Standard",
+      "name": "Pipeline Autônoma PWN Standard",
       "description": "Fluxo nativo de governança contratual, TDD e roteamento de modelos por papéis",
       "default_models": DEFAULT_ROUTING,
       "stages": [
@@ -791,7 +791,7 @@
         {
           "id": "T-003",
           "title": "Marco 3 — Roteamento de Modelos por Papéis",
-          "description": "Suportar arquivo .piwerness/routing.json e overrides por variáveis de ambiente",
+          "description": "Suportar arquivo .pwn/routing.json e overrides por variáveis de ambiente",
           "status": "done",
           "priority": "high",
           "agent": "plan",
@@ -1245,7 +1245,7 @@
     });
 
     document.getElementById('btn-export-env').addEventListener('click', () => {
-      let envLines = ['# Variáveis de Ambiente de Roteamento Piwerness'];
+      let envLines = ['# Variáveis de Ambiente de Roteamento PWN'];
       AVAILABLE_ROLES.forEach(r => {
         const m = routingState[r];
         if (m) {

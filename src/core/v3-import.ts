@@ -3,14 +3,14 @@ import path from 'node:path';
 import { createDefaultContractV4, type RiskLevel, type TaskContractV4 } from './contract-engine.js';
 import type { Plan, PlanAC, PlanComponent, PlanTask } from './plan-renderer.js';
 
-// ── v3 → piwerness import ──────────────────────────────────────────
+// ── v3 → pwn import ──────────────────────────────────────────
 //
 // Projects that were governed by the v3 pack keep their artifacts in
 // `.work/<id>.json`, `.todo/<id>-tasks.md`, `.prompts/<id>-change.md`,
-// `.sources/<id>-*.md` and `.specs/system.md`. Piwerness governs
-// `.piwerness/work/<id>/` with a canonical `plan.json` plus frozen `CTR-*.json`.
+// `.sources/<id>-*.md` and `.specs/system.md`. PWN governs
+// `.pwn/work/<id>/` with a canonical `plan.json` plus frozen `CTR-*.json`.
 //
-// This module translates the v3 layout into the piwerness layout. It only READS
+// This module translates the v3 layout into the pwn layout. It only READS
 // the v3 artifacts and never deletes or rewrites them.
 
 const TASK_HEADING = /^### \[([ x!])\] \[(\d+\.\d+)\] (.+)$/;
@@ -556,7 +556,7 @@ export function mapTaskToCapability(task: PlanTask, map: CapabilityMap): { id: s
 export interface V3ImportOptions {
   rootDir: string;
   workId: string;
-  /** Overwrite existing `.piwerness/work/<id>` artifacts. */
+  /** Overwrite existing `.pwn/work/<id>` artifacts. */
   force?: boolean;
   /** Risk frozen into the derived contracts. `'auto'` classifies per task. Default L2. */
   risk?: RiskLevel | 'auto';
@@ -585,8 +585,8 @@ function writeJson(filePath: string, value: unknown, generated: string[], skippe
 }
 
 /**
- * Translate a v3 Work into piwerness canonical artifacts under
- * `.piwerness/work/<id>/`. Reads only; never touches the v3 files.
+ * Translate a v3 Work into pwn canonical artifacts under
+ * `.pwn/work/<id>/`. Reads only; never touches the v3 files.
  */
 export function importV3Work(options: V3ImportOptions): V3ImportResult {
   const { rootDir, workId, force = false, risk = 'L2', gateChain = false } = options;
@@ -618,7 +618,7 @@ export function importV3Work(options: V3ImportOptions): V3ImportResult {
     riskMapping.push({ task: task.id, risk: risk === 'auto' ? deriveTaskRisk(task) : risk });
   }
 
-  const workDir = path.join(rootDir, '.piwerness', 'work', workId);
+  const workDir = path.join(rootDir, '.pwn', 'work', workId);
   fs.mkdirSync(workDir, { recursive: true });
 
   const generated: string[] = [];
@@ -650,7 +650,7 @@ export function importV3Work(options: V3ImportOptions): V3ImportResult {
 
   const problem = prompt?.problem && prompt.problem.length >= 20
     ? prompt.problem
-    : `O Work ${workId} ("${plan.title}") precisa ser executado sob governança determinística do Piwerness.`;
+    : `O Work ${workId} ("${plan.title}") precisa ser executado sob governança determinística do PWN.`;
   const solution = prompt?.solution && prompt.solution.length >= 20
     ? prompt.solution
     : `Executar o plano "${plan.title}" com contratos V4 congelados, sandbox e diff guard.`;
@@ -681,7 +681,7 @@ export function importV3Work(options: V3ImportOptions): V3ImportResult {
     decisions: [
       {
         id: 'DEC-001',
-        statement: `Governar o Work ${workId} pelo Piwerness com contratos V4 congelados derivados do plano v3.`,
+        statement: `Governar o Work ${workId} pelo PWN com contratos V4 congelados derivados do plano v3.`,
         status: 'accepted',
         made_by: 'pwn-import',
       },

@@ -1,10 +1,16 @@
 node_modules/
-.pi/
+# Runtime do agente; a exceção é o config do relay, versionado de propósito.
+.pi/*
+!.pi/remote-pi/
 *.log
 
 # Artefatos de runtime do harness (telemetria, eventos, aprendizados, sandboxes e fila AFK)
-.piwerness/metrics.jsonl
-.piwerness/RUN-*.jsonl
-.piwerness/learnings.json
-.piwerness/sandboxes/
+.pwn/metrics.jsonl
+.pwn/RUN-*.jsonl
+.pwn/learnings.json
+.pwn/sandboxes/
 queue/review/
+
+# Segredos e caches de veredicto: nunca versionar (a chave HMAC assina os gates)
+.pwn/.verifier_key
+.pwn/gate-cache/

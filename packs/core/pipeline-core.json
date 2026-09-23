@@ -3,7 +3,7 @@
   "meta": {
     "name": "pipeline-core",
     "version": "1.0.0",
-    "description": "Pipeline canônico do Piwerness — do zero à entrega com gates determinísticos",
+    "description": "Pipeline canônico do PWN — do zero à entrega com gates determinísticos",
     "author": "passoz",
     "created_at": "2026-08-26T23:10:58Z"
   },

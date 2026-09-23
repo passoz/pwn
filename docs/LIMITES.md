@@ -1,12 +1,12 @@
-# Limites do Piwerness
+# Limites do PWN
 
-Documento **honesto** sobre o que o harness `piwerness` (v0.1.0) **não** garante.
+Documento **honesto** sobre o que o harness `pwn` (v0.1.0) **não** garante.
 Os gates são checagens estruturais determinísticas: tornam explícito o que foi
 decidido e vinculado, mas não provam que a decisão está certa nem que o código faz o
 que o requisito pretendia. Cada limite traz afirmação, evidência no código real e o
 que usar em vez da garantia que não existe.
 
-As referências `arquivo:linha` correspondem ao estado do repositório em 2026-09-18
+As referências `arquivo:linha` correspondem ao estado do repositório em 2026-09-23
 (v0.1.0); se o arquivo mudar, localize pelo nome da função citada.
 
 ---
@@ -50,6 +50,18 @@ e capability sem rules é `severity: 'medium'` (`src/core/gates.ts:444`).
 `NÃO DETECTADO` como dívida: endureça o gate ou declare o caso `advisory` com
 justificativa. Mutações advisory aparecem no relatório mas **não** afetam o exit code.
 
+**Limite adicional — a chave do cache de veredictos é incompleta.** `GATE-DISC-REQ` e
+`GATE-REQ-PRD` leem `traceability-matrix.json` (`validateTraceability`) e podem bloquear
+por causa dele, mas esse arquivo **não** entra em `input_versions` — que é o que a chave
+do cache usa. Resultado: um PASS assinado continua sendo servido depois de a matriz ser
+esvaziada, e o gate imprime `PASS (cache)` com exit `0` sobre um estado que a avaliação
+fresca bloquearia. **Evidência.** `src/core/gates.ts:280-283` e `:385-388` (leitura) vs.
+`:293` e `:398` (chave); consumo em `src/commands/work.ts:104-106` (`cached ?? fresh`);
+validação do envelope em `src/core/gate-cache.ts`. O `GATE-PLAN-CONTRACT` **inclui** o
+arquivo (`src/core/gates.ts:680`) — a assimetria é o próprio sinal do defeito.
+**Em vez disso.** Rode `pwn work gate --no-cache` antes de confiar num PASS (ou
+`--clear-cache`, que apaga os envelopes).
+
 ## 3. O diff guard valida caminho, não conteúdo
 
 **Afirmação.** O contrato de escopo protege contra escrita **fora** de `write_allow` e
@@ -59,11 +71,23 @@ análise de conteúdo no diff guard.
 
 **Evidência.** `src/core/contract-guard.ts:16-80` (`checkFileAgainstScope`,
 `checkDiffAgainstContract`): a decisão é `minimatch(normalizedPath, pattern)`
-(`:34` e `:47`; implementação em `src/core/glob-utils.ts:109`), sem leitura de bytes
+(`:34` e `:47`; implementação em `src/core/glob-utils.ts`), sem leitura de bytes
 do arquivo.
 
+**Limite adicional — o guard só vê o que o `git status` do repositório reporta.** O
+inventário vem de `git status --porcelain=v1 -z` **no repositório cuja identidade foi
+fixada na criação do sandbox** (apagar o `.git` ou rodar `git init` dentro dele faz o
+guard recusar o inventário em vez de descrever outra árvore). Restam dois buracos
+conhecidos: (a) caminhos cobertos pelo `.gitignore` do repositório **não** aparecem —
+é o caso de `.env`, que o contrato default põe em `write_deny`; (b) um comando que faça
+`git commit` ou `git stash` dentro do sandbox move a base de comparação e some com as
+próprias escritas. **Evidência.** `src/core/run-orchestrator.ts` (`modifiedFiles`),
+`src/core/contract-engine.ts:144` (`.env*` no deny default).
+
 **Em vez disso.** Combine o contrato com evidência de teste (seção 4) e revisão de
-`git diff` antes do merge. Escopo é contenção de dano, não correção.
+`git diff` antes do merge. Escopo é contenção de dano, não correção. E não leia
+"DIFF OK" como prova de contenção: confira `git status`, `git log` e os arquivos
+ignorados do worktree.
 
 ## 4. A auditoria TDD prova causalidade, mas `--expect` é substring
 
@@ -73,48 +97,99 @@ esperada" é comparada por **substring na saída**; qualquer log contendo o text
 `--expect-literal` endurece apenas isso: exige que `--expect` apareça **literalmente**
 em algum arquivo de teste congelado — não que o texto seja uma asserção.
 
-**Evidência.** `src/core/task_evidence.ts:370` (`mutationCheck`:
-`!mutationResult.output.includes(expect)`), `:426` e `:471` (RED/GREEN com
-`output.includes`), `:418-423` (`literalInTests` com `--expect-literal`).
-`assertionRan = !result.output.includes(redExpect)` (`:472`) trata a asserção como
+**Evidência.** `src/core/task_evidence.ts:490` (`mutationCheck`:
+`!mutationResult.output.includes(expect)`), `:546` e `:591` (RED/GREEN com
+`output.includes`), `:538-543` (`literalInTests` com `--expect-literal`).
+`assertionRan = !result.output.includes(redExpect)` (`:642`) trata a asserção como
 "não executada" só quando o texto de falha reaparece — um teste silencioso passa.
 
 **Em vez disso.** Use texto de `--expect` específico do caso (nunca genérico como
 `"Error"`), prefira runners com saída estruturada e revise o log gravado.
 
-## 5. Sandbox é Git Worktree: isolamento de árvore, não de SO
+**Limite adicional — a evidência é auto-atestada pelo repositório.** O comando
+executado é sempre o do operador (ver `docs/MANUAL.md`), mas o *veredicto* ainda vem
+de artefatos versionados: a cadeia `.todo/evidence/<work>/<task>-chain.jsonl` é SHA-256
+**sem chave** sobre campos públicos, e o estado carrega `green_*`/`baseline_*` que o
+próprio audit confere contra si mesmo. Um repositório hostil pode versionar estado,
+logs, cadeia e `audit_checks` coerentes entre si e obter `candidate` com
+`result: "pass"` sem nunca ter rodado RED/GREEN — a única barreira restante é o
+comando do operador ter de coincidir com o `red_command` plantado (basta plantar o
+comando que o repositório sabe que será usado, ex.: `bun test`).
+**Evidência.** `src/core/task_evidence.ts:372-401` (`verifyEvidenceChain`, `GENESIS_HASH`),
+`:707-758` (`candidate`). Nada em `src/` consome atestações hoje.
+**Em vez disso.** Trate `.todo/attestations/**` como alegação do repositório, não como
+prova independente; assine a evidência com uma chave fora da árvore versionada
+(`PWN_VERIFIER_KEY`) se precisar de garantia contra um repositório hostil.
 
-**Afirmação.** O sandbox cria um `git worktree` em branch próprio: isola a **árvore de
-arquivos** do checkout. Não há namespaces, chroot, cgroups, usuário separado nem
-firewall — um subprocesso do agente roda com o mesmo usuário, pode escrever fora do
-worktree (inclusive no Work real) e acessar a rede.
+## 5. Sandbox: isolamento de árvore sempre, de SO só quando há `bwrap`
 
-**Evidência.** `src/core/sandbox.ts:19-56` (`createGitWorktreeSandbox`, com
-`git worktree add -b ... HEAD` em `:37`). O escape por subprocesso é **registrado**
-como documentário em `tests/security-adv.test.ts:383-407`:
+**Afirmação.** O sandbox cria um `git worktree` em branch próprio e **sempre** isola a
+árvore de arquivos do checkout. O isolamento de SO é **condicional**: quando o host tem
+`bwrap` (Bubblewrap), o comando roda em namespaces próprios com o sistema de arquivos
+inteiro montado somente-leitura, apenas o `cwd` gravável, `/tmp` em tmpfs e rede
+desligada (`--unshare-net`). **Sem `bwrap`** (macOS, Windows, contêiner sem user
+namespaces, ou `--no-isolation`), o comando roda com o usuário do operador, sem
+namespace algum: pode escrever fora do worktree e acessar a rede.
+
+**Evidência.** `src/core/sandbox.ts:19-40` (`createGitWorktreeSandbox`), `:113-153`
+(`wrapWithBwrap`); a seleção é silenciosa em `src/core/tool-api.ts:401`
+(`isBwrapSupported()`). O escape por subprocesso é **registrado** como documentário em
+`tests/security-adv.test.ts:383-407`:
 `// The test is DOCUMENTARY — it records whether subprocess escape is possible.`
 
-**Em vez disso.** Para código não confiável, rode em container/VM (Docker, gVisor,
-firecracker) ou com usuário separado. Aqui o sandbox evita sujar o Work; não contém
-um adversário.
+**Em vez disso.** Para código não confiável, garanta `bwrap` presente (ou rode em
+container/VM: Docker, gVisor, firecracker) e trate `--no-isolation` como execução sem
+contenção nenhuma. Aqui o sandbox evita sujar o Work; não contém um adversário.
 
-## 6. Não existe verificação de qualidade semântica de código
+**Limite adicional — o harness abre uma escrita para o host.** `prepareSandbox` cria
+`node_modules` dentro do sandbox como **symlink para o `node_modules` do projeto
+real**; escrever por esse link atinge a árvore real enquanto o worktree é descartado.
+Com `bwrap` ativo a escrita é recusada pelo mount somente-leitura; **sem** `bwrap` (ou
+com `--no-isolation`) o comando escreve dentro do `node_modules` real — e o diff guard
+não tem como ver isso, porque a mudança acontece fora do repositório que ele
+inspeciona. O guard desconsidera o link apenas enquanto a assinatura registrada por
+`prepareSandbox` continuar batendo; substituí-lo devolve o caminho ao inventário, mas
+**escrever através** dele continua invisível. **Evidência.**
+`src/core/run-orchestrator.ts` (`prepareSandbox`, `pathFingerprint`, `modifiedFiles`).
+
+## 6. O sandbox limita escrita, não leitura: o host inteiro é legível
+
+**Afirmação.** Sob `bwrap`, o sistema de arquivos do host é montado **somente-leitura e
+por inteiro** (`--ro-bind / /`): o comando executado **lê** qualquer arquivo que o
+usuário do operador possa ler — `~/.config/gh` (token do GitHub CLI), `~/.config/*`
+(perfis de navegador, opencode), `~/.gnupg` (`private-keys-v1.d`), `~/.docker`,
+`~/.kube`, `~/.netrc`, `~/.gitconfig` — além de herdar o ambiente do operador
+(`GITHUB_TOKEN`, `OPENAI_API_KEY`, `AWS_*`, `SSH_AUTH_SOCK`). Só `~/.ssh` e `~/.aws`
+são mascarados (tmpfs vazio). Ler não é impedido pelo isolamento de escrita.
+
+**Evidência.** `src/core/sandbox.ts:114-134` (bind global + lista `sensitiveDirs` com
+apenas `~/.ssh` e `~/.aws`) e `src/core/tool-api.ts:389-397` (`env: { ...process.env }`,
+removendo somente `PWN_VERIFIER_KEY`). O `PolicyEngine` aprova toda leitura
+(`evaluateFileRead` em `src/core/policy-engine.ts` devolve `allowed: true` sem consultar
+a allowlist).
+
+**Em vez disso.** Rode o executor com um usuário separado, HOME dedicado e ambiente
+explicitamente reduzido; nunca execute em sandbox código que você não executaria
+diretamente, e trate qualquer credencial exportada no seu shell como legível pelo
+comando do agente.
+
+## 7. Não existe verificação de qualidade semântica de código
 
 **Afirmação.** O harness não compila, não roda linter estático nem avalia
 complexidade, segurança ou desempenho do código produzido. Ele registra que comandos
 rodaram e que produziram a saída esperada — e o que conta como "esperado" é declarado
 no próprio plano.
 
-**Evidência.** `src/core/task_evidence.ts:491-517` (`verify`) re-executa o comando RED
-e confere exit code 0 e ausência do texto de falha; a lista de checagens vem do texto
-do plano (`taskAuditRequirements`, `:558-576`, que conta ACs por regex em `**ACs:**` e
-lê `**Visual:** REQUIRED`), e `candidate` (`:578-600`) só confirma que os nomes
+**Evidência.** `src/core/task_evidence.ts:611-651` (`verify`) re-executa o comando e
+confere exit code 0 e ausência do texto de falha; a lista de checagens vem do texto
+do plano (`taskAuditRequirements`, `:687-705`, que conta ACs por regex em `**ACs:**` e
+lê `**Visual:** REQUIRED`), e `candidate` (`:707-758`) só confirma que os nomes
 exigidos foram registrados.
 
 **Em vez disso.** Coloque `tsc --noEmit`, linter e testes no comando de verificação do
 contrato e no template do alvo; revise o diff.
 
-## 7. `pwn validate` valida schema, não a verdade do conteúdo
+## 8. `pwn validate` valida schema, não a verdade do conteúdo
 
 **Afirmação.** A validação é JSON Schema (Ajv): tipos, campos obrigatórios, formatos.
 Um `prd.json` sintaticamente perfeito com requisitos inventados é "VÁLIDO". Dentro de
@@ -130,7 +205,7 @@ explícito de três documentos); Ajv em `src/core/validator.ts:9`.
 **Em vez disso.** Leia "VÁLIDO (conforme schema)" como "bem formado, não revisado"; o
 conteúdo depende dos gates (seções 1-2) e de revisão humana.
 
-## 8. Evidência prova execução; o self-check tem escopo curto
+## 9. Evidência prova execução; o self-check tem escopo curto
 
 **Afirmação.** `evidence/` é auditada por presença de arquivos e heurística de nome
 (`/test|spec|result|log|output|coverage/i`), não por utilidade: o harness garante que
@@ -141,7 +216,7 @@ conteúdo, combinações de violações nem gates fora de `mutationCases()`.
 
 **Evidência.** `src/core/gates.ts:932-990` (`validateEvidenceSemantics`, com
 `hasTestEvidence` por regex e `FIND-SEM-EVD-003` em `severity: 'low'`); logs gravados
-com sha256 em `src/core/task_evidence.ts:546` (`auditCheck`) e revalidados em `:597`;
+com sha256 em `src/core/task_evidence.ts:675` (`auditCheck`) e revalidados em `:723`;
 `src/core/self_check_mutate.ts` para o escopo das mutações.
 
 **Em vez disso.** Nomeie cada evidência com a AC que ela prova

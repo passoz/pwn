@@ -1,7 +1,7 @@
 {
-  "name": "piwerness",
+  "name": "pwn",
   "version": "0.1.0",
-  "description": "Contract-governed agent harness framework for deterministic software engineering",
+  "description": "PWN (Policy Work Norms) — contract-governed agent harness framework for deterministic software engineering",
   "main": "src/cli.ts",
   "type": "module",
   "bin": {
@@ -22,10 +22,16 @@
     "agent-harness",
     "contract-governed",
     "tdd",
-    "piwerness",
+    "pwn",
+    "policy-work-norms",
     "ai-engineering"
   ],
-  "author": "Google DeepMind Advanced Agentic Coding",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/passoz/pwn.git"
+  },
+  "homepage": "https://github.com/passoz/pwn#readme",
+  "author": "Fernando Passos",
   "license": "MIT",
   "dependencies": {
     "ajv": "^8.20.0"

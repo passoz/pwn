@@ -18,7 +18,7 @@ export interface WorkArtifactsPaths {
 }
 
 export function getExistingWorkIds(rootDir: string = process.cwd()): string[] {
-  const baseDir = path.resolve(rootDir, '.piwerness/work');
+  const baseDir = path.resolve(rootDir, '.pwn/work');
   if (!fs.existsSync(baseDir)) {
     return [];
   }
@@ -79,7 +79,7 @@ export function getNextWorkId(rootDir: string = process.cwd()): string {
 }
 
 export function getWorkArtifactsPaths(workId: string, rootDir: string = process.cwd()): WorkArtifactsPaths {
-  const workDir = path.resolve(rootDir, '.piwerness/work', workId);
+  const workDir = path.resolve(rootDir, '.pwn/work', workId);
 
   return {
     workDir,
@@ -142,7 +142,7 @@ export function initWorkDirectory(workId?: string, rootDir: string = process.cwd
 
   if (!fs.existsSync(paths.prd)) {
     fs.writeFileSync(paths.prd, JSON.stringify({
-      $schema: "https://piwerness.dev/schemas/prd.schema.json",
+      $schema: "https://pwn.dev/schemas/prd.schema.json",
       id: `PRD-${resolvedWorkId}`,
       meta: { version: "1.0", created_at: new Date().toISOString(), author: "operator" },
       title: `PRD do Work ${resolvedWorkId}`,

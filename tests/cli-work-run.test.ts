@@ -24,7 +24,7 @@ async function runCli(args: string[], cwd: string): Promise<CliResult> {
 
 function fixtureWork(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-cli-run-'));
-  const workDir = path.join(dir, '.piwerness', 'work', '0001');
+  const workDir = path.join(dir, '.pwn', 'work', '0001');
   mkdirSync(workDir, { recursive: true });
   writeFileSync(path.join(workDir, 'discovery.json'), JSON.stringify({ work_id: '0001', problem: 'p' }), 'utf8');
   writeFileSync(path.join(workDir, 'requirements.json'), JSON.stringify({ requirements: [{ id: 'REQ-1', acceptance_criteria: ['c1'] }] }), 'utf8');
@@ -59,18 +59,27 @@ test('--no-gate não bypassa enforcement: Work sem contratos falha com erro clar
   assert.match(stderr, /CONTRACT ERROR|plan\.json não encontrado/);
 });
 
-test('work audit não envia mais a ação inválida --audit ao task_evidence', async () => {
+test('work audit exige o comando após -- e não envia ação inválida ao task_evidence', async () => {
   const dir = fixtureWork();
-  // Work 0001 não tem baseline registrado → task_evidence responde com o erro real
-  // (e não "unknown or missing action" do parse de --audit).
-  const { stdout } = await runCli(['work', 'audit', '--work', '0001', '--task', '1.1'], dir);
-  assert.match(stdout, /FAIL: baseline not found|verify|=== \[pwn work audit\]/);
+  // Work 0001 não tem baseline registrado. Sem `--`, a ação implícita (`verify`)
+  // recusa antes de qualquer execução — e a mensagem NÃO pode ser o
+  // "unknown or missing action" do antigo parse de `--audit`.
+  const semComando = await runCli(['work', 'audit', '--work', '0001', '--task', '1.1'], dir);
+  assert.equal(semComando.status, 1);
+  assert.match(semComando.stderr, /VERIFY command is required after --/);
+  assert.doesNotMatch(semComando.stderr, /unknown or missing action/);
+
+  // Com o comando, a auditoria segue para o erro real do domínio (falta de baseline).
+  const comComando = await runCli(['work', 'audit', '--work', '0001', '--task', '1.1', '--', 'echo', 'ok'], dir);
+  assert.equal(comComando.status, 2);
+  assert.match(comComando.stderr, /baseline not found/);
+  assert.doesNotMatch(comComando.stderr, /unknown or missing action/);
   rmSync(dir, { recursive: true, force: true });
 });
 
 test('run suspensa por risco L4 não sincroniza o manifest', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-cli-l4-'));
-  const workDir = path.join(dir, '.piwerness', 'work', '0001');
+  const workDir = path.join(dir, '.pwn', 'work', '0001');
   mkdirSync(workDir, { recursive: true });
   writeFileSync(path.join(workDir, 'plan.json'), JSON.stringify({
     work_id: '0001',
@@ -128,7 +137,7 @@ test('run suspensa por risco L4 não sincroniza o manifest', async () => {
 
 function fixtureWorkWithContract(risk = 'L2'): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-cli-ctr-'));
-  const workDir = path.join(dir, '.piwerness', 'work', '0001');
+  const workDir = path.join(dir, '.pwn', 'work', '0001');
   mkdirSync(workDir, { recursive: true });
   writeFileSync(path.join(workDir, 'plan.json'), JSON.stringify({
     work_id: '0001',
@@ -172,7 +181,7 @@ test('work contract valida os contratos V4 congelados (PASS)', async () => {
 
 test('work contract falha com contrato ausente apontando a task', async () => {
   const dir = fixtureWorkWithContract();
-  rmSync(path.join(dir, '.piwerness', 'work', '0001', 'CTR-001.json'));
+  rmSync(path.join(dir, '.pwn', 'work', '0001', 'CTR-001.json'));
   const { status, stderr } = await runCli(['work', 'contract', '--work', '0001'], dir);
   assert.equal(status, 1);
   assert.match(stderr, /CONTRACT RESULT\]: FAIL/);
@@ -196,7 +205,7 @@ test('work scaffold cria a cadeia completa e sai com 0', async () => {
   assert.match(stdout, /Work 0001 criado/);
   assert.match(stdout, /Revisão obrigatória/);
   for (const file of ['plan.json', 'CTR-001.json', 'prd.json', 'spec.json', 'traceability-matrix.json']) {
-    assert.ok(existsSync(path.join(dir, '.piwerness', 'work', '0001', file)), `faltou ${file}`);
+    assert.ok(existsSync(path.join(dir, '.pwn', 'work', '0001', file)), `faltou ${file}`);
   }
   assert.ok(existsSync(path.join(dir, '.todo', '0001-tasks.md')));
   rmSync(dir, { recursive: true, force: true });
@@ -255,7 +264,7 @@ test('work import converte um Work v3 e respeita idempotência', async () => {
   const first = await runCli(['work', 'import', '--all'], dir);
   assert.equal(first.status, 0);
   assert.match(first.stdout, /plan\.json/);
-  assert.ok(existsSync(path.join(dir, '.piwerness', 'work', '0001', 'CTR-001.json')));
+  assert.ok(existsSync(path.join(dir, '.pwn', 'work', '0001', 'CTR-001.json')));
 
   const second = await runCli(['work', 'import', '--all'], dir);
   assert.equal(second.status, 0);

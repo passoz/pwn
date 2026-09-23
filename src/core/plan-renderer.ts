@@ -170,7 +170,7 @@ export function normalizeMarkers(markdown: string): string {
  * Load the canonical plan for a work id. Returns null when absent or unreadable.
  */
 export function loadPlan(workId: string, rootDir: string = process.cwd()): Plan | null {
-  const planPath = path.resolve(rootDir, '.piwerness/work', workId, 'plan.json');
+  const planPath = path.resolve(rootDir, '.pwn/work', workId, 'plan.json');
   if (!fs.existsSync(planPath)) return null;
   try {
     const data = JSON.parse(fs.readFileSync(planPath, 'utf8'));
