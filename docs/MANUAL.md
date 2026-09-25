@@ -1,7 +1,7 @@
 # 📖 Manual Completo do PWN — Policy Work Norms (`pwn`)
 
 > **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
-> *Versão do Harness: 1.1 (Bun / TypeScript)*
+> *Versão do Harness: v0.1.0 (Bun / TypeScript)*
 
 ---
 
@@ -582,7 +582,7 @@ Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard mon
 
 ## 15. Limites Conhecidos
 
-O harness é **honesto sobre o que não garante**. O documento completo, com evidência em código (arquivo:linha) e a alternativa recomendada para cada caso, está em **[LIMITES.md](LIMITES.md)**.
+O harness é **honesto sobre o que não garante**. O documento completo, com evidência em código (arquivo:linha) e a alternativa recomendada para cada caso, está em **[LIMITES.md](LIMITES.md)**. Para detalhes de testes de segurança adversarial e histórico de auditoria de enforcement, consulte também o **[Plano de Teste de Segurança](SECURITY-TEST-PLAN.md)** e a **[Revisão da Fase 1 de Enforcement](REVIEW-FASE-1-ENFORCEMENT.md)**.
 
 Resumo dos limites estruturais:
 
