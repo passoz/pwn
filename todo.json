@@ -38,7 +38,7 @@
         {
           "id": "AC-002",
           "type": "command",
-          "statement": "Copiar skills, workflows, scripts, testes, docs e adapters sem alterar /home/passoz/dev/ai-engineering-skills",
+          "statement": "Copiar skills, workflows, scripts, testes, docs e adapters sem alterar o repositório original ai-engineering-skills",
           "command": "test -d packs/software-engineering/skills && test -d packs/software-engineering/workflows"
         },
         {
@@ -54,7 +54,7 @@
             "packs/software-engineering/**"
           ],
           "write_deny": [
-            "/home/passoz/dev/ai-engineering-skills/**"
+            "<project-root>/../ai-engineering-skills/**"
           ]
         }
       }

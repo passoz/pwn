@@ -1,8 +1,8 @@
 # Plano de Ajuste — PWN (pwn)
 
 **Data:** 2026-09-10
-**Versão avaliada:** 0.1.0 (`/home/passoz/dev/pwn`)
-**Origem do diagnóstico:** teste ponta-a-ponta em projeto real (`pwn-ledger`, em `/home/passoz/dev/teste-pwn`)
+**Versão avaliada:** 0.1.0 (raiz do projeto `pwn`)
+**Origem do diagnóstico:** teste ponta-a-ponta em projeto real (`pwn-ledger`, em diretório irmão `teste-pwn`)
 **Evidências:** `teste-pwn/BENCHMARK.md`, `teste-pwn/bench/phase-timings.tsv`, `teste-pwn/.todo/evidence/0001/`, `teste-pwn/.todo/attestations/0001/`
 
 ---
@@ -315,8 +315,8 @@ suspensão L4 retornava exit 0; `work contract` era um alias enganoso do validad
 ## Apêndice — Reprodução do teste que originou o diagnóstico
 
 ```bash
-cd /home/passoz/dev/teste-pwn
-PWN=/home/passoz/dev/pwn/bin/pwn.js
+cd ../teste-pwn
+PWN=../pwn/bin/pwn.js
 
 # cadeia de governanca
 bun "$PWN" work gate GATE-DISC-REQ --work 0001
@@ -337,7 +337,7 @@ bun "$PWN" task capsule T-001 0001   # L1 / src/** / regression-guarded
 cat .pwn/work/0001/CTR-001.json # L2 / tdd-strict / src/ledger.ts
 
 # baseline do proprio framework (achado A1)
-cd /home/passoz/dev/pwn && npm run validate   # ERR_MODULE_NOT_FOUND
+cd ../pwn && npm run validate   # ERR_MODULE_NOT_FOUND
 bun test                                            # 210 pass / 5 fail
 cd packs/software-engineering && bun test           # 5 fail -> desaparecem no cwd correto
 ```

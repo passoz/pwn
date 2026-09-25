@@ -14,3 +14,10 @@ queue/review/
 # Segredos e caches de veredicto: nunca versionar (a chave HMAC assina os gates)
 .pwn/.verifier_key
 .pwn/gate-cache/
+
+# Configuração de roteamento pode conter API keys em texto claro
+.pwn/routing.json
+
+# Variáveis de ambiente (podem conter segredos)
+.env*
+!.env.example

@@ -82,7 +82,7 @@ test('getRoutingTable e saveRoutingConfig suportam arquivo de configuracao e var
   const root = fixture();
   try {
     saveRoutingConfig({
-      cheap: { defaultModel: 'custom-cheap-model', baseUrl: 'http://localhost:11434/v1', provider: 'ollama', apiKeyEnv: 'OLLAMA_API_KEY', apiKey: 'secret-ollama-key' },
+      cheap: { defaultModel: 'custom-cheap-model', baseUrl: 'http://localhost:11434/v1', provider: 'ollama', apiKeyEnv: 'OLLAMA_API_KEY', apiKey: 'test-placeholder-not-a-real-key' },
       strong: { defaultModel: 'custom-strong-model', baseUrl: 'https://api.anthropic.com/v1', provider: 'anthropic' },
     }, root);
 
@@ -91,7 +91,7 @@ test('getRoutingTable e saveRoutingConfig suportam arquivo de configuracao e var
     assert.equal(table.cheap.baseUrl, 'http://localhost:11434/v1');
     assert.equal(table.cheap.provider, 'ollama');
     assert.equal(table.cheap.apiKeyEnv, 'OLLAMA_API_KEY');
-    assert.equal(table.cheap.apiKey, 'secret-ollama-key');
+    assert.equal(table.cheap.apiKey, 'test-placeholder-not-a-real-key');
     assert.equal(table.strong.defaultModel, 'custom-strong-model');
     assert.equal(table.strong.baseUrl, 'https://api.anthropic.com/v1');
   } finally {
