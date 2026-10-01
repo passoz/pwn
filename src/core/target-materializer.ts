@@ -37,14 +37,14 @@ export const TARGET_CAPABILITY_MATRIX: Record<TargetRuntime, TargetCapabilities>
   },
   omp: {
     target: 'omp',
-    name: 'omp CLI Assistant',
+    name: 'omp (oh my pi) Coding Agent',
     supportsSystemPrompt: true,
-    supportsSubagents: false,
+    supportsSubagents: true,
     supportsSkills: true,
-    supportsToolCalling: false,
-    supportsContractV4: false,
-    supportsWorktreeSandbox: false,
-    promptFileFormat: 'omp.json',
+    supportsToolCalling: true,
+    supportsContractV4: true,
+    supportsWorktreeSandbox: true,
+    promptFileFormat: 'AGENTS.md',
   },
   raw: {
     target: 'raw',
@@ -65,6 +65,21 @@ export interface MaterializationResult {
   unsupportedCapabilities: string[];
   generatedFiles: string[];
   notes: string[];
+}
+
+export const TARGET_CAPABILITY_FLAGS: Array<keyof TargetCapabilities> = [
+  'supportsSystemPrompt',
+  'supportsSubagents',
+  'supportsSkills',
+  'supportsToolCalling',
+  'supportsContractV4',
+  'supportsWorktreeSandbox',
+];
+
+export function deriveUnsupportedCapabilities(target: TargetRuntime): string[] {
+  const caps = TARGET_CAPABILITY_MATRIX[target];
+  if (!caps) return [];
+  return TARGET_CAPABILITY_FLAGS.filter((flag) => !caps[flag]);
 }
 
 export function validateTargetSupport(target: TargetRuntime, requiredCapabilities: Array<keyof TargetCapabilities>): { valid: boolean; missing: string[] } {

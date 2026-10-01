@@ -1,0 +1,10 @@
+# Materializado via `pwn target materialize --target omp`
+# Instale copiando este arquivo para <raiz-do-repo>/.omp/config.yml
+#   (ou carregue só nesta execução: omp --config <caminho>)
+# Chaves validadas contra `omp config list` (omp v18.x).
+
+# Sessões headless (`omp --print`) não têm UI para responder prompts: qualquer
+# policy "prompt" falha fechado. O gate de escrita do PWN é o Diff Guard
+# (write_allow/write_deny), então o approvalMode do projeto fica explícito.
+tools:
+  approvalMode: yolo

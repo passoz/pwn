@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TARGET_CAPABILITY_MATRIX, TargetContractContext, renderScopeSection } from '../core/target-materializer.js';
+import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderScopeSection } from '../core/target-materializer.js';
 
 export function materializePiTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
-  const caps = TARGET_CAPABILITY_MATRIX.pi;
   const generatedFiles: string[] = [];
   const notes: string[] = [];
 
@@ -27,11 +26,12 @@ ${context ? renderScopeSection(context) : ''}
   fs.writeFileSync(agentsPath, agentsMdContent, 'utf8');
   generatedFiles.push(agentsPath);
   notes.push('Gerado AGENTS.md para Pi');
+  notes.push('Instale copiando AGENTS.md para a raiz do projeto (pi descobre AGENTS.md e CLAUDE.md na inicialização)');
 
   return {
     target: 'pi',
     success: true,
-    unsupportedCapabilities: [],
+    unsupportedCapabilities: deriveUnsupportedCapabilities('pi'),
     generatedFiles,
     notes,
   };

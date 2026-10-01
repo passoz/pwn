@@ -302,7 +302,7 @@ O PWN é agnóstico de runtime de IA. O **Target Materializer** (`src/core/targe
 |---|---|---|---|---|---|---|---|
 | **`pi`** | Pi Agent Harness | ✓ | ✓ | ✓ | ✓ | ✓ | `AGENTS.md` |
 | **`opencode`** | OpenCode Interpreter | ✓ | ✓ | ✓ | ✓ | ✓ | `AGENTS.md`, `opencode.jsonc` |
-| **`omp`** | omp CLI Assistant | ✓ | ✗ | ✗ | ✗ | ✗ | `omp.json` *(com degradação graciosa)* |
+| **`omp`** | omp (oh my pi) Coding Agent | ✓ | ✓ | ✓ | ✓ | ✓ | `AGENTS.md`, `.omp/config.yml` |
 | **`raw`** | Raw Model API | ✓ | ✗ | ✗ | ✗ | ✗ | `prompt.txt` |
 
 ### Comandos de Target:
@@ -312,6 +312,9 @@ bun bin/pwn.js target list
 
 # Materializar artefatos para OpenCode
 bun bin/pwn.js target materialize --target opencode
+
+# Materializar artefatos para omp (oh my pi)
+bun bin/pwn.js target materialize --target omp
 ```
 
 ---
@@ -563,7 +566,7 @@ bun bin/pwn.js work gate GATE-PLAN-CONTRACT
 ```
 
 #### Passo 5: Materializar Runtimes e Executar
-Materialize a configuração do seu runtime de preferência (ex: OpenCode ou Pi):
+Materialize a configuração do seu runtime de preferência (ex: OpenCode, Pi ou omp):
 
 ```bash
 bun bin/pwn.js target materialize --target opencode

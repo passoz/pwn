@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TARGET_CAPABILITY_MATRIX, TargetContractContext, renderScopeSection } from '../core/target-materializer.js';
+import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderScopeSection } from '../core/target-materializer.js';
 
 export function materializeOpenCodeTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
-  const caps = TARGET_CAPABILITY_MATRIX.opencode;
   const generatedFiles: string[] = [];
   const notes: string[] = [];
 
@@ -29,27 +28,24 @@ ${context ? renderScopeSection(context) : ''}
 
   // 2. Generate opencode.jsonc
   const openCodeConfig = {
-    $schema: "https://opencode.ai/config.schema.json",
-    version: "1.0",
-    agent: {
-      defaultRole: "cheap",
-      fallbackRole: "strong"
+    $schema: 'https://opencode.ai/config.json',
+    permission: {
+      edit: 'allow',
+      bash: 'allow',
     },
-    sandbox: {
-      type: "git_worktree",
-      isolated: true
-    }
   };
 
   const configPath = path.join(outDir, 'opencode.jsonc');
   fs.writeFileSync(configPath, JSON.stringify(openCodeConfig, null, 2), 'utf8');
   generatedFiles.push(configPath);
   notes.push('Gerado opencode.jsonc e AGENTS.md para OpenCode');
+  notes.push('Instale copiando AGENTS.md e opencode.jsonc para a raiz do projeto (ou exporte OPENCODE_CONFIG apontando para o opencode.jsonc)');
+  notes.push('permission explícita: sessões headless não respondem prompts; o gate de escrita é o Diff Guard do PWN (write_allow/write_deny)');
 
   return {
     target: 'opencode',
     success: true,
-    unsupportedCapabilities: [],
+    unsupportedCapabilities: deriveUnsupportedCapabilities('opencode'),
     generatedFiles,
     notes,
   };
