@@ -14,7 +14,7 @@ function samplePlan(): Plan {
       { name: 'core-domain', purpose: 'Dominio e validacao dos lancamentos' },
       { name: 'cli', purpose: 'Interface de linha de comando' },
     ],
-    global_gates: ['Suite completa verde com bun test'],
+    global_gates: ['`bun test` — a suíte completa permanece verde'],
     tasks: [
       {
         id: '1.1',
@@ -30,7 +30,7 @@ function samplePlan(): Plan {
         implementation_steps: ['Implementar addEntry com validacao', 'Implementar computeBalance'],
         acceptance_criteria: [
           { command: 'bun test tests/ledger.test.ts', description: 'a suite focada do dominio passa' },
-          { command: 'bun test', description: 'a suite completa permanece verde' },
+          { command: "bun test tests/ledger.test.ts -t 'saldo consolidado'", description: 'a assercao de saldo consolidado e observada' },
         ],
         spec_reference: 'CAP-001',
         contract_id: 'CTR-001',

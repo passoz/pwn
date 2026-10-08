@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { describeBaseline, mutationCases, runMutations } from '../src/core/self_check_mutate.js';
+import { createDefaultContractV4 } from '../src/core/contract-engine.js';
 
 /** Escreve um Work mínimo porém válido (todos os gates passam antes das mutações). */
 function writeValidWork(rootDir: string, workId = '0001'): string {
@@ -44,16 +45,27 @@ function writeValidWork(rootDir: string, workId = '0001'): string {
     },
     'plan.json': {
       work_id: workId,
+      title: 'Plano de teste',
+      components: [{ name: 'core', purpose: 'Componente de teste' }],
+      global_gates: ['`bun test` — a suíte completa permanece verde'],
       tasks: [
         {
-          id: 'T-001',
-          description: 'Task de teste',
+          id: '1.1',
+          title: 'Task de teste',
+          requirement_id: 'FR-001',
           spec_reference: 'CAP-001',
           contract_id: 'CTR-001',
-          acceptance_criteria: ['Critério de aceite da task'],
+          components: ['core'],
+          files: ['src/feature.ts', 'tests/feature.test.ts'],
+          implementation_files: ['src/feature.ts'],
+          test_files: ['tests/feature.test.ts'],
+          red: { command: 'bun test tests/feature.test.ts', description: 'a asserção FEATURE-TEST falha antes da implementação' },
+          implementation_steps: ['Implementar o comportamento de teste'],
+          acceptance_criteria: [{ command: 'bun test tests/feature.test.ts', description: 'o comportamento de teste é observado' }],
         },
       ],
     },
+    'CTR-001.json': createDefaultContractV4('1.1', workId, 'Task de teste', 'L2'),
     'traceability-matrix.json': {
       work_id: workId,
       matrix: [
@@ -62,7 +74,7 @@ function writeValidWork(rootDir: string, workId = '0001'): string {
           requirement_id: 'FR-001',
           decision_id: 'TD-001',
           spec_section: 'CAP-001',
-          task_id: 'T-001',
+          task_id: '1.1',
           contract_id: 'CTR-001',
           evidence_id: 'EVD-001',
           status: 'planned',

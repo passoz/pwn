@@ -5,10 +5,14 @@ import path from "node:path";
 
 import { isDirectEntry } from './entry-guard.js';
 
+import { verifyGlobalGates, verifyTaskAttestation } from "./task_evidence.js";
 import { validateTasksDetailed, type TaskAnalysis } from "./validate_tasks.js";
+import { loadPlan, planMatchesMarkdown } from "./plan-renderer.js";
 import { listWorks, loadManifest, resolvePlanTarget } from "./work-manifest.js";
 
 const TASK_HEADING = /^### \[([ x!])\] \[(\d+\.\d+)\] (\S.*)$/;
+/** Único estágio de evidência que conta como task concluída (atestação assinada válida). */
+const ACCEPTED = "ACCEPTED";
 
 interface FileDigest {
   exists: boolean;
@@ -18,6 +22,8 @@ interface FileDigest {
 interface EvidenceState {
   stage: string;
   stale: boolean;
+  /** Por que a evidência VERIFIED ainda não conta como aceita (atestação ausente/inválida). */
+  attestation?: string;
 }
 
 interface StatusTask {
@@ -105,9 +111,10 @@ function digest(filePath: string): FileDigest {
   return { exists: true, sha256: createHash("sha256").update(readFileSync(filePath)).digest("hex") };
 }
 
-function snapshotChanged(snapshot: unknown): boolean {
+/** Caminhos do snapshot são relativos à raiz do repositório (onde o audit roda). */
+function snapshotChanged(snapshot: unknown, rootDir: string): boolean {
   if (!snapshot || typeof snapshot !== "object") return false;
-  return Object.entries(snapshot).some(([filePath, expected]) => JSON.stringify(digest(filePath)) !== JSON.stringify(expected));
+  return Object.entries(snapshot).some(([filePath, expected]) => JSON.stringify(digest(path.resolve(rootDir, filePath))) !== JSON.stringify(expected));
 }
 
 function fieldValue(lines: string[], start: number, end: number, name: string): string {
@@ -137,21 +144,29 @@ function parseTasks(text: string): ParsedTask[] {
   });
 }
 
-function evidenceFor(taskId: string, todoDirectory: string, workId: string | null): EvidenceState {
+/**
+ * Estágio da evidência TDD de uma task. VERIFIED só prova que o teste focado
+ * passa; ACCEPTED exige a atestação de aceitação assinada (ACs do plano
+ * observados sobre o snapshot do GREEN) — é o único estágio que conta como concluído.
+ */
+function evidenceFor(taskId: string, todoDirectory: string, workId: string | null, planText: string): EvidenceState {
+  const rootDir = path.dirname(todoDirectory);
   const evidenceRoot = workId ? path.join(todoDirectory, "evidence", workId) : path.join(todoDirectory, "evidence");
   const stateFile = path.join(evidenceRoot, "state", `${taskId}.json`);
   if (!existsSync(stateFile)) return { stage: "not started", stale: false };
 
   try {
     const state = JSON.parse(readFileSync(stateFile, "utf8"));
-    if (!state.red_tests) return { stage: "BASELINE", stale: snapshotChanged(state.baseline_implementation) || snapshotChanged(state.baseline_tests) };
-    if (!state.green_implementation) return { stage: "RED", stale: snapshotChanged(state.red_tests) };
-    const stale = snapshotChanged(state.green_implementation) || snapshotChanged(state.green_tests);
+    if (!state.red_tests) return { stage: "BASELINE", stale: snapshotChanged(state.baseline_implementation, rootDir) || snapshotChanged(state.baseline_tests, rootDir) };
+    if (!state.green_implementation) return { stage: "RED", stale: snapshotChanged(state.red_tests, rootDir) };
+    const stale = snapshotChanged(state.green_implementation, rootDir) || snapshotChanged(state.green_tests, rootDir);
     const verifyLog = path.join(evidenceRoot, `${taskId}-verify.log`);
-    if (existsSync(verifyLog) && /VERDICT: PASS\s*$/m.test(readFileSync(verifyLog, "utf8"))) {
-      return { stage: "VERIFIED", stale };
+    if (!existsSync(verifyLog) || !/VERDICT: PASS\s*$/m.test(readFileSync(verifyLog, "utf8"))) {
+      return { stage: "GREEN", stale };
     }
-    return { stage: "GREEN", stale };
+    const attestation = verifyTaskAttestation({ rootDir, todoDirectory, workId, taskId, planText });
+    if (attestation.valid) return { stage: "ACCEPTED", stale: stale || attestation.stale };
+    return { stage: "VERIFIED", stale, attestation: attestation.reason };
   } catch (error) {
     return { stage: `invalid evidence: ${(error as Error).message}`, stale: true };
   }
@@ -210,7 +225,12 @@ function artifactStatus(tasksPath: string, validation: TaskAnalysis): ArtifactsS
   return { systemSpec, prompt, tasks };
 }
 
-function globalGates(text: string): GlobalGates {
+/**
+ * Estado dos gates globais. O checkbox não prova nada (qualquer um marca `[x]`):
+ * um gate só conta quando há evidência assinada de `pwn work audit gate` com o
+ * comando do plano, PASS, sobre os arquivos atuais das tasks.
+ */
+function globalGates(text: string, context: { rootDir: string; todoDirectory: string; workId: string | null }): GlobalGates {
   const start = text.indexOf("## Global gates");
   if (start === -1) return { state: "MISSING", detail: "missing" };
   const after = text.slice(start + "## Global gates".length);
@@ -220,11 +240,13 @@ function globalGates(text: string): GlobalGates {
   if (/^\s*N\/A\s*$/m.test(section)) return { state: "N/A", detail: "N/A" };
   const items = [...section.matchAll(/^- \[([ xX!])\]/gm)].map((match) => match[1]);
   if (!items.length) return { state: "UNTRACKED", detail: "declared; no tracked checkbox state" };
-  const checked = items.filter((marker) => marker.toLowerCase() === "x").length;
   const blocked = items.filter((marker) => marker === "!").length;
-  const detail = `${checked}/${items.length} checked${blocked ? `; ${blocked} blocked` : ""}`;
+  const evidence = verifyGlobalGates({ ...context, planText: text });
+  const proven = evidence.filter((gate) => gate.ok).length;
+  const pending = evidence.filter((gate) => !gate.ok).map((gate) => `${gate.name}: ${gate.reason}`);
+  const detail = `${proven}/${items.length} with evidence${blocked ? `; ${blocked} blocked` : ""}${pending.length ? ` (${pending.join("; ")})` : ""}`;
   if (blocked) return { state: "BLOCKED", detail };
-  if (checked === items.length) return { state: "PASS", detail };
+  if (proven === items.length) return { state: "PASS", detail };
   return { state: "PENDING", detail };
 }
 
@@ -233,9 +255,9 @@ function panorama(tasks: StatusTask[], validationErrors: string[], validationWar
   const pending = tasks.filter((task) => task.marker === " ").length;
   const blocked = tasks.filter((task) => task.marker === "!").length;
   const stale = tasks.filter((task) => task.evidence.stale).length;
-  const unverifiedChecked = tasks.filter((task) => task.marker === "x" && task.evidence.stage !== "VERIFIED").length;
-  const verifiedOpen = tasks.filter((task) => task.marker !== "x" && task.evidence.stage === "VERIFIED").length;
-  const partial = tasks.find((task) => task.marker !== "x" && !["not started", "VERIFIED"].includes(task.evidence.stage));
+  const unverifiedChecked = tasks.filter((task) => task.marker === "x" && task.evidence.stage !== ACCEPTED).length;
+  const verifiedOpen = tasks.filter((task) => task.marker !== "x" && task.evidence.stage === ACCEPTED).length;
+  const partial = tasks.find((task) => task.marker !== "x" && !["not started", ACCEPTED].includes(task.evidence.stage));
   const firstBlocked = tasks.find((task) => task.marker === "!");
   const firstPending = tasks.find((task) => task.marker === " ")!;
   const firstOpenIndex = tasks.findIndex((task) => task.marker !== "x");
@@ -255,11 +277,11 @@ function panorama(tasks: StatusTask[], validationErrors: string[], validationWar
     stoppedAt = `Blocked at ${firstBlocked.id}: ${firstBlocked.title}`;
   } else if (unverifiedChecked || verifiedOpen) {
     state = "INCONSISTENT STATE";
-    const task = (tasks.find((entry) => entry.marker === "x" && entry.evidence.stage !== "VERIFIED")
-      ?? tasks.find((entry) => entry.marker !== "x" && entry.evidence.stage === "VERIFIED"))!;
+    const task = (tasks.find((entry) => entry.marker === "x" && entry.evidence.stage !== ACCEPTED)
+      ?? tasks.find((entry) => entry.marker !== "x" && entry.evidence.stage === ACCEPTED))!;
     stoppedAt = task.marker === "x"
-      ? `Task ${task.id} is checked but evidence stage is ${task.evidence.stage}`
-      : `Task ${task.id} has VERIFIED evidence but marker is not checked`;
+      ? `Task ${task.id} is checked but evidence stage is ${task.evidence.stage}${task.evidence.attestation ? ` (${task.evidence.attestation})` : ""}`
+      : `Task ${task.id} has ACCEPTED evidence but marker is not checked`;
   } else if (partial) {
     state = "IN PROGRESS";
     stoppedAt = `Stopped during ${partial.id} at ${partial.evidence.stage}`;
@@ -300,8 +322,18 @@ export function collectProjectStatus(tasksPath = ".todo/tasks.md"): ProjectStatu
     : { errors: [], warnings: [], exceptions: [], contractVersion: null, contractVersionSource: "absent", migratedFromContractVersion: null, workId: null, tasks: [] };
   const todoDirectory = path.dirname(tasksPath);
   const workId = validation.workId ?? null;
-  const tasks: StatusTask[] = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId) }));
-  const gates = globalGates(text);
+  if (workId) {
+    const rootDir = path.dirname(todoDirectory);
+    const canonicalPath = path.resolve(rootDir, ".pwn", "work", workId, "plan.json");
+    if (existsSync(canonicalPath)) {
+      const plan = loadPlan(workId, rootDir);
+      if (!plan || !planMatchesMarkdown(plan, text)) {
+        validation.errors.push(`DRIFT: ${tasksPath} diverge de .pwn/work/${workId}/plan.json ou o plano canônico está ilegível`);
+      }
+    }
+  }
+  const tasks: StatusTask[] = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId, text) }));
+  const gates = globalGates(text, { rootDir: path.dirname(todoDirectory), todoDirectory, workId });
   return {
     artifacts: artifactStatus(tasksPath, validation),
     panorama: panorama(tasks, validation.errors, validation.warnings, gates),
@@ -341,7 +373,7 @@ function crossWorkDependencyState(root: string, workId: string, dependsOn: strin
       const manifest = loadManifest(root, match[1]);
       const report = collectProjectStatus(path.join(root, manifest.artifacts.plan));
       const dependency = report.tasks.find((task) => task.id === match[2]);
-      if (!dependency || dependency.marker !== "x" || dependency.evidence.stage !== "VERIFIED" || dependency.evidence.stale) {
+      if (!dependency || dependency.marker !== "x" || dependency.evidence.stage !== ACCEPTED || dependency.evidence.stale) {
         blockers.push(raw);
       }
     } catch {
@@ -409,7 +441,7 @@ export function renderMarkdown(report: PlanStatus): string {
     `- **Project state:** ${report.panorama.state}`,
     `- **Progress:** ${report.panorama.counts.completed}/${report.panorama.counts.total} checked (${report.panorama.progress}%)`,
     `- **Tasks:** ${report.panorama.counts.pending} pending | ${report.panorama.counts.completed} checked | ${report.panorama.counts.blocked} blocked`,
-    `- **Consistency:** ${report.panorama.counts.unverifiedChecked} checked without VERIFIED evidence | ${report.panorama.counts.verifiedOpen} VERIFIED but open`,
+    `- **Consistency:** ${report.panorama.counts.unverifiedChecked} checked without ACCEPTED evidence | ${report.panorama.counts.verifiedOpen} ACCEPTED but open`,
     `- **Task contract:** ${report.contractVersion == null ? "unknown" : `v${report.contractVersion}`}${report.migratedFromContractVersion == null ? "" : ` migrated from v${report.migratedFromContractVersion}`} | ${report.panorama.compatibilityWarnings} compatibility warning(s) | ${report.validationExceptions.length} preserved legacy exception(s)`,
     `- **Where it stopped:** ${escapeCell(report.panorama.stoppedAt)}`,
     `- **Global gates:** ${report.globalGates.state} — ${escapeCell(report.globalGates.detail)}`,
@@ -422,7 +454,7 @@ export function renderMarkdown(report: PlanStatus): string {
 
   if (!report.tasks.length) lines.push("| — | — | — | — | — | No tasks found |\n");
   for (const task of report.tasks) {
-    const evidence = `${task.evidence.stage}${task.evidence.stale ? " (STALE)" : ""}`;
+    const evidence = `${task.evidence.stage}${task.evidence.stale ? " (STALE)" : ""}${task.evidence.attestation ? ` — ${task.evidence.attestation}` : ""}`;
     lines.push(`| \`${task.id}\` | ${markerStatus(task.marker)} | \`${escapeCell(task.requirement)}\` | ${escapeCell(task.dependsOn)} | ${escapeCell(evidence)} | ${escapeCell(task.title)} |`);
   }
 

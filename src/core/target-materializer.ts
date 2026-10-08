@@ -129,6 +129,33 @@ export function collectContractContext(contracts: Array<{
   };
 }
 
+/**
+ * Protocolo de aceitação que o agente precisa seguir. Cada passo é conferido pelo
+ * harness (comandos e arquivos amarrados ao plano, atestação assinada); o texto
+ * existe para o agente não descobrir as regras pelo erro.
+ */
+export function renderAcceptanceProtocol(): string {
+  return [
+    '',
+    '## Protocolo de aceitação (obrigatório — o harness confere cada passo)',
+    'Uma task só está concluída com a atestação assinada de `pwn work audit candidate`.',
+    'Marcar `[x]` sem ela deixa o Work em INCONSISTENT STATE; "testes passando" não é conclusão.',
+    '',
+    '1. Antes de tocar em qualquer arquivo: `pwn work audit baseline --work <W> --task <T>` (os arquivos vêm do plano).',
+    '2. Escreva o teste que falha e rode `pwn work audit red --work <W> --task <T> --expect "<ID da asserção>" -- <comando RED do plano>`.',
+    '   O texto de `--expect` precisa estar escrito no arquivo de teste e aparecer só na falha (nada de "fail" ou "Error").',
+    '3. Implemente e rode `pwn work audit green --work <W> --task <T> -- <comando RED do plano>`.',
+    '4. Para cada AC do plano: `pwn work audit check --work <W> --task <T> --name AC-<n> -- <comando do AC-n, idêntico ao plano>`.',
+    '   O harness roda o AC também sem a sua implementação: AC que passa assim é recusado como vácuo.',
+    '5. `pwn work audit check --work <W> --task <T> --name REGRESSION -- <comando de regressão do plano>`.',
+    '6. `pwn work audit candidate --work <W> --task <T> -- <comando RED do plano>` e só então marque `[x]`.',
+    '7. Ao fim do Work, para cada gate global: `pwn work audit gate --work <W> --name G-<n> -- <comando do gate>`.',
+    '',
+    'Proibido: editar plano, contrato ou testes de aceitação congelados para a task passar; trocar os comandos do plano;',
+    'alterar testes depois do RED; implementar fora do que os ACs exigem e chamar de pronto.',
+  ].join('\n');
+}
+
 export function renderScopeSection(context: TargetContractContext): string {
   if (context.taskCount === 0) return '';
   const lines = [

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderScopeSection } from '../core/target-materializer.js';
+import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderAcceptanceProtocol, renderScopeSection } from '../core/target-materializer.js';
 
 export function materializePiTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
   const generatedFiles: string[] = [];
@@ -18,7 +18,8 @@ export function materializePiTarget(outDir: string, context?: TargetContractCont
 ## Invariantes Globais
 - **Precedência**: Seguir AGENTS.md e especificações normativas JSON.
 - **Segurança**: Respeitar allowlist de escrita de arquivos.
-- **Validação**: Executar testes automatizados via \`bun test\`.
+- **Validação**: Conclusão só com a atestação do audit — siga o protocolo abaixo.
+${renderAcceptanceProtocol()}
 ${context ? renderScopeSection(context) : ''}
 `;
 

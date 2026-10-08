@@ -57,6 +57,22 @@ export function getVerifierKey(workDir: string): string {
   }
   return generated;
 }
+/**
+ * Lê a chave do verificador SEM criá-la: `null` quando não há `PWN_VERIFIER_KEY`
+ * nem `.pwn/.verifier_key`. Usada por quem só confere assinaturas (status) — gerar
+ * uma chave nova ali invalidaria em silêncio tudo o que já foi assinado.
+ */
+export function readVerifierKey(workDir: string): string | null {
+  const fromEnv = process.env.PWN_VERIFIER_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const existing = fs.readFileSync(path.join(workDir, '.pwn', '.verifier_key'), 'utf8').trim();
+    return existing || null;
+  } catch {
+    return null;
+  }
+}
+
 function canonicalGatePayload(
   gate: string,
   workId: string,

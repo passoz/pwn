@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { scaffoldWork, scaffoldContract } from '../src/core/scaffold.js';
+import { genericCommandReason, isWholeSuiteCommand, normalizeCommand, placeholderPathReason } from '../src/core/acceptance.js';
 import { validateWorkDocuments } from '../src/core/validator.js';
 import { evaluateGateDiscReq, evaluateGatePlanContract, evaluateGatePrdSpec, evaluateGateReqPrd, evaluateGateSpecPlan } from '../src/core/gates.js';
 import { loadPlan, normalizeMarkers, renderTasksMarkdown } from '../src/core/plan-renderer.js';
@@ -121,4 +122,50 @@ test('scaffoldContract monta a allowlist de shell a partir da aceitação', () =
   const contract = scaffoldContract('0001', '1.1', 'Tarefa', 'L2');
   assert.deepEqual(contract.acceptance_contract.commands, ['bun test', 'bun run check']);
   assert.equal(contract.risk.level, 'L2');
+});
+
+test('scaffoldWork declara arquivos concretos e aceitação focada na própria task', () => {
+  const root = fixture();
+  try {
+    scaffoldWork({ rootDir: root, title: 'Módulo de Pagamentos PIX' });
+    const plan = loadPlan('0001', root);
+    assert.ok(plan, 'o plano scaffoldado precisa ser carregável');
+    const task = plan.tasks.find((entry) => entry.id === '1.1');
+    assert.ok(task, 'a task 1.1 precisa existir');
+
+    const implementationFile = 'src/modulo-de-pagamentos-pix.ts';
+    const testFile = 'tests/modulo-de-pagamentos-pix.test.ts';
+    assert.deepEqual(task.implementation_files, [implementationFile]);
+    assert.deepEqual(task.test_files, [testFile]);
+
+    // Nenhum caminho declarado é diretório, glob ou placeholder (o gate bloquearia).
+    for (const file of [...task.implementation_files, ...task.test_files]) {
+      assert.equal(placeholderPathReason(file), null, `caminho não concreto: ${file}`);
+    }
+
+    // O RED aponta para o teste focado da task e é exatamente o comando do AC-1.
+    assert.equal(normalizeCommand(task.red.command), normalizeCommand(`bun test ${testFile}`));
+    assert.equal(normalizeCommand(task.red.command), normalizeCommand(task.acceptance_criteria[0].command));
+
+    // O AC focado não roda a suíte inteira nem repete o gate global `bun test`.
+    const ac = task.acceptance_criteria[0].command;
+    assert.equal(isWholeSuiteCommand(ac), false);
+    assert.notEqual(normalizeCommand(ac), normalizeCommand('bun test'));
+    assert.equal(genericCommandReason(ac, ['bun test', 'bun run check']), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('scaffoldWork em risco L3 exige congelar o teste antes da implementação', () => {
+  const root = fixture();
+  try {
+    const result = scaffoldWork({ rootDir: root, title: 'Módulo de Pagamentos PIX', risk: 'L3' });
+    assert.ok(
+      result.review.some((line) => line.includes('--freeze-tests')),
+      `nenhuma linha de review cita --freeze-tests: ${result.review.join(' | ')}`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

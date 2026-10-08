@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -56,7 +56,11 @@ function validate(content: string) {
   const file = path.join(directory, ".todo", "0001-tasks.md");
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, content, "utf8");
-  return validateTasks(file);
+  try {
+    return validateTasks(file);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 function validateWithSpec(content: string, specContent: string) {
@@ -445,4 +449,87 @@ test("rejects RED with incidental environment/toolchain description in v3 plans"
   })());
   assert.ok(!v2errors.some((e) => e.includes("incidental") || e.includes("toolchain")), "v2 incidental RED must not be an error");
   assert.ok(v2warnings.some((w) => w.includes("incidental") || w.includes("toolchain") || w.includes("environment") || w.includes("legacy")), "v2 incidental RED should produce a warning");
+});
+
+test("rejeita AC genérico que roda a suíte inteira sem alvo", () => {
+  const plan = VALID.replace(
+    "- [ ] `go test -run TestInvalidLogin ./internal/...` — exit 0.",
+    "- [ ] `bun test` — exit 0.",
+  );
+  const errors = validate(plan);
+  assert.ok(
+    errors.some((error) => /AC `bun test` .*suíte inteira sem alvo/.test(error)),
+    `esperava rejeição do AC genérico; erros: ${errors.join("; ")}`,
+  );
+});
+
+test("rejeita AC vácuo que não exercita comportamento", () => {
+  const plan = VALID.replace(
+    "- [ ] `go test -run TestInvalidLogin ./internal/...` — exit 0.",
+    "- [ ] `true` — exit 0.",
+  );
+  const errors = validate(plan);
+  assert.ok(
+    errors.some((error) => /AC `true` .*não exercita comportamento/.test(error)),
+    `esperava rejeição do AC vácuo; erros: ${errors.join("; ")}`,
+  );
+});
+
+test("rejeita AC que repete um gate global", () => {
+  const plan = VALID
+    .replace("## Global gates\nN/A", "## Global gates\n- [ ] `go test ./...` — a suíte passa.")
+    .replace(
+      "- [ ] `go test -run TestInvalidLogin ./internal/...` — exit 0.",
+      "- [ ] `go test ./...` — a suíte passa.",
+    );
+  const errors = validate(plan);
+  assert.ok(
+    errors.some((error) => /AC `go test \.\/\.\.\.` .*repete um gate global/.test(error)),
+    `esperava rejeição do AC que repete o gate; erros: ${errors.join("; ")}`,
+  );
+});
+
+test("rejeita RED genérico que roda a suíte inteira sem alvo", () => {
+  // A coluna Regression vira N/A para que `go test ./...` no RED não seja lido
+  // primeiro como repetição de gate — assim o motivo exercitado é o da suíte inteira.
+  const plan = VALID
+    .replace("`go test ./...` | `N/A`", "`N/A` | `N/A`")
+    .replace(
+      "- `go test -run TestInvalidLogin ./internal/...` — exit non-zero and failure names the test.",
+      "- `go test ./...` — a suíte falha.",
+    );
+  const errors = validate(plan);
+  assert.ok(
+    errors.some((error) => /RED `go test \.\/\.\.\.` .*suíte inteira sem alvo/.test(error)),
+    `esperava rejeição do RED genérico; erros: ${errors.join("; ")}`,
+  );
+});
+
+test("rejeita arquivos declarados que não são arquivos concretos", () => {
+  const directoryErrors = validate(VALID.replace(
+    "**Implementation files:** internal/auth.go",
+    "**Implementation files:** src/",
+  ));
+  assert.ok(
+    directoryErrors.some((error) => /src\/ .*é diretório, não arquivo/.test(error)),
+    `esperava rejeição de diretório; erros: ${directoryErrors.join("; ")}`,
+  );
+
+  const globErrors = validate(VALID.replace(
+    "**Test files:** internal/auth_test.go",
+    "**Test files:** tests/**",
+  ));
+  assert.ok(
+    globErrors.some((error) => /tests\/\*\* .*é glob, não arquivo/.test(error)),
+    `esperava rejeição de glob; erros: ${globErrors.join("; ")}`,
+  );
+});
+
+test("rejeita gate global sem comando executável em crases", () => {
+  const plan = VALID.replace("## Global gates\nN/A", "## Global gates\n- [ ] a suíte passa.");
+  const errors = validate(plan);
+  assert.ok(
+    errors.some((error) => error.includes("global gate without an executable command in backticks")),
+    `esperava rejeição do gate sem comando; erros: ${errors.join("; ")}`,
+  );
 });

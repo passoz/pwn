@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { createDefaultContractV4 } from './contract-engine.js';
 import {
   evaluateGateDiscReq,
   evaluateGatePlanContract,
@@ -111,16 +112,27 @@ function canonicalArtifacts(workId: string): Record<string, unknown> {
     },
     'plan.json': {
       work_id: workId,
+      title: 'Plano de referência',
+      components: [{ name: 'core', purpose: 'Componente de referência' }],
+      global_gates: ['`bun test` — a suíte completa passa'],
       tasks: [
         {
-          id: 'T-001',
-          description: 'Task de referência',
+          id: '1.1',
+          title: 'Task de referência',
+          requirement_id: 'FR-001',
           spec_reference: 'CAP-001',
           contract_id: 'CTR-001',
-          acceptance_criteria: ['Critério de aceite observável da task'],
+          components: ['core'],
+          files: ['src/feature.ts', 'tests/feature.test.ts'],
+          implementation_files: ['src/feature.ts'],
+          test_files: ['tests/feature.test.ts'],
+          red: { command: 'bun test tests/feature.test.ts', description: 'a asserção FEATURE-REF falha antes da implementação' },
+          implementation_steps: ['Implementar o comportamento de referência'],
+          acceptance_criteria: [{ command: 'bun test tests/feature.test.ts', description: 'o comportamento de referência é observado' }],
         },
       ],
     },
+    'CTR-001.json': createDefaultContractV4('1.1', workId, 'Task de referência', 'L2'),
     'traceability-matrix.json': {
       work_id: workId,
       matrix: [
@@ -129,7 +141,7 @@ function canonicalArtifacts(workId: string): Record<string, unknown> {
           requirement_id: 'FR-001',
           decision_id: 'TD-001',
           spec_section: 'CAP-001',
-          task_id: 'T-001',
+          task_id: '1.1',
           contract_id: 'CTR-001',
           evidence_id: 'EVD-001',
           status: 'planned',
@@ -192,13 +204,13 @@ export function mutationCases(): MutationCase[] {
       id: 'mut-missing-ac',
       description: 'Remove acceptance_criteria de todas as tasks do plan.json',
       gate: 'GATE-SPEC-PLAN',
-      expect_blocked: false,
+      expect_blocked: true,
     },
     {
       id: 'mut-missing-contract',
       description: 'Aponta contract_id de uma task para um contrato inexistente',
       gate: 'GATE-PLAN-CONTRACT',
-      expect_blocked: false,
+      expect_blocked: true,
     },
     {
       id: 'mut-broken-traceability',

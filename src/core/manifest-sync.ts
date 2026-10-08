@@ -10,7 +10,8 @@ import { isWorkManifestState, updateManifest, type WorkManifestState } from './w
  */
 const PANORAMA_TO_MANIFEST: Record<string, WorkManifestState> = {
   'COMPLETE': 'completed',
-  'TASKS COMPLETE': 'completed',
+  // Tasks aceitas mas gates globais sem evidência: o Work ainda não terminou.
+  'TASKS COMPLETE': 'active',
   'NOT STARTED': 'planned',
   'NO TASKS': 'planned',
   'BLOCKED': 'blocked',

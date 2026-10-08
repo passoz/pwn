@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createDefaultContractV4, type RiskLevel, type TaskContractV4 } from './contract-engine.js';
+import { frozenTestsRequired } from './gates.js';
 import { getNextWorkId, getWorkArtifactsPaths, initWorkDirectory } from './work-artifacts.js';
 import { renderTasksMarkdown, tasksMarkdownPath, type Plan } from './plan-renderer.js';
 
@@ -32,6 +33,24 @@ export interface ScaffoldResult {
 
 const DEFAULT_ACCEPTANCE = 'bun test';
 const DEFAULT_TYPE_CHECK = 'bun run check';
+
+/**
+ * Slug determinístico do título para nomear os arquivos esqueleto da task.
+ * O plano nunca pode declarar diretório/glob/placeholder (o gate de aceitação
+ * bloqueia), então o scaffold precisa de caminhos concretos desde o início;
+ * renomear para os nomes reais é parte da revisão da task.
+ */
+function titleSlug(title: string): string {
+  const slug = title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+    .replace(/-+$/g, '');
+  return slug || 'task';
+}
 
 function writeFile(
   rootDir: string,
@@ -183,6 +202,11 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
     ],
   }, generated, skipped, overwrite);
 
+  const slug = titleSlug(title);
+  const implementationFile = `src/${slug}.ts`;
+  const testFile = `tests/${slug}.test.ts`;
+  const focusedAcceptance = `${DEFAULT_ACCEPTANCE} ${testFile}`;
+
   const plan: Plan = {
     work_id: workId,
     title,
@@ -199,17 +223,16 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
         depends_on: [],
         behavior: `implementa "${title}" com o resultado observável declarado nos critérios de aceite`,
         components: ['core'],
-        files: ['src/', 'tests/'],
-        implementation_files: ['src/'],
-        test_files: ['tests/'],
-        red: { command: DEFAULT_ACCEPTANCE, description: 'a asserção do novo comportamento falha antes da implementação' },
+        files: [implementationFile, testFile],
+        implementation_files: [implementationFile],
+        test_files: [testFile],
+        red: { command: focusedAcceptance, description: `a asserção do novo comportamento falha antes da implementação de ${implementationFile}` },
         implementation_steps: [
           'Escrever o teste que falha (RED) para o comportamento declarado',
           'Implementar o mínimo para o teste passar (GREEN) e refatorar preservando a suíte verde',
         ],
         acceptance_criteria: [
-          { command: DEFAULT_ACCEPTANCE, description: 'a suíte completa passa' },
-          { command: DEFAULT_TYPE_CHECK, description: 'o typecheck estrito passa' },
+          { command: focusedAcceptance, description: 'o comportamento declarado é observado pelo teste focado da task' },
         ],
         visual: 'N/A',
         documentation: 'N/A',
@@ -245,15 +268,21 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
   writeFile(rootDir, markdownPath, renderTasksMarkdown(plan), generated, skipped, overwrite);
   const relativeMarkdown = path.relative(rootDir, markdownPath);
 
+  const review = [
+    `Renomeie os arquivos esqueleto da task 1.1 (${implementationFile}, ${testFile}) para os nomes reais do módulo e do teste — o audit congela exatamente o que o plano declarar.`,
+    `Revise ${relativeMarkdown}: o RED/AC da task 1.1 apontam para o teste focado dela; a suíte e o typecheck ficam nos gates globais.`,
+    `O risco congelado é ${risk}; ajuste com --risk se a mudança for mais sensível.`,
+  ];
+  if (frozenTestsRequired(risk)) {
+    review.push(
+      `Risco ${risk}: comite o teste de aceitação e rode 'pwn work contract --work ${workId} --task 1.1 --freeze-tests ${testFile}' ANTES da implementação — o gate GATE-PLAN-CONTRACT bloqueia até os testes estarem congelados.`,
+    );
+  }
   return {
     workId,
     workDir: path.relative(rootDir, paths.workDir),
     generated,
     skipped,
-    review: [
-      `Revise ${path.join('.pwn/work', workId, 'plan.json')}: files/implementation_files/test_files são placeholders ("src/", "tests/").`,
-      `Revise ${relativeMarkdown}: a task 1.1 é um esqueleto e precisa ser detalhada antes de implementar.`,
-      `O risco congelado é ${risk}; ajuste com --risk se a mudança for mais sensível.`,
-    ],
+    review,
   };
 }

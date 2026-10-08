@@ -271,3 +271,32 @@ test('work import converte um Work v3 e respeita idempotência', async () => {
   assert.match(second.stdout, /já existe/);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('cache de gate não serve PASS antigo quando a matriz de rastreabilidade muda', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'pwn-cli-cache-'));
+  const workDir = path.join(dir, '.pwn', 'work', '0001');
+  mkdirSync(workDir, { recursive: true });
+  writeFileSync(path.join(workDir, 'discovery.json'), JSON.stringify({ work_id: '0001', problem: 'p' }), 'utf8');
+  writeFileSync(path.join(workDir, 'requirements.json'), JSON.stringify({
+    requirements: [{ id: 'FR-001', acceptance_criteria: ['deve funcionar'] }],
+  }), 'utf8');
+  const matrixPath = path.join(workDir, 'traceability-matrix.json');
+  writeFileSync(matrixPath, JSON.stringify({
+    work_id: '0001',
+    matrix: [{ origin: 'DISC-001', requirement_id: 'FR-001' }],
+  }), 'utf8');
+
+  // Primeiro veredicto: PASS e envelope assinado gravado em .pwn/gate-cache/.
+  const first = await runCli(['work', 'gate', 'GATE-DISC-REQ', '--work', '0001'], dir);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /"result": "pass"/);
+
+  // A matriz esvaziada é lida pelo gate mas NÃO estava na chave do cache: um PASS
+  // antigo não pode ser servido sobre um estado que a avaliação fresca bloqueia.
+  writeFileSync(matrixPath, JSON.stringify({ work_id: '0001', matrix: [] }), 'utf8');
+  const second = await runCli(['work', 'gate', 'GATE-DISC-REQ', '--work', '0001'], dir);
+  assert.equal(second.status, 1, `esperava BLOCKED, stdout=${second.stdout}`);
+  assert.match(second.stdout, /"result": "blocked"/);
+  assert.doesNotMatch(second.stdout, /PASS \(cache\)/);
+  rmSync(dir, { recursive: true, force: true });
+});

@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { assuranceCommands, genericCommandReason, parseGlobalGates, placeholderPathReason } from './acceptance.js';
 import { isDirectEntry } from './entry-guard.js';
 
 export const LEGACY_TASK_CONTRACT_VERSION = 1;
@@ -392,6 +393,10 @@ export function analyzeTasks(text: string, options: AnalyzeOptions = {}): TaskAn
     issue("error", `line ${line}: unresolved marker: ${match[0]}`);
   }
 
+  for (const gate of parseGlobalGates(text) ?? []) {
+    if (!gate.command) compatibilityIssue(`global gate without an executable command in backticks: ${gate.text}`);
+  }
+
   const components = contractComponents(lines);
   if (!components.size) issue("error", "execution contract has no components");
 
@@ -504,6 +509,12 @@ export function analyzeTasks(text: string, options: AnalyzeOptions = {}): TaskAn
       `task ${task.taskId}: atomicity limit exceeded: ${implementationFiles.size} implementation files (max 3)`,
     );
     if (overlap.length) issue("error", `task ${task.taskId}: implementation/test files overlap: ${overlap.join(", ")}`);
+    for (const declaredPath of [...implementationFiles, ...testFiles]) {
+      const reason = placeholderPathReason(declaredPath);
+      if (reason) compatibilityIssue(`task ${task.taskId}: declared file ${declaredPath} ${reason}; declare concrete files`);
+    }
+    const taskComponents = (values.Components ?? "").split(",").map((part) => part.trim().replace(/^`|`$/g, "")).filter(Boolean);
+    const gateCommands = assuranceCommands(text, taskComponents);
     for (const declaredPath of [...new Set([...implementationFiles, ...testFiles])].sort()) {
       if (!files.has(declaredPath)) issue("error", `task ${task.taskId}: declared file missing from Files: ${declaredPath}`);
     }
@@ -526,11 +537,19 @@ export function analyzeTasks(text: string, options: AnalyzeOptions = {}): TaskAn
         if (INCIDENTAL_RED_PATTERNS.some((p) => p.test(description))) {
           compatibilityIssue(`task ${task.taskId}: RED description must not describe an incidental environment or toolchain failure as the primary mechanism; describe the assertion that fires instead`);
         }
+        const command = redLine.match(RED)![1];
+        const generic = genericCommandReason(command, gateCommands);
+        if (generic) compatibilityIssue(`task ${task.taskId}: RED \`${command}\` ${generic}; use the focused command of the task's own test`);
       }
     }
     if (acStart !== -1) {
       const acLines = fieldSection(block, "ACs").filter((line) => AC.test(line));
       if (!acLines.length) issue("error", `task ${task.taskId}: ACs need at least one concrete command and expected result`);
+      for (const acLine of acLines) {
+        const command = acLine.match(AC)![1];
+        const generic = genericCommandReason(command, gateCommands);
+        if (generic) compatibilityIssue(`task ${task.taskId}: AC \`${command}\` ${generic}`);
+      }
       atomicityIssue(
         "ac-commands",
         acLines.length,

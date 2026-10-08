@@ -2,7 +2,7 @@ import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkI
 import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, evaluateGateSpecPlan, evaluateGatePlanContract, evaluateAllGates, computeWorkCoverage, GateOutput } from '../core/gates.js';
 import { readGateCache, writeGateCache, clearGateCache } from '../core/gate-cache.js';
 import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath } from '../core/plan-renderer.js';
-import { loadTaskContract } from '../core/task-contract.js';
+import { freezeAcceptanceTests, loadTaskContract } from '../core/task-contract.js';
 import { importV3Work, listV3WorkIds } from '../core/v3-import.js';
 import { scaffoldWork } from '../core/scaffold.js';
 import type { RiskLevel } from '../core/contract-engine.js';
@@ -124,6 +124,28 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       process.exit(validatePromptMain(args));
 
     case 'contract':
+      if (args.includes('--freeze-tests')) {
+        console.log('=== [pwn work contract --freeze-tests] Congelando testes de aceitação no contrato ===');
+        const workId = flagValue(args, '--work') ?? getLatestWorkId();
+        const taskId = flagValue(args, '--task');
+        const start = args.indexOf('--freeze-tests') + 1;
+        const end = args.findIndex((arg, index) => index >= start && arg.startsWith('--'));
+        const paths = args.slice(start, end === -1 ? args.length : end);
+        if (!taskId) {
+          console.error('Uso: pwn work contract --work NNNN --task 1.1 --freeze-tests <arquivo-de-teste>...');
+          process.exit(1);
+        }
+        try {
+          const result = freezeAcceptanceTests({ workId, taskId, paths });
+          console.log(`✓ ${result.frozen.length} teste(s) congelado(s) em ${result.contractId}:`);
+          for (const entry of result.frozen) console.log(`  ${entry.sha256.slice(0, 12)}  ${entry.path}`);
+          console.log('\nAo menos um AC da task precisa exercitar cada arquivo; o audit recusa a atestação se algum deles mudar.');
+          process.exit(0);
+        } catch (err) {
+          console.error(`✗ ${(err as Error).message}`);
+          process.exit(1);
+        }
+      }
       console.log('=== [pwn work contract] Validando contratos V4 congelados do Work ===');
       {
         const workId = flagValue(args, '--work') ?? getLatestWorkId();
@@ -146,6 +168,8 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
             console.log(`✓ ${task.id} — ${task.contract_id} | risco ${contract.risk.level} | ${contract.validation_strategy}`);
             console.log(`    write_allow: ${contract.scope_contract.write_allow.join(', ')}`);
             console.log(`    aceitação:   ${contract.acceptance_contract.commands.join(' ; ')}`);
+            const frozenTests = contract.acceptance_contract.frozen_tests ?? [];
+            if (frozenTests.length) console.log(`    congelados:  ${frozenTests.map((entry) => entry.path).join(', ')}`);
           } catch (err) {
             failures += 1;
             console.error(`✗ ${task.id} — ${(err as Error).message}`);
@@ -449,7 +473,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     case 'audit':
       console.log('=== [pwn work audit] Auditando Evidências e Aceitação ===');
       {
-        const knownActions = ['baseline', 'red', 'green', 'verify', 'check', 'candidate'];
+        const knownActions = ['baseline', 'red', 'green', 'verify', 'check', 'candidate', 'gate'];
         // Compat: sem ação explícita, o audit roda a verificação de evidência (verify).
         const auditArgs = args.length > 0 && knownActions.includes(args[0])
           ? [...args]
@@ -518,9 +542,10 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('  pwn work gate --clear-cache  Remove o cache de veredictos (.pwn/gate-cache/)');
       console.log('  pwn work specify   Especifica mudanças no baseline');
       console.log('  pwn work contract  Valida os contratos V4 congelados (.pwn/work/<id>/CTR-*.json)');
+      console.log('  pwn work contract --task <t> --freeze-tests <arquivos>  Congela testes de aceitação antes da implementação');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
       console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync, --dry-run)');
-      console.log('  pwn work audit     Audita aceitação e evidência TDD (comando após -- é obrigatório)');
+      console.log('  pwn work audit     Audita aceitação e evidência TDD: baseline|red|green|verify|check|candidate|gate (comando após -- é obrigatório e precisa ser o do plano)');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');
       process.exit(1);

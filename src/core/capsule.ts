@@ -1,17 +1,50 @@
 import { TaskContractV4 } from './contract-engine.js';
 
+/** Check exigido pela task no plano v3: nome (`AC-1`, `REGRESSION`, ...) e comandos autorizados. */
+export interface CapsuleCheckBinding {
+  name: string;
+  commands: string[];
+  error?: string;
+}
+
+/**
+ * Comandos do plano v3 que o audit exige (`parsePlanTask`/`allowedCheckCommands`).
+ * Sem isto a cápsula mostraria só a allowlist do contrato — que não é o critério
+ * de aceite — e o agente descobriria a regra pelo erro do audit.
+ */
+export interface CapsulePlanContext {
+  redCommand: string | null;
+  checks: CapsuleCheckBinding[];
+  globalGates: string[];
+}
+
 export interface ContextCapsuleOptions {
   task: TaskContractV4;
   relevantInterfaces?: string[];
+  plan?: CapsulePlanContext;
+}
+
+/** Bloco da seção de validação: só aparece quando o plano está disponível. */
+function renderPlanCommands(plan: CapsulePlanContext): string {
+  const lines = ['', 'PLANO (o audit exige EXATAMENTE estes comandos):'];
+  lines.push(`  RED:        ${plan.redCommand ?? '(o plano não declara RED)'}`);
+  if (!plan.checks.length) lines.push('  (o plano não declara checks de aceitação)');
+  for (const check of plan.checks) {
+    const commands = check.error ? `[${check.error}]` : check.commands.map((command) => `\`${command}\``).join(' | ');
+    lines.push(`  ${check.name.padEnd(11)} ${commands}`);
+  }
+  lines.push(`  GATES GLOBAIS: ${plan.globalGates.length ? plan.globalGates.map((command) => `\`${command}\``).join(' | ') : '(N/A)'}`);
+  return lines.join('\n');
 }
 
 export function generateContextCapsule(options: ContextCapsuleOptions): string {
-  const { task, relevantInterfaces = [] } = options;
+  const { task, relevantInterfaces = [], plan } = options;
   // Contratos V4 congelados mais antigos podem omitir out_of_scope; a cápsula
   // nunca deve quebrar por um campo opcional ausente.
   const writeAllow = task.scope_contract.write_allow ?? [];
   const writeDeny = task.scope_contract.write_deny ?? [];
   const outOfScope = task.scope_contract.out_of_scope ?? [];
+  const frozenTests = task.acceptance_contract.frozen_tests ?? [];
 
   return `
 ================================================================================
@@ -45,7 +78,13 @@ ${outOfScope.length ? outOfScope.map(o => `  ! ${o}`).join('\n') : '  (não decl
 --------------------------------------------------------------------------------
 3. VALIDATION COMMANDS
 --------------------------------------------------------------------------------
+CONTRACT ALLOWLIST (o shell do sandbox só executa estes prefixos):
 ${task.acceptance_contract.commands.map(cmd => `  $ ${cmd}`).join('\n')}
+${plan ? renderPlanCommands(plan) : ''}
+FROZEN ACCEPTANCE TESTS (não editar — o audit recusa a atestação se mudarem):
+${frozenTests.length ? frozenTests.map((entry) => `  = ${entry.path}`).join('\n') : '  (nenhum)'}
+
+ACCEPTANCE: a task só conclui com 'pwn work audit candidate' (ACs do plano, idênticos, sobre o GREEN).
 
 --------------------------------------------------------------------------------
 4. BUDGET & ESCALATION RULES

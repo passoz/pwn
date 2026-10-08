@@ -1,4 +1,8 @@
-import { generateContextCapsule } from '../core/capsule.js';
+import { existsSync, readFileSync } from 'node:fs';
+
+import { allowedCheckCommands, parseGlobalGates, parsePlanTask, requiredAuditChecks } from '../core/acceptance.js';
+import { generateContextCapsule, type CapsulePlanContext } from '../core/capsule.js';
+import { tasksMarkdownPath } from '../core/plan-renderer.js';
 import { getLatestWorkId } from '../core/work-artifacts.js';
 import { loadTaskContract } from '../core/task-contract.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
@@ -7,6 +11,24 @@ function flagValue(args: string[], name: string): string | null {
   const index = args.indexOf(name);
   if (index === -1 || index + 1 >= args.length || args[index + 1].startsWith('--')) return null;
   return args[index + 1];
+}
+
+/**
+ * Comandos que o plano v3 exige da task (`AC-1`, `REGRESSION`, gates globais).
+ * A cápsula é a superfície de instrução do agente: mostrar só a allowlist do
+ * contrato faria o agente usar um comando que o audit recusa.
+ */
+function planContextFor(workId: string, taskId: string): CapsulePlanContext | undefined {
+  const planPath = tasksMarkdownPath(workId);
+  if (!existsSync(planPath)) return undefined;
+  const planText = readFileSync(planPath, 'utf8');
+  const task = parsePlanTask(planText, taskId);
+  if (!task) return undefined;
+  return {
+    redCommand: task.red?.command ?? null,
+    checks: requiredAuditChecks(task).map((name) => ({ name, ...allowedCheckCommands(planText, task, name) })),
+    globalGates: (parseGlobalGates(planText) ?? []).map((gate) => gate.command).filter((command): command is string => Boolean(command)),
+  };
 }
 
 export function handleTaskCommand(subcommand: string, args: string[]): void {
@@ -54,7 +76,7 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
 
         try {
           const contract = loadTaskContract(workId, taskId);
-          console.log(generateContextCapsule({ task: contract }));
+          console.log(generateContextCapsule({ task: contract, plan: planContextFor(workId, taskId) }));
           process.exit(0);
         } catch (err) {
           console.error(`✗ Não foi possível gerar a cápsula: ${(err as Error).message}`);

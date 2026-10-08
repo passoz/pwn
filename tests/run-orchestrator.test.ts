@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { runOrchestrated, prepareSandbox, modifiedFiles, EXIT_SUSPENDED } from '../src/core/run-orchestrator.js';
+import { runOrchestrated, prepareSandbox, modifiedFiles, overlayWorkingTree, EXIT_SUSPENDED } from '../src/core/run-orchestrator.js';
 import { resolveGitDir, createGitWorktreeSandbox } from '../src/core/sandbox.js';
 
 function git(cwd: string, ...args: string[]) {
@@ -390,6 +390,145 @@ test('artefato do harness apagado, trocado ou reescrito volta ao inventário', (
     // Reescrever o arquivo injetado mantendo o tamanho.
     writeFileSync(bunfig, 'y\n', 'utf8');
     assert.ok(report().includes('bunfig.toml'), 'conteúdo reescrito com o mesmo tamanho deve ser reportado');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+/** Reescreve o `write_allow` do contrato da task 1.1 já criado por `writeWork`. */
+function setWriteAllow(root: string, writeAllow: string[]) {
+  const ctrPath = path.join(root, '.pwn', 'work', '0001', 'CTR-001.json');
+  const ctr = JSON.parse(readFileSync(ctrPath, 'utf8'));
+  ctr.scope_contract.write_allow = writeAllow;
+  writeFileSync(ctrPath, JSON.stringify(ctr), 'utf8');
+}
+
+test('runOrchestrated roda o comando sobre a working tree não commitada, não sobre o HEAD', () => {
+  const root = fixture();
+  try {
+    // HEAD falha sempre: se o sandbox visse o HEAD, o run terminaria != 0.
+    writeFileSync(path.join(root, 'app.js'), 'process.exit(7);\n', 'utf8');
+    git(root, 'add', 'app.js');
+    git(root, 'commit', '-qm', 'app.js que falha no HEAD');
+
+    // Working tree (não commitada): passa somente quando o próprio arquivo é lido
+    // com a mudança aplicada — prova que o sandbox viu a working tree.
+    writeFileSync(
+      path.join(root, 'app.js'),
+      "const fs = require('fs');\nif (!fs.readFileSync(__filename, 'utf8').includes('OVERLAY-OK')) process.exit(7);\n",
+      'utf8',
+    );
+
+    writeWork(root, 'node app.js');
+    setWriteAllow(root, ['app.js']);
+
+    const result = runOrchestrated({
+      workId: '0001',
+      taskId: '1.1',
+      command: ['node', 'app.js'],
+      timeoutSeconds: 10,
+      isolated: true,
+      rootDir: root,
+    });
+
+    assert.deepEqual(result.diffViolations, []);
+    assert.equal(result.status, 0, `esperava sucesso com a working tree sobreposta; stderr=${result.stderr}`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('runOrchestrated reporta arquivo novo da working tree fora do write_allow como violação de diff', () => {
+  const root = fixture();
+  try {
+    writeFileSync(path.join(root, 'runner.js'), 'process.exit(0);\n', 'utf8');
+    git(root, 'add', 'runner.js');
+    git(root, 'commit', '-qm', 'runner que passa');
+
+    writeFileSync(path.join(root, 'intruso.txt'), 'novo fora do escopo\n', 'utf8');
+
+    writeWork(root, 'node runner.js');
+    setWriteAllow(root, ['runner.js']);
+
+    const result = runOrchestrated({
+      workId: '0001',
+      taskId: '1.1',
+      command: ['node', 'runner.js'],
+      timeoutSeconds: 10,
+      isolated: true,
+      rootDir: root,
+    });
+
+    assert.equal(result.status, 1, 'o comando passa, mas a working tree traz arquivo fora do escopo');
+    assert.ok(
+      result.diffViolations.some((entry) => entry.includes('intruso.txt')),
+      `violação de diff deve citar intruso.txt; veio ${JSON.stringify(result.diffViolations)}`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('overlayWorkingTree aplica o diff rastreado e copia arquivos novos, ignorando o estado do harness', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pwn-overlay-'));
+  try {
+    git(root, 'init', '-q');
+    git(root, 'config', 'user.email', 'test@example.invalid');
+    git(root, 'config', 'user.name', 'Test');
+    writeFileSync(path.join(root, 'rastreado.txt'), 'original\n', 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'seed');
+
+    // Mudança não commitada em arquivo rastreado.
+    writeFileSync(path.join(root, 'rastreado.txt'), 'modificado\n', 'utf8');
+    // Arquivo novo não ignorado.
+    writeFileSync(path.join(root, 'novo.txt'), 'novo\n', 'utf8');
+    // Estado do harness: nunca pode ir para o sandbox.
+    mkdirSync(path.join(root, '.todo'), { recursive: true });
+    writeFileSync(path.join(root, '.todo', 'nota.txt'), 'interno\n', 'utf8');
+
+    const session = createGitWorktreeSandbox('RUN-overlay', root);
+    const result = overlayWorkingTree(root, session.worktreePath, {});
+
+    assert.equal(result.ok, true, result.ok ? '' : result.reason);
+    assert.equal(readFileSync(path.join(session.worktreePath, 'rastreado.txt'), 'utf8'), 'modificado\n', 'diff rastreado deve ser aplicado');
+    assert.equal(readFileSync(path.join(session.worktreePath, 'novo.txt'), 'utf8'), 'novo\n', 'arquivo novo deve ser copiado');
+    assert.equal(existsSync(path.join(session.worktreePath, '.todo')), false, '.todo nunca entra no sandbox');
+    assert.ok(
+      result.ok && !result.files.some((file) => file.startsWith('.todo/')),
+      'inventário do overlay não pode listar estado do harness',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('overlayWorkingTree respeita skip e não copia arquivos ignorados pelo git', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pwn-overlay-skip-'));
+  try {
+    git(root, 'init', '-q');
+    git(root, 'config', 'user.email', 'test@example.invalid');
+    git(root, 'config', 'user.name', 'Test');
+    writeFileSync(path.join(root, '.gitignore'), 'ignorado.log\n', 'utf8');
+    writeFileSync(path.join(root, 'seed.txt'), 'seed\n', 'utf8');
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'seed');
+
+    writeFileSync(path.join(root, 'referencia.txt'), 'a\n', 'utf8');
+    writeFileSync(path.join(root, 'normal.txt'), 'normal\n', 'utf8');
+    writeFileSync(path.join(root, 'ignorado.log'), 'log\n', 'utf8');
+
+    const session = createGitWorktreeSandbox('RUN-overlay-skip', root);
+    const result = overlayWorkingTree(root, session.worktreePath, { 'referencia.txt': 'x' });
+
+    assert.equal(result.ok, true, result.ok ? '' : result.reason);
+    // Controle: um arquivo novo sem skip é copiado — sem isso a ausência abaixo
+    // não provaria nada.
+    assert.equal(readFileSync(path.join(session.worktreePath, 'normal.txt'), 'utf8'), 'normal\n');
+    assert.ok(result.ok && result.files.includes('normal.txt'));
+    assert.equal(existsSync(path.join(session.worktreePath, 'referencia.txt')), false, 'skip impede a cópia');
+    assert.ok(result.ok && !result.files.includes('referencia.txt'), 'arquivo pulado não pode aparecer no inventário');
+    assert.equal(existsSync(path.join(session.worktreePath, 'ignorado.log')), false, 'arquivo ignorado pelo git não é copiado');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -206,3 +206,30 @@ test('BudgetController shouldInterrupt retorna true quando limite excedido', () 
   budget.recordTokens(10_000);
   assert.equal(budget.shouldInterrupt(), true);
 });
+
+test('generateContextCapsule mostra os comandos do plano que o audit exige', () => {
+  const contract = createDefaultContractV4('1.1', '0001', 'Cápsula Plano', 'L2');
+  const capsule = generateContextCapsule({
+    task: contract,
+    plan: {
+      redCommand: 'bun test tests/a.test.ts',
+      checks: [
+        { name: 'AC-1', commands: ['bun test tests/a.test.ts'] },
+        { name: 'VISUAL', commands: [], error: 'a task 1.1 não exige VISUAL' },
+        { name: 'REGRESSION', commands: ['bun test'] },
+      ],
+      globalGates: ['bun test'],
+    },
+  });
+
+  assert.match(capsule, /PLANO \(o audit exige EXATAMENTE estes comandos\):/);
+  assert.match(capsule, /RED:\s+bun test tests\/a\.test\.ts/);
+  assert.match(capsule, /AC-1\s+`bun test tests\/a\.test\.ts`/);
+  assert.match(capsule, /VISUAL\s+\[a task 1\.1 não exige VISUAL\]/);
+  assert.match(capsule, /REGRESSION\s+`bun test`/);
+  assert.match(capsule, /GATES GLOBAIS: `bun test`/);
+
+  // Sem o plano a cápsula não inventa comandos: mostra só a allowlist do contrato.
+  const semPlano = generateContextCapsule({ task: contract });
+  assert.doesNotMatch(semPlano, /PLANO \(o audit exige/);
+});

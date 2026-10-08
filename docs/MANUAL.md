@@ -85,7 +85,7 @@ verificador não carrega é **reprovado**, nunca aceito por falta de schema.
 
 ## 3. Contract Engine v4 & As 7 Dimensões Contratuais
 
-Cada tarefa executada pelo PWN possui um **Task Contract V4**. O contrato estrutura 7 dimensões essenciais para garantir que a IA execute exatamente o que foi solicitado:
+Cada tarefa executada pelo PWN possui um **Task Contract V4**. O contrato estrutura 7 dimensões essenciais para declarar e conferir mecanicamente o escopo solicitado; isso não prova que o código esteja completo ou correto:
 
 1. **Behavioral Contract (`behavioral_contract`):**
    - Cenários em formato Given/When/Then.
@@ -118,6 +118,8 @@ Para visualizar o resumo formatado do contrato V4 congelado para uma tarefa:
 bun bin/pwn.js task capsule T-001 0001
 ```
 
+Na seção **3 (VALIDATION COMMANDS)**, além da **allowlist do contrato** (os prefixos que o shell do sandbox executa), a cápsula imprime o bloco **`PLANO (o audit exige EXATAMENTE estes comandos):`** — o **RED** da task, cada check exigido (`AC-1..n`, `VISUAL`/`DOCUMENTATION` quando exigidos, `REGRESSION`) com os comandos autorizados, e os itens de `## Global gates`. Assim o agente vê o critério de aceitação real, e não apenas a allowlist do contrato, que **não** é o AC.
+
 ---
 
 ## 4. Níveis de Risco (L0–L4) e Estratégias de Validação
@@ -129,6 +131,16 @@ O PWN classifica as tarefas em 5 níveis formais de risco:
 - **L2 (Medium Risk):** Alteração de lógica de negócios existente, refatorações internas ou novos subcomandos CLI. Requer suíte de testes de regressão.
 - **L3 (High Risk):** Alterações de API, schemas, interações com sistema de arquivos ou integrações de módulos. Requer aprovação estrita em gates de Spec/Plan.
 - **L4 (Critical Risk):** Alteração de invariantes de segurança, migrações de dados, ações destrutivas ou mudanças na raiz do harness. **Exige suspensão imediata e aprovação na Fila Humana AFK (`queue/review/`)**.
+
+### Congelamento de testes de aceitação (L3+)
+
+A partir de **L3**, os testes de aceitação precisam ser escritos e **congelados** (`sha256`) no contrato da task **antes da implementação**. O `GATE-PLAN-CONTRACT` bloqueia enquanto o contrato não declarar `acceptance_contract.frozen_tests`, e o audit recusa `baseline`/`candidate` se algum arquivo congelado mudar (a atestação passa a `stale`). Ao menos um AC da task precisa **exercitar** cada arquivo congelado.
+
+O congelamento protege a **imutabilidade** dos arquivos após sua aprovação; não prova que os testes sejam suficientes nem que a implementação esteja completa ou correta.
+
+```bash
+bun bin/pwn.js work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
+```
 
 ---
 
@@ -156,8 +168,8 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 - **`GATE-DISC-REQ`:** Valida se `discovery.json` e `requirements.json` existem no Work e se todos os requisitos possuem critérios de aceite testáveis.
 - **`GATE-REQ-PRD`:** Valida se `prd.json` está preenchido e vincula explicitamente os requisitos aceitos (`accepted_requirements`).
 - **`GATE-PRD-SPEC`:** Valida se a especificação técnica `spec.json` existe e se cada capacidade possui regras de negócio mapeadas (`rules`).
-- **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas. Inclui também a **validação de atomicidade** (`validateTaskAtomicity`), que emite findings *advisory* (`low`/`medium` — nunca bloqueiam) quando uma task referencia mais de uma capability, cobre mais de um componente, toca mais de 6 arquivos de implementação, ou descreve mais de 3 comportamentos independentes.
-- **`GATE-PLAN-CONTRACT`:** Valida se todas as tarefas do plano possuem contratos V4 congelados (`contract_id`).
+- **`GATE-SPEC-PLAN`:** Valida se `plan.json` foi derivado da spec e se contém tarefas atomizadas. Inclui também a **validação de atomicidade** (`validateTaskAtomicity`), que emite findings *advisory* (`low`/`medium` — nunca bloqueiam) quando uma task referencia mais de uma capability, cobre mais de um componente, toca mais de 6 arquivos de implementação, ou descreve mais de 3 comportamentos independentes. Além disso roda a **validação semântica da aceitação** (`validatePlanAcceptance`), que bloqueia (`high`) quando um AC ou o RED não tem comando executável, quando o comando é **genérico** (suíte inteira, `true`, comando sem foco no comportamento da task), quando a task não declara AC, RED ou arquivos, ou quando um arquivo de implementação/teste é **não concreto** (diretório, glob ou placeholder).
+- **`GATE-PLAN-CONTRACT`:** Valida se todas as tarefas do plano possuem contratos V4 congelados (`contract_id`) e roda a **validação semântica do contrato** (`validateContractSemantics`): `high` quando o contrato referenciado **não existe** ou não é JSON legível; `medium` quando falta escopo (`write_allow` vazio), falta orçamento ou o risco sub-classifica a complexidade da task; `high` quando um AC da task **não é autorizado** por `acceptance_contract.commands`; e `high` quando o risco é **L3+** sem `acceptance_contract.frozen_tests`, quando uma entrada congelada não tem `{ path, sha256 }` válidos, ou quando um teste congelado **não é exercitado por nenhum AC** da task.
 
 ### Relatório completo em vez do primeiro erro:
 
@@ -169,9 +181,9 @@ bun bin/pwn.js work gate --all --work 0001
 
 ### Cache de veredicto de gate (Certificado Assinado por HMAC):
 
-Cada gate calcula hashes (`shortHash`) dos seus inputs. O resultado é cacheado em `.pwn/gate-cache/<GATE>-<chave>.json`, envelopado em formato **v2** com `gate_version`, `harness_version`, `laws_sha256` (hash determinístico de todas as leis embutidas) e assinado com **HMAC-SHA256**.
+Cada gate calcula hashes (`shortHash`) dos seus inputs. O `input_versions` do veredicto agora inclui a **matriz de rastreabilidade** (`traceability-matrix.json`) exigida por vários gates e os **contratos** (`contractsHash`) no `GATE-PLAN-CONTRACT` — editar a matriz ou um contrato invalida o cache em vez de reaproveitar um veredicto antigo. O resultado é cacheado em `.pwn/gate-cache/<GATE>-<chave>.json`, envelopado em formato **v2** com `gate_version`, `harness_version`, `laws_sha256` (hash determinístico de todas as leis embutidas) e assinado com **HMAC-SHA256**.
 
-A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.pwn/.verifier_key`. Qualquer adulteração manual em disco (ex: tentar alterar `result: "blocked"` para `"pass"`) quebra o HMAC e faz o cache ser **imediatamente rejeitado**, forçando a reavaliação limpa do gate. Da mesma forma, se qualquer schema embutido mudar, o `laws_sha256` invalida caches antigos.
+A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.pwn/.verifier_key`. Adulteração do payload sem a chave quebra o HMAC e faz o cache ser rejeitado, forçando reavaliação do gate; alteração de schema embutido invalida caches pelo `laws_sha256`. A chave default permanece acessível na árvore: isso não protege contra um repositório hostil. Os comandos auditados não herdam `PWN_VERIFIER_KEY`, mas uma chave externa sozinha não basta: `candidate` consome estado, logs e cadeia fornecidos pelo repositório, e a assinatura não prova esse histórico independentemente. Uma fronteira hostil exige execução/verificação em contexto confiável, segredo fora do alcance do código auditado e evidência produzida pelo verificador; isso não está implementado por estas correções.
 
 ```bash
 bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia e assina; 2ª: (cache verificado)
@@ -267,6 +279,10 @@ Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o
 3. O agente executa todas as edições e subprocessos confinados na bolha da sandbox.
 4. Se o teste e a validação do contrato passarem com sucesso, o commit é integrado ao branch principal.
 5. Em seguida, `cleanupGitWorktreeSandbox` remove a worktree e a branch temporária.
+
+### Working tree não commitada entra na sandbox
+
+`pwn work run` leva para a sandbox o **HEAD mais a working tree não commitada** do repositório: o diff rastreado contra `HEAD` e os arquivos novos não ignorados — exceto `.pwn`, `.todo`, `.work`, `queue/review` e os artefatos que o próprio harness injeta. O Diff Guard roda sobre esse inventário, então **qualquer arquivo sujo fora do `write_allow` — inclusive um rascunho seu no repositório — reprova o run com `DIFF VIOLATION`**. Na prática o comando de aceitação valida o seu **código não commitado**, não o `HEAD`: commite ou isole o que não pertence à task.
 
 
 ## 9. Fila Assíncrona de Revisão Humana (AFK)
@@ -381,8 +397,11 @@ Valida um prompt de mudança (`.prompts/NNNN-change.md`) contra a especificaçã
 ### `pwn work scaffold --title "<titulo>" [--work NNNN] [--source spec.md] [--risk Lx] [--dir PATH] [--force]`
 Cria um Work novo com a cadeia **completa e válida**: `discovery.json`, `requirements.json`,
 `prd.json` (schema), `spec.json`, `plan.json` (schema, task `1.1`), `CTR-001.json` (contrato V4
-congelado), `traceability-matrix.json` e o markdown derivado `.todo/NNNN-tasks.md`. Os valores são
-um **esqueleto** que o operador deve detalhar; o comando imprime exatamente o que revisar.
+congelado), `traceability-matrix.json` e o markdown derivado `.todo/NNNN-tasks.md`. O esqueleto já
+vem com **arquivos concretos** (`src/<slug>.ts` / `tests/<slug>.test.ts`, derivados do título) e
+RED/AC **focados nesse teste** — a suíte completa e o typecheck ficam nos **gates globais**. Os
+valores seguem sendo um **esqueleto** que o operador deve detalhar; em risco **L3+** o comando lembra
+de congelar o teste antes da implementação. O comando imprime exatamente o que revisar.
 
 ### `pwn work import [--work NNNN | --all] [--dir PATH] [--gate-chain] [--force] [--risk Lx|auto]`
 Converte Works de um projeto que ainda usa o **layout v3** (`.work/NNNN.json`, `.todo/NNNN-tasks.md`,
@@ -407,6 +426,16 @@ Valida os **contratos V4 congelados** do Work: carrega `plan.json`, resolve o `c
 task e verifica `.pwn/work/<id>/CTR-*.json` (versão 4.0, `risk.level`, `write_allow` não vazio e
 `acceptance_contract.commands` não vazio — a política de shell é fail-closed). Sai com `0` (PASS) ou
 `1` (FAIL), listando cada task.
+
+### `pwn work contract --work <work-id> --task <task-id> --freeze-tests <arquivo>...`
+Congela (`sha256`) os testes de aceitação no `acceptance_contract.frozen_tests` do contrato da
+task. É a defesa de **L3+** (onde o gate exige o congelamento antes da implementação): o
+`baseline`/`candidate` recusa a atestação se algum arquivo congelado mudar, e ao menos um AC da
+task precisa exercitar cada arquivo (senão o `GATE-PLAN-CONTRACT` acusa `FROZEN-UNUSED`).
+
+```bash
+bun bin/pwn.js work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
+```
 
 ### `pwn work run [--work <work-id>] [--task <task-id>] [--no-gate] [--no-isolation] -- <comando>...`
 Executa o Work sob contrato via `run-orchestrator` (não há mais wrapper `unattended_exec.js`):
@@ -443,36 +472,57 @@ bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 ```
 
-### `pwn work audit [verify|check|candidate] [--work <work-id>] [--task <task-id>] -- <comando>...`
-Audita evidências e aceitação TDD via `task_evidence.js`. Sem ação explícita, assume `verify`. As ações válidas são `baseline`, `red`, `green`, `verify`, `check` e `candidate` (passadas adiante); qualquer outra opção na posição de ação é rejeitada pelo validador com mensagem clara.
+### `pwn work audit <ação> [--work <work-id>] [--task <task-id>] [--name <nome>] [--expect <texto>] -- <comando>...`
+Audita evidências e aceitação TDD amarradas ao plano. Sem ação explícita, assume `verify`. As ações válidas são **`baseline`, `red`, `green`, `verify`, `check`, `candidate` e `gate`**; qualquer outra opção na posição de ação é rejeitada com mensagem clara.
 
-**O comando após `--` é obrigatório em `red`, `green`, `verify`, `check` e `candidate`.** O comando RED persistido em `.todo/evidence/<work>/state/<task>.json` é tratado como **conferência cruzada**, nunca como fonte do que será executado: o estado é um artefato versionado do repositório, e executá-lo sem confirmação do operador permitiria execução arbitrária de código a partir de um repositório hostil. Se o comando da CLI divergir do gravado, a auditoria é **violação** (`1`) e nada é executado.
+**Amarração ao plano (`.todo/NNNN-tasks.md`, derivado de `.pwn/work/NNNN/plan.json`).** Todo comando do audit roda com o comando do operador e **precisa coincidir com o declarado no plano** — tokens idênticos ou `sh -c '<texto do plano>'`. O comando persistido em `.todo/evidence/<work>/state/<task>.json` é apenas **conferência cruzada**, nunca a fonte do que será executado: o harness nunca executa um comando lido do repositório. Divergir do plano é **violação** (`1`) e nada é executado. Os arquivos de implementação/teste saem do plano; `--implementation`/`--tests` são opcionais e, se passados, precisam bater com o plano.
+
+**Drift e definição vigente.** Todas as fases (`baseline`, `red`, `green`, `verify`, `check`, `candidate`, `gate`) recusam drift entre o Markdown e `plan.json` antes de executar; `plan.json` existente ilegível também é recusado. A leitura das atestações e a verificação dos gates globais conferem drift. O `status` marca `INVALID PLAN` mesmo sem atestação ou gate. Alterar o ID ou SHA-256 do contrato atual invalida a aceitação anterior.
+
+- **`baseline --task T`** — congela os arquivos do plano (sem comando), exige árvore limpa nos arquivos declarados e em `HEAD` (o mutation check restaura a implementação a partir do commit do baseline) e grava o digest da definição da task e o hash do contrato. Os arquivos precisam ser **concretos** (sem diretório/glob/placeholder).
+- **`red --task T --expect "<ID>" -- <comando RED do plano>`** — o comando tem que ser o do plano; `--expect` não pode ser **genérico** (`fail`, `Error`, `expected`, texto com menos de 6 caracteres...) e, no **contrato v3**, precisa estar **literalmente nos arquivos de teste congelados** (v1/v2 aceitam com `WARNING`).
+- **`green --task T -- <comando RED do plano>`** — exige exit `0` e o `expect` de sucesso quando declarado; a presença de `redExpect` na saída de sucesso não implica falha. Os testes não podem mudar depois do RED; o mutation check restaura a implementação ao baseline e exige que a asserção volte a falhar.
+- **`verify --task T -- <comando RED do plano>`** — confere a definição vigente antes de executar e exige exit `0` e o `expect` de sucesso quando declarado, sem inferir falha pela substring `redExpect` na saída bem-sucedida.
+- **`check --task T --name AC-n|VISUAL|DOCUMENTATION|REGRESSION|LOCAL-GATES -- <comando do plano>`** — roda sobre o snapshot do GREEN, com o comando autorizado pelo plano para aquele check. Os `AC-*` são também executados **sem a implementação**: se ainda assim passarem, o check é recusado como **vácuo**.
+- **`candidate --task T -- <comando RED do plano>`** — exige todos os checks exigidos pelo plano PASS, registrados com os comandos do plano, sobre o GREEN atual e com a cadeia de evidências íntegra; emite `.todo/attestations/<work>/<task>-candidate.json` **v3 assinado (HMAC)** com a chave `PWN_VERIFIER_KEY` ou `.pwn/.verifier_key`.
+- **`gate --name G-n -- <comando do gate>`** — grava a evidência **assinada** de um item de `## Global gates` do plano (o comando tem que ser o do gate); o log e a árvore das tasks ficam no registro.
+
+**O comando após `--` é obrigatório em `red`, `green`, `verify`, `check`, `candidate` e `gate`.**
 
 **Códigos de saída por classe** (para que automação não confunda os estados):
 
 | Código | Classe | Exemplos |
 |---|---|---|
 | `0` | Sucesso | RED/GREEN/verify capturados; atestação gerada |
-| `1` | **Violação** | implementação alterada antes do RED; teste mudou após o GREEN; `verification invalidated`; comando divergente do RED; mutation check falhou; `--expect` não literal |
+| `1` | **Violação** | implementação alterada antes do RED; teste mudou após o GREEN; `verification invalidated`; comando divergente do RED/do plano; mutation check falhou; `--expect` genérico ou não literal; AC vácuo |
 | `2` | **Incompleto** | falta baseline/RED/GREEN; AC/REGRESSION ainda não observados; plano ausente |
 
 O código `2` imprime a lista **completa** do que falta (não para no primeiro item), o que permite corrigir tudo numa rodada.
 
-**`--expect-literal`:** exige que o texto passado em `--expect` apareça **literalmente** em algum arquivo de `state.test_files`. Sem a flag, a validação continua sendo a comparação por substring no output (comportamento histórico).
+**`--expect-literal`:** exige que o texto de `--expect` apareça **literalmente** em algum arquivo de `state.test_files`. No **contrato v3** essa checagem é **sempre ligada** (não depende da flag); a flag segue útil em planos v1/v2.
 
 ```bash
-# Verifica evidência da task 1.1 do Work 0001
-bun bin/pwn.js work audit --work 0001 --task 1.1 -- node tests/calc.test.mjs
+# Verifica evidência da task 1.1 do Work 0001 (comando do plano)
+bun bin/pwn.js work audit --work 0001 --task 1.1 -- bun tests/calc.test.mjs
 
-# RED com a asserção amarrada ao arquivo de teste congelado
-bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" --expect-literal -- node tests/calc.test.mjs
+# RED com a asserção amarrada ao arquivo de teste
+bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" -- bun tests/calc.test.mjs
 
-# GREEN e atestação (mesmo comando do RED)
-bun bin/pwn.js work audit green --work 0001 --task 1.1 -- node tests/calc.test.mjs
-bun bin/pwn.js work audit candidate --work 0001 --task 1.1 -- node tests/calc.test.mjs
+# GREEN, checks e atestação (mesmo comando do plano)
+bun bin/pwn.js work audit green --work 0001 --task 1.1 -- bun tests/calc.test.mjs
+bun bin/pwn.js work audit check --work 0001 --task 1.1 --name AC-1 -- bun tests/calc.test.mjs
+bun bin/pwn.js work audit candidate --work 0001 --task 1.1 -- bun tests/calc.test.mjs
 ```
 
-**Atestação versionada:** o `candidate` grava `version: 2` com `harness_version` e `gate_version` (além dos campos já existentes). `readAttestation(filePath)` lê o arquivo e informa `compatible` — atestações `v1` continuam legíveis, e uma `v2` sem `harness_version` é marcada incompatível em vez de aceita em silêncio.
+**Atestação versionada:** o `candidate` grava `version: 3` — **assinatura HMAC** sobre a definição da task (digest do bloco do plano) e o hash do contrato, além de `harness_version`/`gate_version` e da cadeia de evidências. `status` só conta a task como concluída quando uma atestação v3 válida existe e os arquivos atestados não mudaram (senão fica `stale`); atestações v1/v2 não são aceitas.
+
+### `pwn work status [--work <work-id>] [--coverage]`
+Relatório do panorama do Work. Uma task só conta como **concluída** (`stage: ACCEPTED`) quando existe uma **atestação v3 válida** para ela e os arquivos atestados permanecem **inalterados**; um `[x]` sem atestação válida vira **`INCONSISTENT STATE`** com o motivo (task marcada sem `ACCEPTED`, ou `ACCEPTED` sem marcador). `TASKS COMPLETE` significa que todas as tasks estão concluídas mas os **gates globais** (`## Global gates`) ainda não têm evidência assinada de `pwn work audit gate`; ele mapeia para o manifest `active` e evolui para `COMPLETE` quando `verifyGlobalGates` aprova todos os itens. `--coverage` deriva, dos próprios artefatos, quantos requisitos estão aceitos, quantas capabilities têm regras, quantas tasks têm contrato congelado e critérios de aceite (exit `0` sem lacunas, `1` caso contrário).
+
+```bash
+bun bin/pwn.js work status --work 0001
+bun bin/pwn.js work status --coverage --work 0001
+```
 
 ### `pwn self-check [--mutate [--work <work-id>]]`
 Valida os documentos normativos do framework. Com `--mutate`, roda **mutation testing dos próprios gates**: copia um Work para um diretório temporário, quebra um artefato de propósito e verifica se o gate correspondente passa de `pass` para `blocked`. O relatório é explícito sobre gates que **não** bloqueiam (advisory) — é assim que se descobre um gate decorativo. Exit `1` quando uma mutação que deveria ser detectada não é; o Work real nunca é modificado.
@@ -482,7 +532,7 @@ bun bin/pwn.js self-check --mutate
 ```
 
 ### `pwn task capsule <task-id> [work-id]`
-Exibe a cápsula de contexto formatada com limites de escrita, cenários e orçamento da tarefa. Se `work-id` for omitido, utiliza **automaticamente o último Work ID ativo**.
+Exibe a cápsula de contexto formatada com cenários, limites de escrita, orçamento e comandos de validação da tarefa. Na seção de validação, junto da allowlist do contrato, imprime o bloco do **plano** — o **RED**, cada check exigido (`AC-*`, `VISUAL`/`DOCUMENTATION` quando exigidos, `REGRESSION`) com os comandos autorizados e os gates globais — para que o agente conheça de antemão os comandos que o audit vai exigir. Se `work-id` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
 ### `pwn queue [list|approve|reject] [run-id]`
 Gerencia a fila de revisão humana assíncrona.
@@ -591,10 +641,11 @@ Resumo dos limites estruturais:
 
 | Limite | O que isso significa na prática |
 |---|---|
-| Gates validam **presença e vínculo de ID**, não intenção | Um ID fabricado ou uma capability só com título passa; o gate não lê o texto para conferir se a capability implementa o requisito |
-| Diff Guard valida **caminho**, não conteúdo | Escrever código incorreto dentro do `write_allow` não é detectado |
-| `--expect` é comparado por **substring** (por padrão) | Use `--expect-literal` para amarrar a asserção ao arquivo de teste congelado |
+| Gates validam **presença, vínculo e forma** da aceitação, não intenção | Desde 2026-10-08 recusam AC/RED genérico e arquivo não concreto, mas um ID fabricado ou um AC focado que mede a coisa errada ainda passa: o gate não lê o texto para conferir se implementa o requisito |
+| Diff Guard valida **caminho**, não conteúdo | Escrever código incorreto dentro do `write_allow` não é detectado; e a working tree não commitada entra na sandbox — sujeira fora do `write_allow` reprova o run com `DIFF VIOLATION` |
+| A comparação de saída de `--expect` é por **substring**; no contrato v3 o texto precisa ser não-genérico e **literal no teste congelado** | GREEN/VERIFY exigem exit `0` e `expect` de sucesso quando declarado, não ausência de `redExpect`. Congelar testes protege imutabilidade, não suficiência; revise as asserções |
 | Sandbox é isolamento de **árvore Git**, não de SO | Um subprocesso pode escapar do worktree (`tests/security-adv.test.ts` registra isso) |
+| A atestação é **assinada pelo repositório** por padrão | A chave nasce em `.pwn/.verifier_key`; comandos auditados não herdam `PWN_VERIFIER_KEY`, mas chave externa sozinha não garante proteção hostil. Exija contexto confiável, segredo inacessível ao código auditado e evidência produzida pelo verificador; essa fronteira não está implementada |
 | Não há verificação de **qualidade semântica** de código | Nenhum gate julga se o código está correto, legível ou bem projetado |
 | `pwn validate` valida **schema**, não verdade | Um `prd.json` sintaticamente válido pode descrever um produto incoerente |
 

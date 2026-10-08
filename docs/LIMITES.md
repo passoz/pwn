@@ -6,61 +6,81 @@ decidido e vinculado, mas não provam que a decisão está certa nem que o códi
 que o requisito pretendia. Cada limite traz afirmação, evidência no código real e o
 que usar em vez da garantia que não existe.
 
-As referências `arquivo:linha` correspondem ao estado do repositório em 2026-09-23
+As referências `arquivo:linha` correspondem ao estado do repositório em 2026-10-08
 (v0.1.0); se o arquivo mudar, localize pelo nome da função citada.
 
 ---
 
-## 1. Gates validam presença e vínculo de ID — não a intenção
+## 1. Gates validam presença, vínculo e forma da aceitação — não a intenção
 
 **Afirmação.** Os cinco gates (`GATE-DISC-REQ`, `GATE-REQ-PRD`, `GATE-PRD-SPEC`,
 `GATE-SPEC-PLAN`, `GATE-PLAN-CONTRACT`) verificam que os artefatos existem, que os IDs
 se referenciam e que campos obrigatórios estão preenchidos. Nenhum lê o texto para
-conferir se uma capability **implementa** a intenção do requisito que ela cita, e a
-rastreabilidade aceita qualquer ID não vazio: um ID fabricado passa, e a checagem de
-existência casa por **substring do nome de arquivo**.
+conferir se uma capability **implementa** a intenção do requisito que ela cita: a
+rastreabilidade aceita qualquer ID não vazio — um ID fabricado passa — e a checagem de
+existência casa por **substring do nome de arquivo**. Desde 2026-10-08 os gates também
+conferem a **forma** da aceitação (AC/RED com comando focado, arquivos concretos,
+contrato autorizando os ACs e testes congelados quando o risco é L3+), o que torna
+`bun test` como AC e listas de arquivos diretório/glob violações `high` — mas forma não
+é intenção: um AC focado e autorizado ainda pode medir a coisa errada.
 
-**Evidência.** `src/core/gates.ts:411-500` (`evaluateGatePrdSpec`): a única checagem
-por capability é `if (!cap.rules || cap.rules.length === 0)` — qualquer string serve
-como regra. `src/core/gates.ts:512-603` (`evaluateGateSpecPlan`) só confere que
-`plan.json` tem tasks e que `spec_reference` existe em `spec.json`. Um ID é aceito se
-não for vazio nem `PLACEHOLDER-<campo>` (`src/core/gates.ts:122`, `validateTraceability`),
-e `validateFullTraceability` considera que o artefato existe quando
-`files.some(f => f.includes(artifactId) || ...)` (`src/core/gates.ts:177`).
+**Evidência.** `src/core/gates.ts:887` (`validatePlanAcceptance`: comando de AC/RED
+vazio ou genérico, arquivos ausentes/não concretos). `src/core/gates.ts:981`
+(`validateContractSemantics`: contrato ausente/ilegível, escopo/budget/risco, AC fora de
+`acceptance_contract.commands`, `frozen_tests` exigidos por risco e exercitados por
+algum AC). `src/core/gates.ts:751` e `:802` (semântica do PRD e cobertura de
+requisitos). O uso de IDs continua estrutural: `validateTraceability` (`gates.ts:122`)
+aceita qualquer ID não vazio nem `PLACEHOLDER-<campo>`, e a existência do artefato é
+`files.some(f => f.includes(artifactId) || ...)` (`gates.ts:177`).
 
-**Em vez disso.** Use revisão humana e testes de aceitação derivados do requisito. O
-gate garante que a cadeia DISC → REQ → PRD → CAP → TASK → CONTRACT → EVIDENCE está
-amarrada — não que ela é verdadeira.
+**Em vez disso.** Use revisão humana e testes de aceitação escritos fora do loop de
+implementação (congele-os; ver seção 4). O gate garante que a cadeia DISC → REQ → PRD →
+CAP → TASK → CONTRACT → EVIDENCE está amarrada e que a aceitação é *executável e
+específica* — não que ela é verdadeira.
 
-## 2. Alguns gates são decorativos (medido, não suposto)
+## 2. Um gate segue decorativo (medido, não suposto)
 
-**Afirmação.** Nem toda violação bloqueia. Das cinco mutações canônicas de
-`pwn self-check --mutate`, três **não** produzem `blocked` no repo atual: remover
-`acceptance_criteria` das tasks (`GATE-SPEC-PLAN` não olha esse campo), apontar
-`contract_id` para contrato inexistente (`GATE-PLAN-CONTRACT` só checa presença) e
-remover `rules` de todas as capabilities (`GATE-PRD-SPEC` emite finding `medium`,
-advisory → `pass_with_notes`). Resultado medido: `2/5 mutações detectadas`.
+**Afirmação.** Quatro das cinco mutações canônicas de `pwn self-check --mutate`
+**agora bloqueiam** — `mut-missing-ac` e `mut-missing-contract` passaram a
+`expect_blocked: true` com a validação semântica do plano/contrato dentro dos gates. A
+quinta continua advisory: remover `rules` de todas as capabilities deixa `GATE-PRD-SPEC`
+em `severity: 'medium'` → `pass_with_notes`. Resultado medido: `4/5 mutações
+detectadas`. Um gate `pass_with_notes` com findings `medium`/`low` **não** bloqueia a
+execução.
 
-**Evidência.** `src/core/self_check_mutate.ts` (`mutationCases`, `runMutations`) e
-`src/commands/validate.ts` (`handleMutationCheck`). Só `critical`/`high` com
-`status: 'open'` bloqueiam (`hasCriticalOrHigh` em `src/core/gates.ts:287,392,493,593,674`),
-e capability sem rules é `severity: 'medium'` (`src/core/gates.ts:444`).
+**Evidência.** `src/core/self_check_mutate.ts:201` (`mutationCases`) e `:327`
+(`runMutations`); `src/commands/validate.ts` (`handleMutationCheck`). Só
+`critical`/`high` com `status: 'open'` bloqueiam, e capability sem rules é
+`severity: 'medium'` (`validateSpecCoversPRD` em `src/core/gates.ts:838`).
 
 **Em vez disso.** Rode `pwn self-check --mutate` após mexer em gates e trate cada
 `NÃO DETECTADO` como dívida: endureça o gate ou declare o caso `advisory` com
 justificativa. Mutações advisory aparecem no relatório mas **não** afetam o exit code.
 
-**Limite adicional — a chave do cache de veredictos é incompleta.** `GATE-DISC-REQ` e
-`GATE-REQ-PRD` leem `traceability-matrix.json` (`validateTraceability`) e podem bloquear
-por causa dele, mas esse arquivo **não** entra em `input_versions` — que é o que a chave
-do cache usa. Resultado: um PASS assinado continua sendo servido depois de a matriz ser
-esvaziada, e o gate imprime `PASS (cache)` com exit `0` sobre um estado que a avaliação
-fresca bloquearia. **Evidência.** `src/core/gates.ts:280-283` e `:385-388` (leitura) vs.
-`:293` e `:398` (chave); consumo em `src/commands/work.ts:104-106` (`cached ?? fresh`);
-validação do envelope em `src/core/gate-cache.ts`. O `GATE-PLAN-CONTRACT` **inclui** o
-arquivo (`src/core/gates.ts:680`) — a assimetria é o próprio sinal do defeito.
-**Em vez disso.** Rode `pwn work gate --no-cache` antes de confiar num PASS (ou
-`--clear-cache`, que apaga os envelopes).
+## 2b. A aceitação é forma; a chave do verificador mora no repositório
+
+**Afirmação.** `pwn work audit` compara o comando digitado pelo operador com o comando
+declarado no plano (`src/core/acceptance.ts:136`, `commandMatches`), recusa `--expect`
+genérico ou não literal no teste do contrato v3 (`acceptance.ts:224`) e roda cada AC
+também **sem a implementação** para recusar critério vácuo (`task_evidence.ts:927`).
+Nada disso julga o *conteúdo* da asserção: um AC focado, autorizado pelo contrato e que
+falha sem a implementação ainda pode afirmar a coisa errada (ver seção 4). E a chave que
+assina atestações e evidências de gate nasce em `.pwn/.verifier_key` **dentro do
+repositório** quando `PWN_VERIFIER_KEY` não está definida: quem pode versionar o estado
+pode assinar o que quiser, e o `status` não distingue "assinado pelo operador" de
+"assinado pelo repositório".
+
+**Evidência.** `src/core/gate-cache.ts` (`getVerifierKey` cria a chave em
+`.pwn/.verifier_key`; `readVerifierKey` só lê), `src/core/task_evidence.ts:995`
+(`candidate` assina) e `:1169`/`:1219` (`verifyTaskAttestation`/`verifyGlobalGates`
+conferem); `src/core/task_evidence.ts` (`run` remove `PWN_VERIFIER_KEY` do ambiente
+dos comandos auditados). **Em vez disso.** Uma chave externa sozinha **não** garante
+proteção contra repositório hostil: a chave default continua acessível, e `candidate`
+consome estado, logs e cadeia fornecidos pelo repositório. A assinatura não prova
+independentemente que o histórico foi executado. Para atravessar essa fronteira,
+exija execução e verificação em contexto confiável, segredo fora do alcance do código
+auditado e evidência produzida pelo verificador. Estas correções **não implementam**
+essa fronteira de confiança.
 
 ## 3. O diff guard valida caminho, não conteúdo
 
@@ -84,42 +104,64 @@ conhecidos: (a) caminhos cobertos pelo `.gitignore` do repositório **não** apa
 próprias escritas. **Evidência.** `src/core/run-orchestrator.ts` (`modifiedFiles`),
 `src/core/contract-engine.ts:144` (`.env*` no deny default).
 
+**Nota — a working tree não commitada agora conta.** `work run` leva para o sandbox o
+diff rastreado contra `HEAD` e os arquivos novos não ignorados
+(`src/core/run-orchestrator.ts:238`, `overlayWorkingTree`), exceto `.pwn`, `.todo`,
+`.work`, `queue/review` e os artefatos que o harness injeta. Consequência prática: o
+comando de aceitação valida o **seu código não commitado** (não o HEAD), e qualquer
+arquivo sujo fora do `write_allow` — inclusive um rascunho seu no repo — reprova o run
+com `DIFF VIOLATION`. Commite ou isole o que não pertence à task.
+
 **Em vez disso.** Combine o contrato com evidência de teste (seção 4) e revisão de
 `git diff` antes do merge. Escopo é contenção de dano, não correção. E não leia
 "DIFF OK" como prova de contenção: confira `git status`, `git log` e os arquivos
 ignorados do worktree.
 
-## 4. A auditoria TDD prova causalidade, mas `--expect` é substring
+## 4. A auditoria TDD prova a asserção declarada — não que ela é suficiente
 
-**Afirmação.** O mutation check é forte: ele remove o diff de implementação e exige
-que o teste falhe — isso prova que o teste depende da implementação. Mas a "falha
-esperada" é comparada por **substring na saída**; qualquer log contendo o texto serve.
-`--expect-literal` endurece apenas isso: exige que `--expect` apareça **literalmente**
-em algum arquivo de teste congelado — não que o texto seja uma asserção.
+**Afirmação.** O mutation check continua forte: ele **restaura os arquivos de
+implementação ao commit do baseline** (`baseline_commit`) e exige que o teste falhe —
+prova que a asserção depende da implementação. Desde 2026-10-08 o texto de `--expect`
+precisa ser **não-genérico** e estar **literalmente no arquivo de teste** (contrato v3),
+e cada AC precisa falhar sem a implementação (senão o check é recusado como vácuo) —
+mas nada disso julga o *conteúdo* da asserção: a comparação de saída continua sendo
+**substring**, e quem escreve o teste é quem escreve o código. Um teste honesto e
+focado que afirma só `sum(1, 1) === 2` atesta uma implementação que ignora o resto
+(demonstrado no repro de aceitação, seção 8). O congelamento
+(`bun bin/pwn.js work contract --freeze-tests`) grava os hashes no contrato e o audit
+recusa baseline/candidate se algum arquivo congelado mudar — exigido a partir de L3.
+Isso protege a **imutabilidade** dos testes, não a suficiência de seu conteúdo.
 
-**Evidência.** `src/core/task_evidence.ts:490` (`mutationCheck`:
-`!mutationResult.output.includes(expect)`), `:546` e `:591` (RED/GREEN com
-`output.includes`), `:538-543` (`literalInTests` com `--expect-literal`).
-`assertionRan = !result.output.includes(redExpect)` (`:642`) trata a asserção como
-"não executada" só quando o texto de falha reaparece — um teste silencioso passa.
+**Evidência.** `src/core/task_evidence.ts:546` (`withoutImplementation`), `:778`
+(`red`: `literalInTests`, `genericExpectReason`) e `:927` (`auditCheck`: probe de
+vacuidade para `AC-*`); `src/core/acceptance.ts:224` (`genericExpectReason`), `:232`
+(`placeholderPathReason`) e `:440` (`allowedCheckCommands`); `src/core/task-contract.ts:54`
+(`freezeAcceptanceTests`); `src/core/gates.ts:981` (frozen exigido/exercitado em risco
+L3+). GREEN e VERIFY exigem exit code `0` e o `expect` de sucesso quando declarado;
+não inferem falha só porque `redExpect` aparece na saída bem-sucedida. O mutation
+check continua exigindo que a asserção falhe ao restaurar a implementação ao baseline.
 
-**Em vez disso.** Use texto de `--expect` específico do caso (nunca genérico como
-`"Error"`), prefira runners com saída estruturada e revise o log gravado.
+**Em vez disso.** Escreva e **congele** os testes de aceitação antes da implementação
+(L3+ obriga; faça em L2 também), use texto de `--expect` específico do caso, prefira
+runners com saída estruturada e revise o log gravado. O audit garante causalidade da
+asserção declarada — a suficiência dela é revisão humana.
 
-**Limite adicional — a evidência é auto-atestada pelo repositório.** O comando
-executado é sempre o do operador (ver `docs/MANUAL.md`), mas o *veredicto* ainda vem
-de artefatos versionados: a cadeia `.todo/evidence/<work>/<task>-chain.jsonl` é SHA-256
-**sem chave** sobre campos públicos, e o estado carrega `green_*`/`baseline_*` que o
-próprio audit confere contra si mesmo. Um repositório hostil pode versionar estado,
-logs, cadeia e `audit_checks` coerentes entre si e obter `candidate` com
-`result: "pass"` sem nunca ter rodado RED/GREEN — a única barreira restante é o
-comando do operador ter de coincidir com o `red_command` plantado (basta plantar o
-comando que o repositório sabe que será usado, ex.: `bun test`).
-**Evidência.** `src/core/task_evidence.ts:372-401` (`verifyEvidenceChain`, `GENESIS_HASH`),
-`:707-758` (`candidate`). Nada em `src/` consome atestações hoje.
+**Limite adicional — o veredicto ainda é do repositório.** A cadeia
+`.todo/evidence/<work>/<task>-chain.jsonl` é SHA-256 **sem chave** sobre campos
+públicos, e o estado carrega `green_*`/`baseline_*` que o próprio audit confere contra
+si mesmo (agora também contra o commit do baseline). Um repositório hostil pode
+versionar estado, logs, cadeia e `audit_checks` coerentes entre si, plantar o comando
+que sabe ser usado e obter `candidate` com `result: "pass"` sem nunca ter rodado
+RED/GREEN. O que mudou: a atestação v3 é **assinada** e amarrada à definição da task
+(digest do bloco do plano + contrato), então ela agora é consumida e detecta alteração
+*posterior* (`status` marca `stale`); e a chave default mora no próprio repositório
+(seção 2b).
+**Evidência.** `src/core/task_evidence.ts:454` (`verifyEvidenceChain`, `GENESIS_HASH`),
+`:995` (`candidate`) e `:1169` (`verifyTaskAttestation`, consumido por
+`src/core/project_status.ts:151`).
 **Em vez disso.** Trate `.todo/attestations/**` como alegação do repositório, não como
-prova independente; assine a evidência com uma chave fora da árvore versionada
-(`PWN_VERIFIER_KEY`) se precisar de garantia contra um repositório hostil.
+prova independente. Uma chave externa (`PWN_VERIFIER_KEY`) sozinha não basta: aplique
+a fronteira de execução/verificação confiável descrita na seção 2b.
 
 ## 5. Sandbox: isolamento de árvore sempre, de SO só quando há `bwrap`
 
@@ -173,21 +215,25 @@ explicitamente reduzido; nunca execute em sandbox código que você não executa
 diretamente, e trate qualquer credencial exportada no seu shell como legível pelo
 comando do agente.
 
-## 7. Não existe verificação de qualidade semântica de código
+## 7. Não existe verificação de qualidade do código produzido
 
 **Afirmação.** O harness não compila, não roda linter estático nem avalia
-complexidade, segurança ou desempenho do código produzido. Ele registra que comandos
-rodaram e que produziram a saída esperada — e o que conta como "esperado" é declarado
-no próprio plano.
+complexidade, segurança ou desempenho do **código** produzido: não há análise de
+conteúdo — o diff guard olha caminho (seção 3) e a auditoria olha comandos, snapshots e
+asserções declaradas (seções 2b e 4). O que existe é semântica sobre o **plano**: os
+gates agora recusam AC/RED genérico, arquivo não concreto, AC que o contrato não
+autoriza e risco L3+ sem teste congelado (`validatePlanAcceptance`,
+`validateContractSemantics`), e o `pwn validate` do markdown repete as mesmas regras —
+mas isso valida a *forma da aceitação*, não o código nem a intenção do requisito.
 
-**Evidência.** `src/core/task_evidence.ts:611-651` (`verify`) re-executa o comando e
-confere exit code 0 e ausência do texto de falha; a lista de checagens vem do texto
-do plano (`taskAuditRequirements`, `:687-705`, que conta ACs por regex em `**ACs:**` e
-lê `**Visual:** REQUIRED`), e `candidate` (`:707-758`) só confirma que os nomes
-exigidos foram registrados.
+**Evidência.** `src/core/task_evidence.ts:995` (`candidate`): confere que os checks do
+plano (`requiredAuditChecks` em `src/core/acceptance.ts:430`) foram registrados com os
+comandos do plano, sobre o snapshot do GREEN, e assina; `verify`
+(`src/core/task_evidence.ts` `verify`) re-executa o comando e confere exit code 0 e a
+saída. Nada lê o conteúdo da implementação.
 
-**Em vez disso.** Coloque `tsc --noEmit`, linter e testes no comando de verificação do
-contrato e no template do alvo; revise o diff.
+**Em vez disso.** Coloque `tsc --noEmit`, linter e testes de mutação no comando de
+verificação do contrato e no template do alvo; revise o diff.
 
 ## 8. `pwn validate` valida schema, não a verdade do conteúdo
 
@@ -205,21 +251,36 @@ explícito de três documentos); Ajv em `src/core/validator.ts:9`.
 **Em vez disso.** Leia "VÁLIDO (conforme schema)" como "bem formado, não revisado"; o
 conteúdo depende dos gates (seções 1-2) e de revisão humana.
 
-## 9. Evidência prova execução; o self-check tem escopo curto
+## 9. Evidência prova execução da asserção declarada; o self-check tem escopo curto
 
-**Afirmação.** `evidence/` é auditada por presença de arquivos e heurística de nome
-(`/test|spec|result|log|output|coverage/i`), não por utilidade: o harness garante que
-o comando rodou naquele instante com aquele resultado, não que o teste exercita o
-requisito. E `pwn self-check --mutate` roda 5 mutações estruturais sobre uma **cópia
-temporária** (baseline canônica quando o Work está incompleto): não cobre mutações de
-conteúdo, combinações de violações nem gates fora de `mutationCases()`.
+**Afirmação.** A antiga checagem por heurística de nome em `evidence/`
+(`FIND-SEM-EVD-*`) foi removida: ninguém escrevia nesse diretório (o audit grava em
+`.todo/evidence/<work>/`), e a prova de execução passou a ser a **atestação v3
+assinada** — `status` só conta uma task como concluída com a assinatura válida e os
+arquivos atestados inalterados (`stale`), e os gates globais só passam com evidência
+assinada de `pwn work audit gate` (comando, log e árvore das tasks conferidos). O que
+isso **não** prova: que a asserção exercita o requisito (seção 4) nem que o
+implementador não plantou evidência coerente (seção 4, limite adicional). E o
+`pwn self-check --mutate` segue rodando 5 mutações estruturais sobre uma **cópia
+temporária**: não cobre mutações de conteúdo, combinações de violações nem gates fora
+de `mutationCases()`.
 
-**Evidência.** `src/core/gates.ts:932-990` (`validateEvidenceSemantics`, com
-`hasTestEvidence` por regex e `FIND-SEM-EVD-003` em `severity: 'low'`); logs gravados
-com sha256 em `src/core/task_evidence.ts:675` (`auditCheck`) e revalidados em `:723`;
-`src/core/self_check_mutate.ts` para o escopo das mutações.
+**Evidência.** `src/core/project_status.ts:151` (`evidenceFor`, estágio `ACCEPTED`) e
+`:232` (`globalGates` + `verifyGlobalGates`); `src/core/task_evidence.ts:454`
+(cadeia), `:927` (checks sobre o snapshot do GREEN, com probe de vacuidade) e `:995`
+(atestacão assinada). `src/core/self_check_mutate.ts:201` para o escopo das mutações.
 
-**Em vez disso.** Nomeie cada evidência com a AC que ela prova
-(`AC-3-timeout.log`) e mantenha a matriz apontando para ela; ao endurecer um gate,
-mude o caso correspondente para `expect_blocked: true` — essa mudança é o registro de
-que o gate deixou de ser decorativo.
+**Registro de correções (2026-10-08).** O drift entre Markdown e `plan.json` é validado
+em todas as fases do audit, na leitura das atestações e dos gates globais; `plan.json`
+existente ilegível é recusado. O `status` marca `INVALID PLAN` mesmo sem evidência.
+O ID e o SHA-256 do contrato atual são conferidos, invalidando aceitação anterior
+após alteração. GREEN/VERIFY usam exit `0` e `expect` de sucesso quando declarado,
+sem heurística de ausência de `redExpect`; o mutation check mantém a falha no baseline.
+Os comandos auditados não herdam `PWN_VERIFIER_KEY`. Essas correções não garantem
+suficiência dos testes, código completo/correto nem proteção contra árvore hostil.
+
+**Em vez disso.** Marque `[x]` só depois do `candidate` (o `status` acusa
+`INCONSISTENT STATE` quando o marcador e a atestação discordam) e rode
+`pwn work audit gate` para cada item de `## Global gates` ao fim do Work; ao endurecer
+um gate, mude o caso correspondente para `expect_blocked: true` — essa mudança é o
+registro de que o gate deixou de ser decorativo.

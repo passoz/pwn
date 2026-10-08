@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderScopeSection } from '../core/target-materializer.js';
+import { MaterializationResult, TargetContractContext, deriveUnsupportedCapabilities, renderAcceptanceProtocol, renderScopeSection } from '../core/target-materializer.js';
 
 export function materializeOpenCodeTarget(outDir: string, context?: TargetContractContext): MaterializationResult {
   const generatedFiles: string[] = [];
@@ -18,7 +18,8 @@ export function materializeOpenCodeTarget(outDir: string, context?: TargetContra
 ## Regras Globais
 - Respeitar contratos contratuais V4 de tarefas.
 - Modificações Restritas à allowlist declarada.
-- Executar scripts de validação antes de sinalizar conclusão.
+- Conclusão só com a atestação do audit — siga o protocolo abaixo.
+${renderAcceptanceProtocol()}
 ${context ? renderScopeSection(context) : ''}
 `;
 

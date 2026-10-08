@@ -32,6 +32,11 @@ export interface TaskContractV4 {
   acceptance_contract: {
     commands: string[];
     required_evidence: string[];
+    /**
+     * Testes de aceitação congelados ANTES da implementação (`pwn work contract
+     * --freeze-tests`): o audit recusa a atestação se algum deles mudar.
+     */
+    frozen_tests?: Array<{ path: string; sha256: string }>;
   };
   scope_contract: {
     write_allow: string[];

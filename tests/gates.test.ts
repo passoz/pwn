@@ -4,7 +4,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { initWorkDirectory, getWorkArtifactsPaths, getNextWorkId, getLatestWorkId, getExistingWorkIds } from '../src/core/work-artifacts.js';
-import { evaluateGateDiscReq, evaluateGateReqPrd, evaluateGatePrdSpec, validateFullTraceability } from '../src/core/gates.js';
+import {
+  evaluateGateDiscReq,
+  evaluateGatePlanContract,
+  evaluateGatePrdSpec,
+  evaluateGateReqPrd,
+  evaluateGateSpecPlan,
+  validateFullTraceability,
+  validatePlanAcceptance,
+  validateSemanticTraceability,
+} from '../src/core/gates.js';
 
 function fixture() {
   return mkdtempSync(path.join(tmpdir(), 'pwn-gates-test-'));
@@ -160,8 +169,6 @@ test('validateFullTraceability valida campos preenchidos na matriz', () => {
 
 // ── Semantic Traceability Tests ────────────────────────────────────────
 
-import { validateSemanticTraceability } from '../src/core/gates.js';
-
 test('validateSemanticTraceability detecta critério de aceite não observável', () => {
   const root = fixture();
   try {
@@ -261,13 +268,284 @@ test('validateSemanticTraceability detecta contrato sem scope/budget', () => {
   }
 });
 
-test('validateSemanticTraceability detecta evidence ausente', () => {
+// A checagem `FIND-SEM-EVD-*` (existência de `.pwn/work/<id>/evidence/`) foi removida:
+// nenhum módulo escrevia nesse diretório (o audit grava em `.todo/evidence/<work>`), e a
+// prova de execução passou a ser a atestação assinada, conferida pelo status.
+
+// ── Aceitação amarrada ao plano (plan.json) e contrato congelado ───────
+//
+// `validatePlanAcceptance` roda dentro de GATE-SPEC-PLAN: RED focado, AC com
+// comando executável e específico e listas de arquivos concretas. `validateContractSemantics`
+// roda dentro de GATE-PLAN-CONTRACT — como não é exportada, os cenários de contrato
+// observam os findings pelo gate que a aplica.
+
+/** Task de referência: RED/AC focados, arquivos concretos e spec_reference única. */
+function taskValida(override: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: '1.1',
+    spec_reference: 'CAP-001',
+    components: ['core'],
+    acceptance_criteria: [{ command: 'bun test tests/x.test.ts', description: 'roda o teste focado do módulo x' }],
+    red: { command: 'bun test tests/x.test.ts', description: 'falha antes da implementação' },
+    implementation_files: ['src/x.ts'],
+    test_files: ['tests/x.test.ts'],
+    ...override,
+  };
+}
+
+/** Contrato mínimo legível: escopo, orçamento, risco e comandos de aceitação. */
+function contratoValido(override: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    risk: { level: 'L1' },
+    scope_contract: { write_allow: ['src/x.ts'] },
+    budget_contract: { max_tokens: 10000 },
+    acceptance_contract: { commands: ['bun test tests/x.test.ts'] },
+    ...override,
+  };
+}
+
+function writePlan(workDir: string, plan: unknown): void {
+  writeFileSync(path.join(workDir, 'plan.json'), JSON.stringify(plan, null, 2));
+}
+
+function writeContract(workDir: string, contractId: string, contract: unknown): void {
+  writeFileSync(path.join(workDir, `${contractId}.json`), JSON.stringify(contract, null, 2));
+}
+
+test('validatePlanAcceptance aceita plano de referência (RED/AC focados, arquivos concretos)', () => {
   const root = fixture();
   try {
-    const paths = initWorkDirectory('0011', root);
+    const paths = initWorkDirectory('0001', root);
 
-    const findings = validateSemanticTraceability(paths.workDir, '0011');
-    assert.ok(findings.some(f => f.id === 'FIND-SEM-EVD-001'));
+    // Spec que cobre o requisito aceito pelo PRD padrão e a matriz apontando para a capability.
+    writeFileSync(paths.spec, JSON.stringify({
+      capabilities: [{ id: 'CAP-001', title: 'Capacidade X', covered_requirements: ['FR-001'], rules: ['regra de negócio'] }],
+    }, null, 2));
+    writeFileSync(paths.traceabilityMatrix, JSON.stringify({
+      work_id: '0001',
+      matrix: [{
+        origin: 'DISC-001', requirement_id: 'FR-001', decision_id: 'TD-001',
+        spec_section: 'CAP-001', task_id: '1.1', contract_id: 'CTR-001', evidence_id: 'EVD-001', status: 'planned',
+      }],
+    }, null, 2));
+    writePlan(paths.workDir, {
+      tasks: [taskValida()],
+      components: [{ name: 'core', regression: 'bun run check', lint: 'N/A', build: 'N/A', security: 'N/A' }],
+    });
+
+    assert.deepEqual(validatePlanAcceptance(paths.workDir), []);
+    assert.equal(evaluateGateSpecPlan('0001', paths.workDir).result, 'pass');
+    assert.equal(evaluateGatePrdSpec('0001', paths.workDir).result, 'pass');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validatePlanAcceptance rejeita AC que roda a suíte inteira e bloqueia GATE-SPEC-PLAN', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({ acceptance_criteria: [{ command: 'bun test', description: 'roda tudo' }] })],
+    });
+
+    const findings = validatePlanAcceptance(paths.workDir);
+    const finding = findings.find((f) => f.id === 'FIND-AC-GENERIC-1.1-1');
+    assert.ok(finding, 'AC `bun test` sem alvo deve gerar FIND-AC-GENERIC-1.1-1');
+    assert.equal(finding.severity, 'high');
+    assert.equal(finding.type, 'unverifiable_acceptance');
+
+    assert.equal(evaluateGateSpecPlan('0001', paths.workDir).result, 'blocked');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validatePlanAcceptance rejeita RED que roda a suíte inteira', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({ red: { command: 'bun test', description: 'roda tudo' } })],
+    });
+
+    const finding = validatePlanAcceptance(paths.workDir).find((f) => f.id === 'FIND-RED-GENERIC-1.1');
+    assert.ok(finding, 'RED `bun test` sem alvo deve gerar FIND-RED-GENERIC-1.1');
+    assert.equal(finding.severity, 'high');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validatePlanAcceptance rejeita AC ausente, arquivos ausentes e caminho placeholder', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({ acceptance_criteria: [], implementation_files: [], test_files: ['tests/'] })],
+    });
+
+    const ids = validatePlanAcceptance(paths.workDir).map((f) => f.id);
+    assert.ok(ids.includes('FIND-AC-MISSING-1.1'), 'sem AC deve gerar FIND-AC-MISSING-1.1');
+    assert.ok(ids.includes('FIND-FILES-MISSING-1.1-implementation_files'), 'sem implementation_files deve gerar FIND-FILES-MISSING');
+    assert.ok(ids.includes('FIND-FILES-PLACEHOLDER-1.1-tests/'), 'diretório em test_files deve gerar FIND-FILES-PLACEHOLDER');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validatePlanAcceptance rejeita AC vácuo (`true`) como critério de aceite', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({ acceptance_criteria: [{ command: 'true', description: 'passa sempre' }] })],
+    });
+
+    const finding = validatePlanAcceptance(paths.workDir).find((f) => f.id === 'FIND-AC-GENERIC-1.1-1');
+    assert.ok(finding, 'AC `true` deve gerar FIND-AC-GENERIC-1.1-1');
+    assert.equal(finding.severity, 'high');
+    assert.match(finding.description, /não exercita comportamento/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validatePlanAcceptance rejeita AC que apenas repete um gate global', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({ acceptance_criteria: [{ command: 'bun test', description: 'repete o gate' }] })],
+      global_gates: ['`bun test` — a suíte passa'],
+    });
+
+    const finding = validatePlanAcceptance(paths.workDir).find((f) => f.id === 'FIND-AC-GENERIC-1.1-1');
+    assert.ok(finding, 'AC igual a um gate global deve gerar FIND-AC-GENERIC-1.1-1');
+    assert.equal(finding.severity, 'high');
+    assert.match(finding.description, /repete um gate/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('GATE-PLAN-CONTRACT bloqueia task cujo contract_id não existe no Work', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, { tasks: [taskValida({ contract_id: 'CTR-999' })] });
+
+    const gate = evaluateGatePlanContract('0001', paths.workDir);
+    const finding = gate.findings.find((f) => f.id === 'FIND-SEM-CTR-MISSING-1.1');
+    assert.ok(finding, 'contrato ausente deve gerar FIND-SEM-CTR-MISSING-1.1');
+    assert.equal(finding.severity, 'high');
+    assert.equal(gate.result, 'blocked');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('GATE-PLAN-CONTRACT rejeita AC não autorizado pelos comandos do contrato', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, { tasks: [taskValida({ contract_id: 'CTR-001' })] });
+    writeContract(paths.workDir, 'CTR-001', contratoValido({
+      acceptance_contract: { commands: ['bun run check'] },
+    }));
+
+    const findings = evaluateGatePlanContract('0001', paths.workDir).findings;
+    const finding = findings.find((f) => f.id === 'FIND-SEM-CTR-AC-1.1-1');
+    assert.ok(finding, 'AC fora dos comandos do contrato deve gerar FIND-SEM-CTR-AC-1.1-1');
+    assert.equal(finding.severity, 'high');
+    assert.equal(finding.type, 'conflict');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('GATE-PLAN-CONTRACT exige frozen_tests a partir de risco L3 (e não em L2)', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, { tasks: [taskValida({ contract_id: 'CTR-001' })] });
+
+    writeContract(paths.workDir, 'CTR-001', contratoValido({
+      risk: { level: 'L3' },
+      acceptance_contract: { commands: ['bun test'] },
+    }));
+    let findings = evaluateGatePlanContract('0001', paths.workDir).findings;
+    const required = findings.find((f) => f.id === 'FIND-SEM-CTR-FROZEN-REQUIRED-1.1');
+    assert.ok(required, 'risco L3 sem frozen_tests deve exigir congelamento');
+    assert.equal(required.severity, 'high');
+
+    // L2 está abaixo de FROZEN_TESTS_REQUIRED_FROM_RISK: não exige congelamento.
+    writeContract(paths.workDir, 'CTR-001', contratoValido({
+      risk: { level: 'L2' },
+      acceptance_contract: { commands: ['bun test'] },
+    }));
+    findings = evaluateGatePlanContract('0001', paths.workDir).findings;
+    assert.equal(findings.some((f) => f.id === 'FIND-SEM-CTR-FROZEN-REQUIRED-1.1'), false,
+      'risco L2 não deve exigir frozen_tests');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('GATE-PLAN-CONTRACT rejeita teste congelado que nenhum AC exercita', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, {
+      tasks: [taskValida({
+        contract_id: 'CTR-001',
+        acceptance_criteria: [{ command: 'bun test tests/y.test.ts', description: 'aponta para outro arquivo' }],
+      })],
+    });
+    writeContract(paths.workDir, 'CTR-001', contratoValido({
+      risk: { level: 'L2' },
+      acceptance_contract: {
+        commands: ['bun test'],
+        frozen_tests: [{ path: 'tests/x.test.ts', sha256: 'a'.repeat(64) }],
+      },
+    }));
+
+    let findings = evaluateGatePlanContract('0001', paths.workDir).findings;
+    const unused = findings.find((f) => f.id === 'FIND-SEM-CTR-FROZEN-UNUSED-1.1-tests/x.test.ts');
+    assert.ok(unused, 'teste congelado não citado por AC deve gerar FIND-SEM-CTR-FROZEN-UNUSED');
+    assert.equal(unused.severity, 'high');
+
+    // Quando o AC cita o arquivo congelado, o finding desaparece.
+    writePlan(paths.workDir, {
+      tasks: [taskValida({
+        contract_id: 'CTR-001',
+        acceptance_criteria: [{ command: 'bun test tests/x.test.ts', description: 'exercita o teste congelado' }],
+      })],
+    });
+    findings = evaluateGatePlanContract('0001', paths.workDir).findings;
+    assert.equal(findings.some((f) => f.id === 'FIND-SEM-CTR-FROZEN-UNUSED-1.1-tests/x.test.ts'), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('GATE-PLAN-CONTRACT rejeita frozen_tests malformado (sem sha256)', () => {
+  const root = fixture();
+  try {
+    const paths = initWorkDirectory('0001', root);
+    writePlan(paths.workDir, { tasks: [taskValida({ contract_id: 'CTR-001' })] });
+    writeContract(paths.workDir, 'CTR-001', contratoValido({
+      risk: { level: 'L2' },
+      acceptance_contract: {
+        commands: ['bun test'],
+        frozen_tests: [{ path: 'tests/x.test.ts' }],
+      },
+    }));
+
+    const finding = evaluateGatePlanContract('0001', paths.workDir).findings
+      .find((f) => f.id === 'FIND-SEM-CTR-FROZEN-INVALID-1.1');
+    assert.ok(finding, 'entrada sem sha256 deve gerar FIND-SEM-CTR-FROZEN-INVALID-1.1');
+    assert.equal(finding.severity, 'high');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

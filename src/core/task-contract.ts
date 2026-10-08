@@ -1,5 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { placeholderPathReason } from './acceptance.js';
 import type { TaskContractV4 } from './contract-engine.js';
 import { loadPlan } from './plan-renderer.js';
 
@@ -39,6 +42,53 @@ export function loadTaskContract(workId: string, taskId: string, rootDir: string
   }
 
   return typed;
+}
+
+/**
+ * Congela testes de aceitação no contrato da task (`acceptance_contract.frozen_tests`).
+ *
+ * O ponto é a ordem: os testes precisam existir, estar commitados e limpos ANTES
+ * do baseline da task — quem implementa não consegue mais ajustá-los ao código,
+ * porque o audit recusa a atestação se algum hash mudar.
+ */
+export function freezeAcceptanceTests(options: {
+  workId: string;
+  taskId: string;
+  paths: string[];
+  rootDir?: string;
+}): { contractId: string; frozen: Array<{ path: string; sha256: string }> } {
+  const rootDir = options.rootDir ?? process.cwd();
+  const plan = loadPlan(options.workId, rootDir);
+  const task = plan?.tasks.find((entry) => entry.id === options.taskId);
+  if (!plan || !task) throw new Error(`Task ${options.taskId} não encontrada no plan.json do Work ${options.workId}`);
+  if (!task.contract_id) throw new Error(`Task ${options.taskId} não vincula contract_id`);
+  if (options.paths.length === 0) throw new Error('informe ao menos um arquivo de teste após --freeze-tests');
+
+  const evidenceState = path.resolve(rootDir, '.todo', 'evidence', options.workId, 'state', `${options.taskId}.json`);
+  if (fs.existsSync(evidenceState)) {
+    throw new Error(`a task ${options.taskId} já tem baseline (${path.relative(rootDir, evidenceState)}): testes de aceitação se congelam antes da implementação`);
+  }
+
+  const frozen: Array<{ path: string; sha256: string }> = [];
+  for (const filePath of [...new Set(options.paths)]) {
+    const reason = placeholderPathReason(filePath);
+    if (reason) throw new Error(`${filePath} ${reason}`);
+    if (task.implementation_files.includes(filePath)) throw new Error(`${filePath} é arquivo de implementação da task, não teste de aceitação`);
+    const absolute = path.resolve(rootDir, filePath);
+    if (!fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) throw new Error(`teste de aceitação não encontrado: ${filePath}`);
+    const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', filePath], { cwd: rootDir, encoding: 'utf8' });
+    const status = spawnSync('git', ['status', '--porcelain=v1', '--', filePath], { cwd: rootDir, encoding: 'utf8' });
+    if (tracked.status !== 0 || status.status !== 0 || (status.stdout ?? '').trim()) {
+      throw new Error(`${filePath} precisa estar commitado e sem alterações para ser congelado (a versão aprovada fica no histórico)`);
+    }
+    frozen.push({ path: filePath, sha256: crypto.createHash('sha256').update(fs.readFileSync(absolute)).digest('hex') });
+  }
+
+  const contractPath = path.resolve(rootDir, '.pwn/work', options.workId, `${task.contract_id}.json`);
+  const contract = loadTaskContract(options.workId, options.taskId, rootDir);
+  contract.acceptance_contract.frozen_tests = frozen;
+  fs.writeFileSync(contractPath, `${JSON.stringify(contract, null, 2)}\n`, 'utf8');
+  return { contractId: task.contract_id, frozen };
 }
 
 /**

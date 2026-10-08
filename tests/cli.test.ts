@@ -37,3 +37,13 @@ test('pwn task capsule sem task-id exige task-id e contrato congelado', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Uso: pwn task capsule/);
 });
+
+test('flags globais do CLI não engolem o comando do operador depois de --', () => {
+  // `bun --version` é o comando do OPERADOR: precisa chegar ao audit, não ser
+  // interceptado pelo `--version` do próprio pwn. Sem baseline, o audit devolve
+  // INCOMPLETO (exit 2); antes da correção, o CLI imprimia a versão do pwn (exit 0).
+  const result = runPwn(['work', 'audit', 'check', '--work', '9999', '--task', '9.9', '--name', 'AC-1', '--', 'bun', '--version']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /INCOMPLETO|baseline not found/);
+  assert.doesNotMatch(result.stdout, /pwn v\d/);
+});

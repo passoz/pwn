@@ -13,6 +13,7 @@ import { selectForRisk } from './router.js';
 import { addLearning } from './learnings.js';
 import { invalidScopePattern } from './contract-guard.js';
 import { resolveGitDir } from './sandbox.js';
+import { splitCommandLine } from './acceptance.js';
 
 export interface OrchestratedOptions {
   workId: string;
@@ -57,7 +58,7 @@ function aggregateContracts(workId: string, taskId: string, contracts: TaskContr
 
 function buildShellPolicy(contract: TaskContractV4): PolicyConfig['shell'] {
   const allowedCommands = contract.acceptance_contract.commands
-    .map((raw) => raw.trim().split(/\s+/))
+    .map((raw) => splitCommandLine(raw.trim()) ?? raw.trim().split(/\s+/))
     .filter((parts) => parts.length > 0 && parts[0])
     .map(([command, ...args]) => ({ command, args }));
   return {
@@ -217,6 +218,70 @@ export function prepareSandbox(sandboxPath: string, rootDir: string): HarnessArt
   return injected;
 }
 
+/** Estado do próprio harness: nunca é levado ao sandbox nem entra no inventário do diff guard. */
+const HARNESS_STATE_PATHS = ['.pwn', '.todo', '.work', 'queue/review'];
+
+/** Resultado da cópia da working tree para o sandbox. */
+export type OverlayResult = { ok: true; files: string[] } | { ok: false; reason: string };
+
+/**
+ * Leva para o sandbox o que existe na working tree e ainda não foi commitado:
+ * o diff rastreado contra HEAD (inclusive deleções) e os arquivos novos não
+ * ignorados. O worktree nasce do HEAD; sem esta etapa o comando de aceitação
+ * validaria o código antigo e o diff guard só veria o que o próprio comando
+ * escreveu. Os arquivos aplicados entram no inventário do diff guard — mudança
+ * fora do `write_allow` na working tree é violação, como qualquer outra.
+ *
+ * `skip` são os artefatos que o harness já injetou (`prepareSandbox`): nada é
+ * copiado por cima deles nem através deles (o `node_modules` é um link para o real).
+ */
+export function overlayWorkingTree(rootDir: string, sandboxPath: string, skip: HarnessArtifacts = {}): OverlayResult {
+  const excludes = HARNESS_STATE_PATHS.map((entry) => `:(exclude)${entry}`);
+  const diff = spawnSync('git', ['diff', '--binary', 'HEAD', '--', '.', ...excludes], {
+    cwd: rootDir,
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  if (diff.status !== 0) {
+    return { ok: false, reason: `não foi possível ler a working tree (git diff): ${String(diff.stderr ?? diff.error?.message ?? '').trim()}` };
+  }
+  const applied: string[] = [];
+  if (diff.stdout.length > 0) {
+    const apply = spawnSync('git', ['apply', '--binary', '--whitespace=nowarn', '-'], { cwd: sandboxPath, input: diff.stdout, encoding: 'utf8' });
+    if (apply.status !== 0) {
+      return { ok: false, reason: `não foi possível aplicar a working tree no sandbox: ${(apply.stderr || apply.error?.message || '').trim()}` };
+    }
+    applied.push('(diff rastreado)');
+  }
+
+  const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '-z', '--', '.', ...excludes], {
+    cwd: rootDir,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (untracked.status !== 0) {
+    return { ok: false, reason: `não foi possível listar arquivos novos da working tree: ${(untracked.stderr || '').trim()}` };
+  }
+  const skipped = Object.keys(skip);
+  const files = (untracked.stdout ?? '')
+    .split('\0')
+    .filter(Boolean)
+    .filter((file) => !skipped.some((entry) => file === entry || file.startsWith(`${entry}/`)));
+  for (const file of files) {
+    const source = path.join(rootDir, file);
+    const target = path.join(sandboxPath, file);
+    const stats = fs.lstatSync(source);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (stats.isSymbolicLink()) {
+      fs.symlinkSync(fs.readlinkSync(source), target);
+    } else if (stats.isFile()) {
+      fs.copyFileSync(source, target);
+      fs.chmodSync(target, stats.mode);
+    }
+    applied.push(file);
+  }
+  return { ok: true, files: applied };
+}
+
 function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: number, rootDir: string, agentRole: 'cheap' | 'strong' | 'review' | 'plan'): void {
   recordMetrics({
     timestamp: new Date().toISOString(),
@@ -237,7 +302,7 @@ function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: n
 
 /**
  * Run a command under contract enforcement:
- *   contract (V4) → policy → sandbox → budget → diff guard → cleanup → metrics.
+ *   contract (V4) → policy → sandbox (HEAD + working tree) → budget → diff guard → cleanup → metrics.
  *
  * `isolated` (default true) creates a Git worktree sandbox; `false` runs in the
  * main tree with policy still enforced but without sandbox isolation or diff-guard rollback.
@@ -340,6 +405,13 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
   }
 
   const harnessInjected = prepareSandbox(ctx.sandbox!.worktreePath, rootDir);
+  const overlay = overlayWorkingTree(rootDir, ctx.sandbox!.worktreePath, harnessInjected);
+  if (!overlay.ok) {
+    finalizeRun(ctx, false);
+    saveRunEvents(ctx, path.join(rootDir, '.pwn'));
+    failedMetrics(runId, options, startedAt, rootDir, agentRole);
+    return { status: 1, stdout: '', stderr: `[SANDBOX ABORT] ${overlay.reason}`, runId, diffViolations: [], suspended: false };
+  }
 
   const execResult = ctx.tools.exec(options.command[0], options.command.slice(1), options.timeoutSeconds * 1000);
 

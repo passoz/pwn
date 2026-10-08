@@ -50,13 +50,18 @@ EXEMPLOS:
 export function main(): void {
   assertLawsPinned();
   const args = process.argv.slice(2);
+  // Flags globais do próprio CLI valem só ANTES do separador `--`: depois dele vem o
+  // comando do operador (ex.: `work audit check … -- bun --version`), que pode conter
+  // `--version`/`--help` legítimos e precisa chegar intacto ao audit.
+  const separator = args.indexOf('--');
+  const ownArgs = separator === -1 ? args : args.slice(0, separator);
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (ownArgs.length === 0 || ownArgs.includes('--help') || ownArgs.includes('-h')) {
     showHelp();
     process.exit(0);
   }
 
-  if (args.includes('--version') || args.includes('-v')) {
+  if (ownArgs.includes('--version') || ownArgs.includes('-v')) {
     console.log(`pwn v${VERSION}`);
     process.exit(0);
   }
