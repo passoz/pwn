@@ -18,6 +18,9 @@ queue/review/
 # Configuração de roteamento pode conter API keys em texto claro
 .pwn/routing.json
 
+# Material de marketing (não versionado)
+.marketing/
+
 # Variáveis de ambiente (podem conter segredos)
 .env*
 !.env.example
