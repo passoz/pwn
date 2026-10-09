@@ -5,13 +5,13 @@ import path from "node:path";
 
 import { isDirectEntry } from './entry-guard.js';
 
-import { verifyGlobalGates, verifyTaskAttestation } from "./task_evidence.js";
+import { evaluateAcceptance } from "./verification-receipt.js";
 import { validateTasksDetailed, type TaskAnalysis } from "./validate_tasks.js";
 import { loadPlan, planMatchesMarkdown } from "./plan-renderer.js";
 import { listWorks, loadManifest, resolvePlanTarget } from "./work-manifest.js";
 
 const TASK_HEADING = /^### \[([ x!])\] \[(\d+\.\d+)\] (\S.*)$/;
-/** Único estágio de evidência que conta como task concluída (atestação assinada válida). */
+/** Único estágio de evidência que conta como task concluída (recibo do verificador independente). */
 const ACCEPTED = "ACCEPTED";
 
 interface FileDigest {
@@ -22,7 +22,7 @@ interface FileDigest {
 interface EvidenceState {
   stage: string;
   stale: boolean;
-  /** Por que a evidência VERIFIED ainda não conta como aceita (atestação ausente/inválida). */
+  /** Por que a evidência VERIFIED ainda não conta como aceita (recibo ausente/inválido). */
   attestation?: string;
 }
 
@@ -145,15 +145,23 @@ function parseTasks(text: string): ParsedTask[] {
 }
 
 /**
- * Estágio da evidência TDD de uma task. VERIFIED só prova que o teste focado
- * passa; ACCEPTED exige a atestação de aceitação assinada (ACs do plano
- * observados sobre o snapshot do GREEN) — é o único estágio que conta como concluído.
+ * Estágio da evidência de uma task.
+ *
+ * `ACCEPTED` é o único estágio que conta como concluído e agora exige **aceitação
+ * independente**: aprovação vigente + recibo assinado pelo verificador + árvore
+ * atual idêntica à avaliada. Os estágios anteriores descrevem o loop local (RED/GREEN,
+ * `work audit`) — são diagnóstico do agente, não autorização.
  */
-function evidenceFor(taskId: string, todoDirectory: string, workId: string | null, planText: string): EvidenceState {
+function evidenceFor(taskId: string, todoDirectory: string, workId: string | null): EvidenceState {
   const rootDir = path.dirname(todoDirectory);
   const evidenceRoot = workId ? path.join(todoDirectory, "evidence", workId) : path.join(todoDirectory, "evidence");
+  const evaluation = workId
+    ? evaluateAcceptance({ rootDir, workId, taskId })
+    : { accepted: false, reason: "plano sem Work ID: a aceitação independente exige um Work canônico" as string | undefined };
   const stateFile = path.join(evidenceRoot, "state", `${taskId}.json`);
-  if (!existsSync(stateFile)) return { stage: "not started", stale: false };
+  if (!existsSync(stateFile)) {
+    return { stage: evaluation.accepted ? "ACCEPTED" : "not started", stale: false, attestation: evaluation.reason };
+  }
 
   try {
     const state = JSON.parse(readFileSync(stateFile, "utf8"));
@@ -164,9 +172,9 @@ function evidenceFor(taskId: string, todoDirectory: string, workId: string | nul
     if (!existsSync(verifyLog) || !/VERDICT: PASS\s*$/m.test(readFileSync(verifyLog, "utf8"))) {
       return { stage: "GREEN", stale };
     }
-    const attestation = verifyTaskAttestation({ rootDir, todoDirectory, workId, taskId, planText });
-    if (attestation.valid) return { stage: "ACCEPTED", stale: stale || attestation.stale };
-    return { stage: "VERIFIED", stale, attestation: attestation.reason };
+    // A árvore avaliada é a árvore atual: quando o recibo é válido não há evidência obsoleta.
+    if (evaluation.accepted) return { stage: "ACCEPTED", stale: false };
+    return { stage: "VERIFIED", stale, attestation: evaluation.reason };
   } catch (error) {
     return { stage: `invalid evidence: ${(error as Error).message}`, stale: true };
   }
@@ -227,8 +235,8 @@ function artifactStatus(tasksPath: string, validation: TaskAnalysis): ArtifactsS
 
 /**
  * Estado dos gates globais. O checkbox não prova nada (qualquer um marca `[x]`):
- * um gate só conta quando há evidência assinada de `pwn work audit gate` com o
- * comando do plano, PASS, sobre os arquivos atuais das tasks.
+ * um gate só conta quando existe **recibo de aceitação independente** para ele —
+ * execução feita pelo verificador, sobre a árvore atual, com a aprovação vigente.
  */
 function globalGates(text: string, context: { rootDir: string; todoDirectory: string; workId: string | null }): GlobalGates {
   const start = text.indexOf("## Global gates");
@@ -241,10 +249,20 @@ function globalGates(text: string, context: { rootDir: string; todoDirectory: st
   const items = [...section.matchAll(/^- \[([ xX!])\]/gm)].map((match) => match[1]);
   if (!items.length) return { state: "UNTRACKED", detail: "declared; no tracked checkbox state" };
   const blocked = items.filter((marker) => marker === "!").length;
-  const evidence = verifyGlobalGates({ ...context, planText: text });
+
+  const evidence = items.map((_, index) => {
+    const name = `G-${index + 1}`;
+    if (!context.workId) return { name, ok: false, reason: "plano sem Work ID" };
+    const evaluation = evaluateAcceptance({
+      rootDir: context.rootDir,
+      workId: context.workId,
+      taskId: name,
+    });
+    return { name, ok: evaluation.accepted, reason: evaluation.reason };
+  });
   const proven = evidence.filter((gate) => gate.ok).length;
   const pending = evidence.filter((gate) => !gate.ok).map((gate) => `${gate.name}: ${gate.reason}`);
-  const detail = `${proven}/${items.length} with evidence${blocked ? `; ${blocked} blocked` : ""}${pending.length ? ` (${pending.join("; ")})` : ""}`;
+  const detail = `${proven}/${items.length} with independent receipt${blocked ? `; ${blocked} blocked` : ""}${pending.length ? ` (${pending.join("; ")})` : ""}`;
   if (blocked) return { state: "BLOCKED", detail };
   if (proven === items.length) return { state: "PASS", detail };
   return { state: "PENDING", detail };
@@ -332,7 +350,7 @@ export function collectProjectStatus(tasksPath = ".todo/tasks.md"): ProjectStatu
       }
     }
   }
-  const tasks: StatusTask[] = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId, text) }));
+  const tasks: StatusTask[] = parseTasks(text).map((task) => ({ ...task, evidence: evidenceFor(task.id, todoDirectory, workId) }));
   const gates = globalGates(text, { rootDir: path.dirname(todoDirectory), todoDirectory, workId });
   return {
     artifacts: artifactStatus(tasksPath, validation),

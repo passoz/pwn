@@ -1145,7 +1145,7 @@ function validateContractSemantics(workDir: string): GateFinding[] {
  * Run ALL semantic validations for a Work (as mesmas que os gates aplicam:
  * PRD → GATE-REQ-PRD, cobertura → GATE-PRD-SPEC, aceitação → GATE-SPEC-PLAN,
  * contrato → GATE-PLAN-CONTRACT). A prova de execução não é checada aqui: ela é
- * a atestação assinada do audit, conferida pelo status.
+ * o recibo do verificador independente (`pwn verify`), conferido pelo status.
  */
 export function validateSemanticTraceability(workDir: string, workId: string): GateFinding[] {
   const findings: GateFinding[] = [];

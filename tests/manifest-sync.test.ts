@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { canonicalJson, parsePlanTask, taskDefinitionDigest } from '../src/core/acceptance.js';
 import { collectPlanStatus } from '../src/core/project_status.js';
 import { loadManifest, reserveWork, WORK_MANIFEST_STATES } from '../src/core/work-manifest.js';
 import { syncWorkManifest } from '../src/core/manifest-sync.js';
@@ -78,34 +76,6 @@ function writeGreenEvidence(root: string, workId: string, taskId: string): void 
   writeFileSync(path.join(evidenceDirectory, `${taskId}-verify.log`), 'VERDICT: PASS\n', 'utf8');
 }
 
-/** Atestação de aceitação v3 assinada, como `pwn work audit candidate` a emitiria. */
-function writeAttestation(root: string, workId: string, plan: string, taskId: string): void {
-  const key = 'manifest-sync-test-key';
-  mkdirSync(path.join(root, '.pwn'), { recursive: true });
-  writeFileSync(path.join(root, '.pwn', '.verifier_key'), key, 'utf8');
-
-  const task = parsePlanTask(plan, taskId);
-  assert.ok(task, `a task ${taskId} precisa existir no plano do fixture`);
-  const subject = {
-    version: 3,
-    kind: 'task-acceptance-candidate',
-    harness_version: '0.1.0',
-    gate_version: '1',
-    work_id: workId,
-    task_id: taskId,
-    result: 'pass',
-    plan: { task_definition_sha256: taskDefinitionDigest(plan, task) },
-    implementation: {},
-    tests: {},
-    frozen_tests: [],
-    generated_at: new Date().toISOString(),
-  };
-  const signature = createHmac('sha256', key).update(canonicalJson(subject)).digest('hex');
-  const directory = path.join(root, '.todo', 'attestations', workId);
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(path.join(directory, `${taskId}-candidate.json`), `${JSON.stringify({ ...subject, signature }, null, 2)}\n`, 'utf8');
-}
-
 test('syncWorkManifest projeta o panorama no vocabulário canônico do manifest', () => {
   const root = fixture();
   try {
@@ -156,7 +126,7 @@ test('manifest legado com state fora do vocabulário é lido como invalid e repa
   }
 });
 
-test('tasks todas aceitas com gate global pendente mantêm o manifest em active', () => {
+test('marcador [x] sem recibo independente mantém o manifest fora de completed', () => {
   const root = fixture();
   try {
     const manifest = reserveWork(root);
@@ -170,14 +140,16 @@ test('tasks todas aceitas com gate global pendente mantêm o manifest em active'
 
     for (const taskId of ['1.1', '1.2']) {
       writeGreenEvidence(root, workId, taskId);
-      writeAttestation(root, workId, plan, taskId);
+      // Evidência local (estado + verify PASS) é DIAGNÓSTICO do agente: não existe
+      // atestação local que conclua a task — isso agora exige recibo do verificador
+      // independente (`pwn verify`), coberto em tests/project_status.test.ts.
     }
 
-    // Precondição observável: o panorama é "TASKS COMPLETE" (tudo aceito, gate sem evidência),
-    // não "COMPLETE" — é exatamente esse estado que não pode virar manifest "completed".
+    // Precondição observável: marcador `[x]` sem recibo independente é estado
+    // inconsistente — nunca "COMPLETE" e nunca manifest "completed".
     const panorama = collectPlanStatus(workId, root).panorama;
-    assert.equal(panorama?.state, 'TASKS COMPLETE');
-    assert.equal(panorama?.counts.unverifiedChecked, 0);
+    assert.equal(panorama?.state, 'INCONSISTENT STATE');
+    assert.equal(panorama?.counts.unverifiedChecked, 2);
 
     const state = syncWorkManifest(workId, root);
     assert.ok(MANIFEST_STATES.includes(state), `estado fora do vocabulário do manifest: ${state}`);

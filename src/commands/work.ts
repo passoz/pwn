@@ -8,6 +8,7 @@ import { scaffoldWork } from '../core/scaffold.js';
 import type { RiskLevel } from '../core/contract-engine.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
 import { syncWorkManifest } from '../core/manifest-sync.js';
+import { reportAutoVerification, verifyAfterRun, type AutoVerification } from '../core/acceptance-flow.js';
 import { main as validatePromptMain } from '../core/validate_prompt.js';
 import { main as validateTasksMain } from '../core/validate_tasks.js';
 import { main as taskEvidenceMain } from '../core/task_evidence.js';
@@ -453,10 +454,20 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
         if (taskId && result.status !== 0 && !result.suspended) {
           console.error(`[RUN FAILED] Execução terminou com status ${result.status} para a task ${taskId} (work ${workId}).`);
         }
+        let verification: AutoVerification | null = null;
         if (result.suspended) {
           console.error(`\n[SUSPENDED] A task ${taskId ?? '(work)'} do Work ${workId} não foi executada: aguarda decisão humana na fila AFK.`);
           console.error(`Use 'pwn queue approve ${result.runId}' para destravar (exit code ${result.status}).`);
           // Suspensão L4 não altera estado de governança.
+        } else if (!taskId) {
+          console.log('· Aceitação independente exige --task (ou use: pwn verify run --work NNNN --task T).');
+        } else if (result.status === 0) {
+          // A execução terminou: a aceitação independente roda SEM depender do agente.
+          verification = verifyAfterRun({ rootDir: process.cwd(), workId, taskId, timeoutSeconds });
+          reportAutoVerification(verification);
+        }
+        if (result.suspended) {
+          // nada a fazer
         } else if (noSync) {
           console.log(`· Manifest .work/${workId}.json não sincronizado (--no-sync).`);
         } else {
@@ -466,6 +477,9 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           }
         }
 
+        if (verification && verification.attempted && verification.outcome !== 'pass') {
+          process.exit(1);
+        }
         process.exit(result.status);
       }
       break;
@@ -473,7 +487,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
     case 'audit':
       console.log('=== [pwn work audit] Auditando Evidências e Aceitação ===');
       {
-        const knownActions = ['baseline', 'red', 'green', 'verify', 'check', 'candidate', 'gate'];
+        const knownActions = ['baseline', 'red', 'green', 'verify', 'check'];
         // Compat: sem ação explícita, o audit roda a verificação de evidência (verify).
         const auditArgs = args.length > 0 && knownActions.includes(args[0])
           ? [...args]
@@ -545,7 +559,7 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('  pwn work contract --task <t> --freeze-tests <arquivos>  Congela testes de aceitação antes da implementação');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
       console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync, --dry-run)');
-      console.log('  pwn work audit     Audita aceitação e evidência TDD: baseline|red|green|verify|check|candidate|gate (comando após -- é obrigatório e precisa ser o do plano)');
+      console.log('  pwn work audit     Diagnóstico TDD local: baseline|red|green|verify|check (NÃO conclui a task — a aceitação é do pwn verify)');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');
       process.exit(1);

@@ -57,30 +57,57 @@ execução.
 `NÃO DETECTADO` como dívida: endureça o gate ou declare o caso `advisory` com
 justificativa. Mutações advisory aparecem no relatório mas **não** afetam o exit code.
 
-## 2b. A aceitação é forma; a chave do verificador mora no repositório
+## 2b. A aceitação independente existe, mas o verificador e a aprovação vivem no host do operador
 
-**Afirmação.** `pwn work audit` compara o comando digitado pelo operador com o comando
-declarado no plano (`src/core/acceptance.ts:136`, `commandMatches`), recusa `--expect`
-genérico ou não literal no teste do contrato v3 (`acceptance.ts:224`) e roda cada AC
-também **sem a implementação** para recusar critério vácuo (`task_evidence.ts:927`).
-Nada disso julga o *conteúdo* da asserção: um AC focado, autorizado pelo contrato e que
-falha sem a implementação ainda pode afirmar a coisa errada (ver seção 4). E a chave que
-assina atestações e evidências de gate nasce em `.pwn/.verifier_key` **dentro do
-repositório** quando `PWN_VERIFIER_KEY` não está definida: quem pode versionar o estado
-pode assinar o que quiser, e o `status` não distingue "assinado pelo operador" de
-"assinado pelo repositório".
+**Afirmação.** A conclusão não vem mais do repositório. `pwn work audit` virou
+**diagnóstico TDD local** (`baseline`, `red`, `green`, `verify`, `check`): ele compara o
+comando digitado com o declarado no plano (`src/core/acceptance.ts:136`,
+`commandMatches`), recusa `--expect` genérico ou não literal no contrato v3
+(`acceptance.ts:224`) e roda cada AC também **sem a implementação** para recusar critério
+vácuo (`src/core/task_evidence.ts:836`, `auditCheck`) — mas **nada disso conclui**. Os
+antigos `audit candidate`/`audit gate` (atestação/evidência HMAC dentro do repositório)
+foram removidos.
 
-**Evidência.** `src/core/gate-cache.ts` (`getVerifierKey` cria a chave em
-`.pwn/.verifier_key`; `readVerifierKey` só lê), `src/core/task_evidence.ts:995`
-(`candidate` assina) e `:1169`/`:1219` (`verifyTaskAttestation`/`verifyGlobalGates`
-conferem); `src/core/task_evidence.ts` (`run` remove `PWN_VERIFIER_KEY` do ambiente
-dos comandos auditados). **Em vez disso.** Uma chave externa sozinha **não** garante
-proteção contra repositório hostil: a chave default continua acessível, e `candidate`
-consome estado, logs e cadeia fornecidos pelo repositório. A assinatura não prova
-independentemente que o histórico foi executado. Para atravessar essa fronteira,
-exija execução e verificação em contexto confiável, segredo fora do alcance do código
-auditado e evidência produzida pelo verificador. Estas correções **não implementam**
-essa fronteira de confiança.
+A conclusão exige o **verificador independente** (`pwn verify`): a raiz protegida fica
+**fora do repositório** (`~/.config/pwn/verifier` ou `PWN_VERIFIER_HOME`), com par de
+chaves **Ed25519**; `approve --by <responsável>` grava um **pacote imutável** (checks do
+plano + **cópia do conteúdo** dos testes de aceitação congelados) e `run` captura um
+snapshot da entrega, restaura o teste aprovado, executa em `bwrap` e assina um recibo.
+
+**Limites que permanecem** (a fronteira é melhor, não mágica):
+
+1. **A aprovação é ato do operador e não é protegida contra o próprio agente.** Se o
+   agente roda como o **mesmo usuário do SO** do operador, ele alcança a raiz protegida
+   (`0700`, mas do mesmo dono), a chave e as aprovações. `approve --by <responsável>` é
+   uma declaração humana, não uma assinatura do operador.
+2. **A chave default vive no host — é raiz protegida, não HSM.** A privada
+   (`keys/verifier-private.pem`, modo `0600`) está no disco do operador. Comprometer o
+   host (ou o usuário do SO) compromete a autoridade de conclusão.
+3. **`node_modules` é montado read-only a partir do repositório.** O candidato pode
+   adulterar sua árvore de dependências antes do `run`; a integridade é vinculada apenas
+   pelo **digest dos manifestos** (`package.json`, `bun.lock`, `bun.lockb`, `bunfig.toml`,
+   `tsconfig.json` — `captureDependencyDigest`), **não** pelo conteúdo de cada módulo
+   instalado.
+4. **`bwrap` ausente bloqueia em vez de degradar.** `requireVerifierReady` lança
+   `VerificationUnavailable` sem `bwrap` (ou runtime/chave): o `run` sai com exit `2`.
+   Não existe aceitação sem isolamento.
+5. **Testes fracos aprovados continuam aprovando.** O verificador restaura o conteúdo
+   aprovado e exige causalidade do AC (falha no baseline revertido), mas não julga a
+   **suficiência** da asserção. Um teste que mede a coisa errada, uma vez aprovado,
+   produz recibo `pass`.
+
+**Evidência.** `src/core/verifier-home.ts:207` (`requireVerifierReady`), `:249`
+(`assertProtectedOutsideRepository`); `src/core/acceptance-approval.ts:190`
+(`createApproval`, exige `frozen_tests` e grava a cópia aprovada);
+`src/core/candidate-snapshot.ts:86`/`:97` (`captureSnapshot`/`captureDependencyDigest`);
+`src/core/verification-runner.ts:218` (`runVerification`), `:305` (`executeCheck`),
+`:121` (`sandboxPolicy`); `src/core/verification-receipt.ts:81` (`buildReceipt`), `:168`
+(`evaluateAcceptance`); `src/core/project_status.ts:155` (`evidenceFor`, estágio
+`ACCEPTED` pelo recibo).
+
+**Em vez disso.** Trate o recibo como histórico de uma execução — a árvore muda e ele
+expira. Para uma fronteira real contra o operador, rode o verificador em outra máquina
+ou contêiner, com segredo do agente, e confie no `fingerprint` da chave pública.
 
 ## 3. O diff guard valida caminho, não conteúdo
 
@@ -126,42 +153,47 @@ precisa ser **não-genérico** e estar **literalmente no arquivo de teste** (con
 e cada AC precisa falhar sem a implementação (senão o check é recusado como vácuo) —
 mas nada disso julga o *conteúdo* da asserção: a comparação de saída continua sendo
 **substring**, e quem escreve o teste é quem escreve o código. Um teste honesto e
-focado que afirma só `sum(1, 1) === 2` atesta uma implementação que ignora o resto
-(demonstrado no repro de aceitação, seção 8). O congelamento
-(`bun bin/pwn.js work contract --freeze-tests`) grava os hashes no contrato e o audit
-recusa baseline/candidate se algum arquivo congelado mudar — exigido a partir de L3.
-Isso protege a **imutabilidade** dos testes, não a suficiência de seu conteúdo.
+focado que afirma só `sum(1, 1) === 2` atesta uma implementação que ignora o resto. O congelamento
+(`bun bin/pwn.js work contract --freeze-tests`) grava os hashes no contrato; o audit
+local recusa `baseline` se algum arquivo congelado mudar, e a **aceitação independente**
+exige o congelamento, guarda uma cópia aprovada do conteúdo e restaura essa cópia por
+cima da entrega — exigido a partir de L3. Isso protege a **imutabilidade** dos testes,
+não a suficiência de seu conteúdo.
 
-**Evidência.** `src/core/task_evidence.ts:546` (`withoutImplementation`), `:778`
-(`red`: `literalInTests`, `genericExpectReason`) e `:927` (`auditCheck`: probe de
+**Evidência.** `src/core/task_evidence.ts:462` (`withoutImplementation`), `:689`
+(`red`: `literalInTests`, `genericExpectReason`) e `:836` (`auditCheck`: probe de
 vacuidade para `AC-*`); `src/core/acceptance.ts:224` (`genericExpectReason`), `:232`
 (`placeholderPathReason`) e `:440` (`allowedCheckCommands`); `src/core/task-contract.ts:54`
 (`freezeAcceptanceTests`); `src/core/gates.ts:981` (frozen exigido/exercitado em risco
-L3+). GREEN e VERIFY exigem exit code `0` e o `expect` de sucesso quando declarado;
-não inferem falha só porque `redExpect` aparece na saída bem-sucedida. O mutation
-check continua exigindo que a asserção falhe ao restaurar a implementação ao baseline.
+L3+); `src/core/acceptance-approval.ts:190` (`createApproval` exige `frozen_tests` e
+grava o conteúdo aprovado); `src/core/verification-runner.ts:305` (`executeCheck`
+restaura o arquivo aprovado e exige falha no baseline revertido). GREEN e VERIFY exigem
+exit code `0` e o `expect` de sucesso quando declarado; não inferem falha só porque
+`redExpect` aparece na saída bem-sucedida. O mutation check continua exigindo que a
+asserção falhe ao restaurar a implementação ao baseline.
 
 **Em vez disso.** Escreva e **congele** os testes de aceitação antes da implementação
 (L3+ obriga; faça em L2 também), use texto de `--expect` específico do caso, prefira
 runners com saída estruturada e revise o log gravado. O audit garante causalidade da
 asserção declarada — a suficiência dela é revisão humana.
 
-**Limite adicional — o veredicto ainda é do repositório.** A cadeia
-`.todo/evidence/<work>/<task>-chain.jsonl` é SHA-256 **sem chave** sobre campos
-públicos, e o estado carrega `green_*`/`baseline_*` que o próprio audit confere contra
-si mesmo (agora também contra o commit do baseline). Um repositório hostil pode
-versionar estado, logs, cadeia e `audit_checks` coerentes entre si, plantar o comando
-que sabe ser usado e obter `candidate` com `result: "pass"` sem nunca ter rodado
-RED/GREEN. O que mudou: a atestação v3 é **assinada** e amarrada à definição da task
-(digest do bloco do plano + contrato), então ela agora é consumida e detecta alteração
-*posterior* (`status` marca `stale`); e a chave default mora no próprio repositório
-(seção 2b).
-**Evidência.** `src/core/task_evidence.ts:454` (`verifyEvidenceChain`, `GENESIS_HASH`),
-`:995` (`candidate`) e `:1169` (`verifyTaskAttestation`, consumido por
-`src/core/project_status.ts:151`).
-**Em vez disso.** Trate `.todo/attestations/**` como alegação do repositório, não como
-prova independente. Uma chave externa (`PWN_VERIFIER_KEY`) sozinha não basta: aplique
-a fronteira de execução/verificação confiável descrita na seção 2b.
+**Limite adicional — o loop local é diagnóstico, não autorização.** Os artefatos locais
+(`.todo/evidence/<work>/state/<task>.json`, logs e `*-chain.jsonl`) são gravados pelo
+próprio audit e não têm chave: um repositório hostil pode versioná-los coerentes entre
+si e obter `0` no `work audit` sem nunca ter rodado RED/GREEN. Isso não conclui mais
+nada: o antigo `audit candidate` foi removido, e o `status` só conta uma task como
+`ACCEPTED` quando existe **recibo de aceitação independente** válido para a árvore atual
+(`src/core/verification-receipt.ts:168`, `evaluateAcceptance`, consumido por
+`src/core/project_status.ts:155`). O limite migrou para a seção 2b: o verificador e a
+aprovação vivem no host do operador, e um agente que rode como o mesmo usuário do SO
+alcança ambos.
+**Evidência.** `src/core/task_evidence.ts:367` (`appendEvidenceChain`, `GENESIS_HASH`:
+cadeia SHA-256 sem chave, **apenas gravada**), `src/core/verification-receipt.ts:111`
+(`signatureIsValid`), `:168` (`evaluateAcceptance`).
+**Em vez disso.** Trate `.todo/evidence/**` como diagnóstico do agente. A prova
+independente é o recibo da raiz protegida; para atravessar a fronteira do host, aplique
+o descrito na seção 2b (verificador em outro contexto, segredo inalcançável pelo
+agente).
 
 ## 5. Sandbox: isolamento de árvore sempre, de SO só quando há `bwrap`
 
@@ -210,6 +242,14 @@ removendo somente `PWN_VERIFIER_KEY`). O `PolicyEngine` aprova toda leitura
 (`evaluateFileRead` em `src/core/policy-engine.ts` devolve `allowed: true` sem consultar
 a allowlist).
 
+**Nota — a leitura irrestrita é do sandbox do `work run`, não do verificador.** O
+sandbox de `pwn verify run` **não** monta o host inteiro: `sandboxPolicy` lista mounts
+mínimos (`/usr`, `/bin`, `/lib`, `/lib64`, `/etc`, a raiz do runtime e as dependências
+do candidato), usa `HOME=/nonexistent`, `--clearenv` com allowlist de ambiente, sem rede
+e sem a raiz do verificador (`src/core/verification-runner.ts:121`, `:147`). Isso reduz
+a superfície de leitura no momento da **avaliação**; não altera o sandbox do agente
+descrito acima.
+
 **Em vez disso.** Rode o executor com um usuário separado, HOME dedicado e ambiente
 explicitamente reduzido; nunca execute em sandbox código que você não executaria
 diretamente, e trate qualquer credencial exportada no seu shell como legível pelo
@@ -226,11 +266,12 @@ autoriza e risco L3+ sem teste congelado (`validatePlanAcceptance`,
 `validateContractSemantics`), e o `pwn validate` do markdown repete as mesmas regras —
 mas isso valida a *forma da aceitação*, não o código nem a intenção do requisito.
 
-**Evidência.** `src/core/task_evidence.ts:995` (`candidate`): confere que os checks do
-plano (`requiredAuditChecks` em `src/core/acceptance.ts:430`) foram registrados com os
-comandos do plano, sobre o snapshot do GREEN, e assina; `verify`
-(`src/core/task_evidence.ts` `verify`) re-executa o comando e confere exit code 0 e a
-saída. Nada lê o conteúdo da implementação.
+**Evidência.** `src/core/task_evidence.ts:836` (`auditCheck`) roda os checks do plano
+(`requiredAuditChecks` em `src/core/acceptance.ts:430`) sobre o snapshot do GREEN;
+`verify` (`src/core/task_evidence.ts:795`) re-executa o comando e confere exit code 0 e
+a saída. Na aceitação independente, `src/core/verification-runner.ts:218`
+(`runVerification`) executa o check em `bwrap`, mas o veredicto é o **exit code + digest
+de saída** — não há leitura do conteúdo da implementação em nenhum caminho.
 
 **Em vez disso.** Coloque `tsc --noEmit`, linter e testes de mutação no comando de
 verificação do contrato e no template do alvo; revise o diff.
@@ -255,32 +296,39 @@ conteúdo depende dos gates (seções 1-2) e de revisão humana.
 
 **Afirmação.** A antiga checagem por heurística de nome em `evidence/`
 (`FIND-SEM-EVD-*`) foi removida: ninguém escrevia nesse diretório (o audit grava em
-`.todo/evidence/<work>/`), e a prova de execução passou a ser a **atestação v3
-assinada** — `status` só conta uma task como concluída com a assinatura válida e os
-arquivos atestados inalterados (`stale`), e os gates globais só passam com evidência
-assinada de `pwn work audit gate` (comando, log e árvore das tasks conferidos). O que
-isso **não** prova: que a asserção exercita o requisito (seção 4) nem que o
-implementador não plantou evidência coerente (seção 4, limite adicional). E o
-`pwn self-check --mutate` segue rodando 5 mutações estruturais sobre uma **cópia
-temporária**: não cobre mutações de conteúdo, combinações de violações nem gates fora
-de `mutationCases()`.
+`.todo/evidence/<work>/`), e a prova de execução passou a ser o **recibo de aceitação
+independente** — `status` só conta uma task como concluída (`ACCEPTED`) com recibo
+válido e a **árvore atual idêntica** à avaliada, e **cada gate global** também exige
+**recibo próprio** (`pwn verify approve --global G-n` + `pwn verify run --global G-n`).
+O checkbox `[x]` não prova nada. O loop local (`audit baseline`/`red`/`green`/`verify`/
+`check`) é **diagnóstico** e não autoriza conclusão. O que isso **não** prova: que a
+asserção exercita o requisito (seção 4) nem que o host/operador não foram comprometidos
+(seção 2b). E o `pwn self-check --mutate` segue rodando 5 mutações estruturais sobre uma
+**cópia temporária**: não cobre mutações de conteúdo, combinações de violações nem gates
+fora de `mutationCases()`.
 
-**Evidência.** `src/core/project_status.ts:151` (`evidenceFor`, estágio `ACCEPTED`) e
-`:232` (`globalGates` + `verifyGlobalGates`); `src/core/task_evidence.ts:454`
-(cadeia), `:927` (checks sobre o snapshot do GREEN, com probe de vacuidade) e `:995`
-(atestacão assinada). `src/core/self_check_mutate.ts:201` para o escopo das mutações.
+**Evidência.** `src/core/project_status.ts:155` (`evidenceFor`, estágio `ACCEPTED` via
+`evaluateAcceptance`), `:241` (`globalGates`: recibo por gate) e `:315` (`COMPLETE`
+deriva de tasks concluídas **e** gates globais `PASS`); `src/core/verification-receipt.ts:168`
+(`evaluateAcceptance`) e `:111` (`signatureIsValid`); `src/core/acceptance-approval.ts:109`
+(`currentApproval`); `src/core/task_evidence.ts:367` (cadeia local, só gravada), `:836`
+(checks sobre o snapshot do GREEN). `src/core/self_check_mutate.ts:201` para o escopo das
+mutações.
 
 **Registro de correções (2026-10-08).** O drift entre Markdown e `plan.json` é validado
-em todas as fases do audit, na leitura das atestações e dos gates globais; `plan.json`
-existente ilegível é recusado. O `status` marca `INVALID PLAN` mesmo sem evidência.
-O ID e o SHA-256 do contrato atual são conferidos, invalidando aceitação anterior
-após alteração. GREEN/VERIFY usam exit `0` e `expect` de sucesso quando declarado,
-sem heurística de ausência de `redExpect`; o mutation check mantém a falha no baseline.
-Os comandos auditados não herdam `PWN_VERIFIER_KEY`. Essas correções não garantem
-suficiência dos testes, código completo/correto nem proteção contra árvore hostil.
+em todas as fases do audit; `plan.json` existente ilegível é recusado. O `status` marca
+`INVALID PLAN` mesmo sem recibo. Alterar qualquer arquivo da árvore — ou um manifesto de
+dependência — depois do `run` **invalida** o recibo (o recibo é histórico, não
+permissão). Os antigos `audit candidate`/`audit gate` foram **removidos**; a conclusão
+agora exige o verificador independente (`pwn verify`), com recibo assinado Ed25519 e
+sandbox `bwrap`. GREEN/VERIFY usam exit `0` e `expect` de sucesso quando declarado, sem
+heurística de ausência de `redExpect`; o mutation check mantém a falha no baseline.
+Essas correções não garantem suficiência dos testes, código completo/correto, nem
+proteção contra o operador/agente que roda como o mesmo usuário do SO (seção 2b).
 
-**Em vez disso.** Marque `[x]` só depois do `candidate` (o `status` acusa
-`INCONSISTENT STATE` quando o marcador e a atestação discordam) e rode
-`pwn work audit gate` para cada item de `## Global gates` ao fim do Work; ao endurecer
-um gate, mude o caso correspondente para `expect_blocked: true` — essa mudança é o
-registro de que o gate deixou de ser decorativo.
+**Em vez disso.** Marque `[x]` só depois de `pwn verify run --task` retornar `PASS`
+(o `status` acusa `INCONSISTENT STATE` quando o marcador e o recibo discordam) e rode
+`pwn verify approve --global G-n` + `pwn verify run --global G-n` para cada item de
+`## Global gates` ao fim do Work; ao endurecer um gate, mude o caso correspondente para
+`expect_blocked: true` — essa mudança é o registro de que o gate deixou de ser
+decorativo.

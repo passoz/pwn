@@ -9,7 +9,6 @@ import { test as bunTest } from "bun:test";
 import { createDefaultContractV4 } from "../src/core/contract-engine.js";
 import { renderTasksMarkdown, type Plan } from "../src/core/plan-renderer.js";
 import { freezeAcceptanceTests } from "../src/core/task-contract.js";
-import { verifyGlobalGates, verifyTaskAttestation } from "../src/core/task_evidence.js";
 
 const script = path.resolve(import.meta.dirname, "../src/core/task_evidence.ts");
 /** Runtime que executa a suíte (bun sob `bun test`): o plano declara o mesmo caminho que o operador usa. */
@@ -177,19 +176,21 @@ test("enforces immutable RED/GREEN evidence", () => {
   assert.equal(readFileSync(implementation, "utf8"), "export const value = 'new';\n");
   assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2", "--", ...focusedRun("app.test.mjs")).status, 0);
 
-  // candidate exige os checks declarados no plano, com os comandos do plano
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2", "--", ...focusedRun("app.test.mjs")).status, 2);
+  // checks exigem os comandos declarados no plano, com os comandos do plano
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "AC-1", "--", "true").status, 1);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "AC-1", "--", ...focusedRun("app.test.mjs")).status, 0);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "REGRESSION", "--", ...focusedRun("app.test.mjs")).status, 1);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.2", "--name", "REGRESSION", "--", RUNTIME, "test").status, 0);
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.2", "--", ...focusedRun("app.test.mjs")).status, 0);
-  const candidate = JSON.parse(readFileSync(path.join(cwd, ".todo/attestations/0001/1.2-candidate.json"), "utf8"));
-  assert.equal(candidate.version, 3);
-  assert.equal(candidate.work_id, "0001");
-  assert.equal(candidate.task_id, "1.2");
-  assert.equal(candidate.result, "pass");
-  assert.match(candidate.signature, /^[0-9a-f]{64}$/);
+
+  // As ações `candidate` e `gate` foram removidas: o uso é inválido e nenhum
+  // artefato de atestação/gate é produzido.
+  const removedCandidate = run(cwd, "candidate", "--work", "0001", "--task", "1.2", "--", ...focusedRun("app.test.mjs"));
+  assert.equal(removedCandidate.status, 1);
+  assert.match(removedCandidate.stderr, /unknown or missing action/);
+  const removedGate = run(cwd, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "test");
+  assert.equal(removedGate.status, 1);
+  assert.match(removedGate.stderr, /unknown or missing action/);
+  assert.equal(existsSync(path.join(cwd, ".todo/attestations")), false, "a ação removida não grava atestação");
 
   writeFileSync(implementation, "export const value = 'broken-after-green';\n");
   assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.2", "--", ...focusedRun("app.test.mjs")).status, 1);
@@ -303,48 +304,6 @@ test("allows incidental RED in legacy v1/v2 plans but warns", () => {
   assert.match(legacyResult.stderr, /WARNING: RED accepted due to legacy contract/i);
 });
 
-test("detects corrupted or tampered evidence chain", () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-chain-"));
-  initRepository(cwd);
-
-  const implementation = path.join(cwd, "app.js");
-  const tests = path.join(cwd, "app.test.mjs");
-  writeFileSync(implementation, "export const value = 'old';\n");
-  writeFileSync(tests, "");
-  planFor(cwd, [
-    { id: "1.1", title: "Implement value", implementation: "app.js", test: "app.test.mjs", assertion: "chain-tamper-001" },
-  ]);
-  commit(cwd, "baseline");
-
-  assert.equal(run(cwd, "baseline", "--work", "0001", "--task", "1.1").status, 0);
-  writeFileSync(tests, "import { value } from './app.js';\nif (value !== 'new') throw new Error('chain-tamper-001');\n");
-  assert.equal(run(cwd, "red", "--work", "0001", "--task", "1.1", "--expect", "chain-tamper-001", "--", ...focusedRun("app.test.mjs")).status, 0);
-
-  writeFileSync(implementation, "export const value = 'new';\n");
-  assert.equal(run(cwd, "green", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
-  assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
-
-  assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", ...focusedRun("app.test.mjs")).status, 0);
-  assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "REGRESSION", "--", RUNTIME, "test").status, 0);
-
-  // Cadeia intacta: candidate passa com status 0
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
-
-  // Agora adulteramos o arquivo de cadeia (altera um campo no histórico)
-  const chainFile = path.join(cwd, ".todo/evidence/0001/1.1-chain.jsonl");
-  assert.equal(existsSync(chainFile), true);
-  const chainLines = readFileSync(chainFile, "utf8").trim().split("\n");
-  const first = JSON.parse(chainLines[0]);
-  first.exit_code = 99; // forja o código de saída no histórico
-  chainLines[0] = JSON.stringify(first);
-  writeFileSync(chainFile, chainLines.join("\n") + "\n", "utf8");
-
-  // candidate DEVE rejeitar a cadeia corrompida
-  const candidateResult = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
-  assert.equal(candidateResult.status, 2);
-  assert.match(candidateResult.stderr, /cadeia de evidências/);
-});
-
 test("estado de evidência forjado não executa nada sem definição e baseline válidos", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-forged-"));
   initRepository(cwd);
@@ -381,7 +340,7 @@ test("estado de evidência forjado não executa nada sem definição e baseline 
   assert.equal(existsSync(marker), false, "nenhum comando executa sem definição válida");
 });
 
-// ── Vacuidade, congelamento e gates globais ─────────────────────────
+// ── Vacuidade e congelamento ────────────────────────────────────────
 
 test("AC que passa sem a implementação é recusado como vácuo", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-vacuo-"));
@@ -416,13 +375,13 @@ test("AC que passa sem a implementação é recusado como vácuo", () => {
   const log = readFileSync(path.join(cwd, ".todo/evidence/0001/1.1-ac-2.log"), "utf8");
   assert.match(log, /MUTATION_VERDICT: FAIL/);
 
-  // A atestação não sai com um AC que não prova o comportamento da task.
-  const candidate = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
-  assert.equal(candidate.status, 2);
-  assert.match(candidate.stderr, /AC-2 \(não observado\)/);
+  // A ação `candidate` foi removida: o uso é inválido e nenhum veredito é consumido do estado.
+  const removed = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
+  assert.equal(removed.status, 1);
+  assert.match(removed.stderr, /unknown or missing action/);
 });
 
-test("testes de aceitação congelados no contrato são exigidos no baseline e na atestação", () => {
+test("testes de aceitação congelados no contrato são exigidos no baseline", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-frozen-"));
   initRepository(cwd);
 
@@ -496,88 +455,6 @@ test("testes de aceitação congelados no contrato são exigidos no baseline e n
 
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", ...focusedRun("acceptance.test.mjs")).status, 0);
   assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "REGRESSION", "--", RUNTIME, "test").status, 0);
-  assert.equal(run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
-
-  // Alterar um teste congelado invalida a evidência assinada e a atestação fica stale
-  writeFileSync(path.join(cwd, "acceptance.test.mjs"), "// trocado depois da atestação\n");
-  const attestation = verifyTaskAttestation({
-    rootDir: cwd,
-    todoDirectory: path.join(cwd, ".todo"),
-    workId: "0001",
-    taskId: "1.1",
-    planText,
-  });
-  assert.equal(attestation.valid, true, "a assinatura continua válida: o que muda é a staleness");
-  assert.equal(attestation.stale, true);
-  const candidateAgain = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
-  assert.equal(candidateAgain.status, 1);
-  assert.match(candidateAgain.stderr, /teste de aceitação congelado alterado ou ausente/);
-});
-
-test("gates globais: audit gate grava evidência assinada conferida contra comando, log e árvore", () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-gates-"));
-  initRepository(cwd);
-  writeFileSync(path.join(cwd, "app.js"), "export const value = 'old';\n");
-  writeFileSync(path.join(cwd, "app.test.mjs"), "import { expect, test } from 'bun:test';\ntest('valor legado', () => { expect('old').toBe('old'); });\n");
-  const planText = planFor(cwd, [
-    { id: "1.1", title: "Implement value", implementation: "app.js", test: "app.test.mjs", assertion: "VALUE-NEW" },
-  ]).replace(
-    "## Global gates\n",
-    `## Global gates\n- [ ] \`${RUNTIME} --version\` — o runtime responde.\n`,
-  );
-  writeFileSync(path.join(cwd, ".todo", "0001-tasks.md"), planText, "utf8");
-  commit(cwd, "gates");
-
-  const verify = () => verifyGlobalGates({
-    rootDir: cwd,
-    todoDirectory: path.join(cwd, ".todo"),
-    workId: "0001",
-    planText: readFileSync(path.join(cwd, ".todo", "0001-tasks.md"), "utf8"),
-  });
-
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "--version").status, 0);
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-2", "--", RUNTIME, "test").status, 0);
-  assert.deepEqual(verify(), [
-    { name: "G-1", command: `${RUNTIME} --version`, ok: true },
-    { name: "G-2", command: `${RUNTIME} test`, ok: true },
-  ]);
-
-  // Nome fora do plano e comando divergente do declarado são violações
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-3", "--", RUNTIME, "--version").status, 1);
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-0", "--", RUNTIME, "--version").status, 1);
-  const wrongCommand = run(cwd, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "--help");
-  assert.equal(wrongCommand.status, 1);
-  assert.match(wrongCommand.stderr, /comando diverge do plano/);
-
-  // Log adulterado derruba a evidência do gate
-  const logPath = path.join(cwd, ".todo", "evidence", "0001", "GLOBAL-g-1.log");
-  const log = readFileSync(logPath, "utf8");
-  writeFileSync(logPath, log.replace("VERDICT: PASS", "VERDICT: PASS\nADULTERADO"), "utf8");
-  assert.equal(verify()[0].reason, "log alterado");
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "--version").status, 0);
-
-  // Comando do plano trocado invalida a evidência antiga
-  const changedPlan = planText.replace(`\`${RUNTIME} --version\` — o runtime responde.`, "`node --version` — o runtime responde.");
-  assert.equal(verifyGlobalGates({ rootDir: cwd, todoDirectory: path.join(cwd, ".todo"), workId: "0001", planText: changedPlan })[0].reason, "comando do plano mudou");
-
-  // Arquivo das tasks alterado depois da execução invalida a evidência
-  writeFileSync(path.join(cwd, "app.js"), "export const value = 'changed-after-gate';\n");
-  assert.equal(verify()[0].reason, "arquivos das tasks mudaram desde a execução");
-
-  // Gate cuja execução falhou fica registrado como FAIL e não conta como evidência
-  writeFileSync(path.join(cwd, "app.js"), "export const value = 'old';\n");
-  const failingLine = `- [ ] \`${RUNTIME} -e process.exit(3)\` — a suíte crítica passa.\n`;
-  const withFailingGate = planText.replace("\n### [ ] [1.1]", `\n${failingLine}\n### [ ] [1.1]`);
-  writeFileSync(path.join(cwd, ".todo", "0001-tasks.md"), withFailingGate, "utf8");
-  assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-3", "--", RUNTIME, "-e", "process.exit(3)").status, 1);
-  const failing = verifyGlobalGates({
-    rootDir: cwd,
-    todoDirectory: path.join(cwd, ".todo"),
-    workId: "0001",
-    planText: withFailingGate,
-  });
-  assert.equal(failing[2].name, "G-3");
-  assert.equal(failing[2].reason, "última execução falhou");
 });
 
 bunTest("Bun imprime redExpect no nome do teste sem invalidar GREEN/VERIFY; falhas, expect e mutation continuam exigidos", () => {
@@ -641,7 +518,7 @@ test('BUN-NAME-RED-001', () => {
   }
 }, 60_000);
 
-bunTest("drift e plan.json ilegível recusam gate e todas as fases antes de executar ou gravar PASS", () => {
+bunTest("drift e plan.json ilegível recusam verify e todas as fases antes de executar ou gravar PASS", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-drift-"));
   try {
     initRepository(cwd);
@@ -661,10 +538,9 @@ bunTest("drift e plan.json ilegível recusam gate e todas as fases antes de exec
       () => writeFileSync(canonicalPath, "{ invalid JSON\n"),
     ];
     const evidenceFiles = [
-      ".todo/evidence/0001/state/1.1.json", ".todo/evidence/0001/state/GLOBAL.json",
-      ".todo/evidence/0001/1.1-chain.jsonl", ".todo/evidence/0001/GLOBAL-chain.jsonl",
+      ".todo/evidence/0001/state/1.1.json",
+      ".todo/evidence/0001/1.1-chain.jsonl",
       ...["red", "green", "verify", "ac-1", "regression"].map((phase) => `.todo/evidence/0001/1.1-${phase}.log`),
-      ".todo/evidence/0001/GLOBAL-g-1.log", ".todo/attestations/0001/1.1-candidate.json",
     ];
     const refuse = (...args: string[]) => {
       for (const corrupt of corruptions) {
@@ -696,33 +572,17 @@ test('CANONICAL-RED-001', () => { expect(value).toBe('new'); });
     writeFileSync(path.join(cwd, "app.js"), "export const value = 'new';\n");
     refuse("green", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
     assert.equal(run(cwd, "green", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
-    for (const phase of ["verify", "candidate"]) refuse(phase, "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
+    // verify e check também recusam o drift antes de executar ou gravar PASS
+    refuse("verify", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
+    assert.equal(run(cwd, "verify", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs")).status, 0);
     refuse("check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", ...focusedRun("app.test.mjs"));
-    refuse("gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "test");
 
     assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", ...focusedRun("app.test.mjs")).status, 0);
     assert.equal(run(cwd, "check", "--work", "0001", "--task", "1.1", "--name", "REGRESSION", "--", RUNTIME, "test").status, 0);
-    const candidate = run(cwd, "candidate", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
-    assert.equal(candidate.status, 0, candidate.stderr);
-    assert.equal(run(cwd, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "test").status, 0);
-    const options = { rootDir: cwd, todoDirectory: path.join(cwd, ".todo"), workId: "0001", planText: markdown };
-    assert.equal(verifyTaskAttestation({ ...options, taskId: "1.1" }).valid, true);
-    assert.equal(verifyGlobalGates(options)[0].ok, true);
     assert.equal(existsSync(marker), true, "o fixture legítimo realmente executa o comando com marcador");
-    for (const phase of ["verify", "candidate"]) refuse(phase, "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
-    refuse("gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "test");
-    for (const corrupt of corruptions) {
-      corrupt();
-      const current = { ...options, planText: readFileSync(markdownPath, "utf8") };
-      const attestation = verifyTaskAttestation({ ...current, taskId: "1.1" });
-      assert.equal(attestation.valid, false);
-      assert.match(attestation.reason!, /DRIFT/);
-      const gate = verifyGlobalGates(current)[0];
-      assert.equal(gate.ok, false);
-      assert.match(gate.reason!, /DRIFT/);
-      writeFileSync(markdownPath, markdown);
-      writeFileSync(canonicalPath, canonical);
-    }
+    // Com toda a evidência no disco, o drift continua recusando verify e check
+    refuse("verify", "--work", "0001", "--task", "1.1", "--", ...focusedRun("app.test.mjs"));
+    refuse("check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", ...focusedRun("app.test.mjs"));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -731,21 +591,30 @@ test('CANONICAL-RED-001', () => { expect(value).toBe('new'); });
 bunTest("comando auditado não herda PWN_VERIFIER_KEY do ambiente explícito do subprocesso", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "task-evidence-child-env-"));
   try {
+    initRepository(cwd);
     writeFileSync(path.join(cwd, "app.js"), "export const value = 'old';\n");
+    writeFileSync(path.join(cwd, "app.test.mjs"), "");
+    planFor(cwd, [{ id: "1.1", title: "Implement value", implementation: "app.js", test: "app.test.mjs", assertion: "ENV-RED-001" }]);
+    commit(cwd, "baseline");
+    const env = { ...process.env, PWN_VERIFIER_KEY: "subprocess-only-secret-001", PWN_AUDIT_ENV_CONTROL: "explicit-control" };
+    const baseline = spawnSync(RUNTIME, [script, "baseline", "--work", "0001", "--task", "1.1"], { cwd, encoding: "utf8", env });
+    assert.equal(baseline.status, 0, baseline.stderr);
+    // O comando auditado falha com ENV-RED-001 só quando a chave do verificador NÃO é herdada;
+    // se fosse herdada, a falha teria outra mensagem e o RED seria recusado.
     writeFileSync(path.join(cwd, "app.test.mjs"), `import { expect, test } from 'bun:test';
 test('ambiente auditado sem chave do verificador', () => {
-  expect(process.env.PWN_VERIFIER_KEY).toBeUndefined();
   expect(process.env.PWN_AUDIT_ENV_CONTROL).toBe('explicit-control');
+  if (process.env.PWN_VERIFIER_KEY !== undefined) throw new Error('chave do verificador herdada do ambiente');
+  throw new Error('ENV-RED-001');
 });
 `);
-    planFor(cwd, [{ id: "1.1", title: "Implement value", implementation: "app.js", test: "app.test.mjs", assertion: "ENV-RED-001" }]);
-    const result = spawnSync(RUNTIME, [script, "gate", "--work", "0001", "--name", "G-1", "--", RUNTIME, "test"], {
+    const result = spawnSync(RUNTIME, [script, "red", "--work", "0001", "--task", "1.1", "--expect", "ENV-RED-001", "--", RUNTIME, "test", "app.test.mjs"], {
       cwd,
       encoding: "utf8",
-      env: { ...process.env, PWN_VERIFIER_KEY: "subprocess-only-secret-001", PWN_AUDIT_ENV_CONTROL: "explicit-control" },
+      env,
     });
     assert.equal(result.status, 0, result.stderr);
-    const log = readFileSync(path.join(cwd, ".todo/evidence/0001/GLOBAL-g-1.log"), "utf8");
+    const log = readFileSync(path.join(cwd, ".todo/evidence/0001/1.1-red.log"), "utf8");
     assert.match(log, /VERDICT: PASS/);
     assert.doesNotMatch(log, /subprocess-only-secret-001/);
   } finally {

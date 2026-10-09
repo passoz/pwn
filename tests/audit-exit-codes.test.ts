@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -8,7 +8,6 @@ import {
   EXIT_SUSPENDED,
   EXIT_VIOLATION,
   main,
-  readAttestation,
 } from '../src/core/task_evidence.js';
 
 /** Executa `main` em um diretório temporário vazio, capturando stderr e restaurando o cwd. */
@@ -102,62 +101,5 @@ describe('códigos de saída do audit de evidências', () => {
       'ok',
     ]);
     expect(code).toBe(EXIT_VIOLATION);
-  });
-});
-
-describe('readAttestation', () => {
-  function writeAttestation(fixtureName: string, payload: unknown): string {
-    const dir = mkdtempSync(path.join(tmpdir(), 'pwn-attestation-'));
-    const filePath = path.join(dir, `${fixtureName}.json`);
-    writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-    return filePath;
-  }
-
-  test('aceita atestação v1 legada como compatível', () => {
-    const filePath = writeAttestation('v1', {
-      version: 1,
-      kind: 'task-acceptance-candidate',
-      work_id: '0001',
-      task_id: '1.1',
-      result: 'pass',
-    });
-    expect(readAttestation(filePath)).toEqual({ version: 1, harness_version: null, compatible: true });
-    rmSync(path.dirname(filePath), { recursive: true, force: true });
-  });
-
-  test('rejeita v2 sem harness_version', () => {
-    const filePath = writeAttestation('v2-sem-versao', {
-      version: 2,
-      kind: 'task-acceptance-candidate',
-      gate_version: '1',
-      work_id: '0001',
-      task_id: '1.1',
-      result: 'pass',
-    });
-    expect(readAttestation(filePath)).toEqual({ version: 2, harness_version: null, compatible: false });
-    rmSync(path.dirname(filePath), { recursive: true, force: true });
-  });
-
-  test('aceita v2 com harness_version', () => {
-    const filePath = writeAttestation('v2', {
-      version: 2,
-      kind: 'task-acceptance-candidate',
-      harness_version: '0.1.0',
-      gate_version: '1',
-      work_id: '0001',
-      task_id: '1.1',
-      result: 'pass',
-    });
-    expect(readAttestation(filePath)).toEqual({ version: 2, harness_version: '0.1.0', compatible: true });
-    rmSync(path.dirname(filePath), { recursive: true, force: true });
-  });
-
-  test('devolve null para arquivo ausente e para JSON inválido', () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'pwn-attestation-invalida-'));
-    const invalid = path.join(dir, 'invalida.json');
-    writeFileSync(invalid, '{ nao e json', 'utf8');
-    expect(readAttestation(path.join(dir, 'ausente.json'))).toBeNull();
-    expect(readAttestation(invalid)).toBeNull();
-    rmSync(dir, { recursive: true, force: true });
   });
 });

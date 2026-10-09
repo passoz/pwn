@@ -84,7 +84,9 @@ ${plan ? renderPlanCommands(plan) : ''}
 FROZEN ACCEPTANCE TESTS (não editar — o audit recusa a atestação se mudarem):
 ${frozenTests.length ? frozenTests.map((entry) => `  = ${entry.path}`).join('\n') : '  (nenhum)'}
 
-ACCEPTANCE: a task só conclui com 'pwn work audit candidate' (ACs do plano, idênticos, sobre o GREEN).
+ACEITAÇÃO: o audit local (red/green/check) é DIAGNÓSTICO e não conclui nada.
+A conclusão exige o verificador independente: 'pwn verify run --work <W> --task <T>'.
+Você não aprova critérios nem emite o recibo: isso é ato do operador.
 
 --------------------------------------------------------------------------------
 4. BUDGET & ESCALATION RULES

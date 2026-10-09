@@ -27,7 +27,7 @@ O **PWN** substitui a confiança cega em prompts por **mecanismos determinístic
 | Execução direta no branch de trabalho | **Sandboxes descartáveis em Git Worktree** (`.pwn/sandboxes/`) |
 | Transições de fase avaliadas pelo próprio LLM | **5 Gates determinísticos em TypeScript** com cache por hash e veredito HMAC |
 | Modelo único ou seleção manual | **Roteamento por 5 níveis de risco (L0–L4)** com escalação automática |
-| Conclusão baseada em texto ("Tarefa finalizada!") | **Auditoria TDD estrita** com atestação versionada e exit codes por classe |
+| Conclusão baseada em texto ("Tarefa finalizada!") | **Aceitação independente** (`pwn verify`) com recibo assinado Ed25519 sobre um snapshot executado em sandbox; o loop local (`work audit`) apenas diagnostica |
 
 ---
 
@@ -43,14 +43,16 @@ flowchart LR
     D -->|GATE-SPEC-PLAN| E[Plan\nTarefas Atômicas]
     E -->|GATE-PLAN-CONTRACT| F[Contrato V4\n7 Dimensões Congeladas]
     F --> G[Sandbox Worktree\n+ Diff Guard]
-    G --> H[Auditoria TDD\nRED ➔ GREEN ➔ Atestação v3]
-    H --> I[Global gates\nEvidência assinada]
+    G --> H[Auditoria TDD local\nRed ➔ Green (diagnóstico)]
+    H --> I[pwn verify\nsnapshot + bwrap + recibo Ed25519]
+    I --> J[Global gates\nrecibo por gate]
 ```
 
 1. **Cadeia de Planejamento:** Cada transição de fase exige a aprovação de um portão determinístico (*gate*). Se faltar vínculo de rastreabilidade, o portão bloqueia a execução.
 2. **Contrato V4 Congelado:** Antes de executar qualquer código, a tarefa recebe um contrato atômico imutável (`CTR-*.json`) definindo `write_allow`, `write_deny`, invariantes e critérios de aceite. A partir de risco **L3+** o `GATE-PLAN-CONTRACT` exige também o congelamento dos testes de aceitação (`work contract --freeze-tests`), gravando seus hashes no contrato.
 3. **Execução Confinada:** O agente executa dentro de uma Git Worktree isolada. O sandbox recebe o **HEAD mais a sua working tree não commitada** (diff rastreado + arquivos novos não ignorados, exceto `.pwn`, `.todo`, `.work` e `queue/review`): o comando de aceitação valida o seu código atual, não apenas o último commit. O Diff Guard confere as modificações via `git diff`; se o agente tocar em arquivos proibidos, a execução é abortada e escalada para revisão.
-4. **Auditoria TDD amarrada ao plano:** O CLI só aceita, em cada ação, o comando exatamente como declarado no plano da task (`.todo/NNNN-tasks.md`, derivado de `.pwn/work/NNNN/plan.json`). O ciclo é `baseline` (congela a definição da task) → `red` (comando do plano, `--expect` não-genérico e literal no arquivo de teste) → `green` (restaura a implementação ao commit do baseline e exige que a asserção volte a falhar) → `check` dos ACs do plano (cada `AC-*` também roda sem a implementação; se ainda passar, é recusado como **vácuo**) → `candidate` (atestação v3 **assinada por HMAC** sobre o GREEN) → `audit gate` para cada item de `## Global gates`. Só depois marque `[x]`: task concluída = atestação v3 válida e arquivos inalterados (`ACCEPTED`).
+4. **Auditoria TDD local (diagnóstico):** O CLI só aceita, em cada ação, o comando exatamente como declarado no plano da task (`.todo/NNNN-tasks.md`, derivado de `.pwn/work/NNNN/plan.json`). O ciclo local é `baseline` (congela a definição da task) → `red` (comando do plano, `--expect` não-genérico e literal no arquivo de teste) → `green` (restaura a implementação ao commit do baseline e exige que a asserção volte a falhar) → `check` dos ACs do plano (cada `AC-*` também roda sem a implementação; se ainda passar, é recusado como **vácuo**) → `verify` (re-executa o comando do plano sobre a árvore atual). Esse loop é **diagnóstico do agente**: ele não conclui nada e não existe mais `audit candidate`/`audit gate`.
+5. **Aceitação independente (`pwn verify`):** a conclusão vem de um verificador fora do repositório. `pwn verify init` cria a raiz protegida (chaves Ed25519, runtime aprovado, `bwrap`); `pwn verify approve --by <responsável>` congela um **pacote imutável** (checks do plano + cópia dos testes de aceitação congelados); `pwn verify run` captura um **snapshot determinístico** da entrega, materializa uma **cópia isolada**, **restaura o teste aprovado** por cima dela, executa cada check em `bwrap` com mounts mínimos (sem `HOME` do operador, sem rede, sem a chave) e emite um **recibo assinado** Ed25519. Só depois marque `[x]`: task concluída = recibo independente válido para a árvore atual (`ACCEPTED`). Alterar qualquer arquivo (ou dependência) **invalida** o recibo.
 
 ---
 
@@ -136,9 +138,11 @@ bun bin/pwn.js work run --work 0002 --timeout-seconds 600 -- bun test
 - **Diff Guard:** Se o agente modificar algo fora de `write_allow` ou dentro de `write_deny`, a execução é abortada.
 - **Escape consciente:** `--no-gate` pula os portões mantendo a guarda de escrita; `--no-isolation` pula a sandbox mas registra o escape em `.pwn/metrics.jsonl`.
 
-### 5. Auditoria TDD Estrita (amarrada ao plano)
+### 5. Auditoria TDD Local (diagnóstico) + Aceitação Independente (`pwn verify`)
 
 Cada ação do audit recebe, após `--`, o comando **exatamente como declarado no plano** da task (`.todo/NNNN-tasks.md`, derivado de `.pwn/work/NNNN/plan.json`): tokens idênticos ou `sh -c '<texto do plano>'`. Os arquivos de implementação e teste também saem do plano — `--implementation`/`--tests` são opcionais e, se passados, precisam bater com ele. O harness **nunca** executa um comando lido do repositório.
+
+As ações válidas são **`baseline`, `red`, `green`, `verify` e `check`**. Esse loop é **diagnóstico local do agente** — ele prova causalidade e vacuidade, mas **não conclui** a task. Não existem mais `audit candidate` nem `audit gate`; a autoridade de conclusão é do verificador independente.
 
 ```bash
 # 1. Baseline: exige árvore limpa nos arquivos declarados e congela a definição da task
@@ -158,20 +162,47 @@ bun bin/pwn.js work audit green --work 0002 --task 1.1 -- bun test tests/auth.te
 bun bin/pwn.js work audit check --work 0002 --task 1.1 --name AC-1 -- bun test tests/auth.test.ts
 bun bin/pwn.js work audit check --work 0002 --task 1.1 --name REGRESSION -- bun test
 
-# 5. Candidate: exige todos os checks do plano PASS, com os comandos do plano, e emite a
-#    atestação v3 assinada (HMAC) da task.
-bun bin/pwn.js work audit candidate --work 0002 --task 1.1 -- bun test tests/auth.test.ts
-
-# 6. Gates globais: uma evidência assinada por item de `## Global gates` do plano.
-bun bin/pwn.js work audit gate --work 0002 --name G-1 -- bun run check
+# 5. Verify local: re-executa o comando do plano sobre a árvore atual (exit 0 + expect).
+bun bin/pwn.js work audit verify --work 0002 --task 1.1 -- bun test tests/auth.test.ts
 ```
 
 - **Amarrado ao plano:** comando divergente do declarado reprova a ação; um `--expect` genérico (`fail`, `Error`, `expected`, muito curto…) é recusado no contrato v3.
-- **Drift e contrato atual:** todas as fases do audit (incluindo `verify` e `gate`), a leitura das atestações e a verificação dos gates globais recusam divergência entre o Markdown e `plan.json`; um `plan.json` existente ilegível também é recusado. O `status` marca `INVALID PLAN` mesmo sem atestação ou gate. Alterar o ID ou o SHA-256 do contrato invalida a aceitação anterior.
+- **Drift e contrato atual:** todas as fases do audit recusam divergência entre o Markdown e `plan.json`; um `plan.json` existente ilegível também é recusado. O `status` marca `INVALID PLAN` mesmo sem recibo.
 - **GREEN/VERIFY:** exigem exit code `0` e o texto de sucesso (`expect`) quando declarado; a presença de `redExpect` na saída bem-sucedida não implica falha. O mutation check continua exigindo falha ao restaurar a implementação ao baseline.
-- **Teste congelado (L3+):** `bun bin/pwn.js work contract --work 0002 --task 1.1 --freeze-tests tests/auth.test.ts` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, `baseline`/`candidate` recusam e a atestação fica `stale`.
-- **Marcador `[x]`:** só depois do `candidate`. O `status` acusa `INCONSISTENT STATE` quando o marcador e a atestação discordam.
-- **Limites de confiança:** congelar testes protege sua imutabilidade, não sua suficiência nem a correção/completude do código. Comandos auditados não herdam `PWN_VERIFIER_KEY`, mas a chave default `.pwn/.verifier_key` permanece acessível e `candidate` consome estado, logs e cadeia fornecidos pelo repositório. Uma assinatura não prova o histórico independentemente; uma chave externa sozinha não torna seguro auditar uma árvore hostil. Essa fronteira exige execução/verificação em contexto confiável, segredo fora do alcance do código auditado e evidência produzida pelo verificador — isolamento não implementado por estas correções. Veja [os limites](docs/LIMITES.md).
+- **Teste congelado (L3+):** `bun bin/pwn.js work contract --work 0002 --task 1.1 --freeze-tests tests/auth.test.ts` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, o audit recusa `baseline` e o verificador recusa a aprovação (`frozen_tests` exigidos e conferidos contra o arquivo).
+- **Marcador `[x]`:** só depois de `pwn verify run` **PASS** para a árvore atual. O `status` acusa `INCONSISTENT STATE` quando o marcador e o recibo discordam.
+
+#### Aceitação independente
+
+O audit local roda no mesmo processo e na mesma árvore do agente — por isso ele **não** conclui. A conclusão vem do `pwn verify`, um verificador cuja raiz fica **fora do repositório**:
+
+```bash
+# 1. init: cria a raiz protegida (~/.config/pwn/verifier, ou PWN_VERIFIER_HOME)
+#    com chaves Ed25519, runtime aprovado e suporte a bwrap detectados no host.
+bun bin/pwn.js verify init
+
+# 2. approve: o OPERADOR aprova o pacote imutável de uma task (checks do plano +
+#    cópia dos testes de aceitação congelados). Exige --by <responsável>.
+bun bin/pwn.js verify approve --work 0002 --task 1.1 --by "ana"
+#    Ou um item de ## Global gates:
+bun bin/pwn.js verify approve --work 0002 --global G-1 --by "ana"
+
+# 3. run: captura o snapshot da entrega, restaura o teste aprovado, executa cada
+#    check em bwrap com mounts mínimos e emite o recibo assinado.
+bun bin/pwn.js verify run --work 0002 --task 1.1
+
+# 4. status/show: consulta a aceitação vigente e inspeciona aprovação + último recibo.
+bun bin/pwn.js verify status --work 0002 --task 1.1
+bun bin/pwn.js verify show --work 0002
+```
+
+- **Pacote imutável:** a aprovação guarda, na raiz protegida, o conteúdo dos testes de aceitação congelados. Durante o `run`, o verificador **restaura** esses arquivos por cima da cópia do candidato — enfraquecer o teste no repositório não muda o que é executado.
+- **Snapshot determinístico:** o recibo identifica exatamente a árvore avaliada (caminho, tipo, modo e conteúdo de cada arquivo), exceto os diretórios de estado/dependência **na raiz** (`.git`, `.pwn`, `.todo`, `.work`, `queue`, `.pwn-verifier`, `node_modules`). Alterar qualquer arquivo depois da verificação **invalida** o recibo.
+- **Causalidade do AC:** cada check `AC-*` roda também com a implementação revertida ao commit aprovado (baseline) e **precisa falhar**. Uma falha de baseline que pareça erro de ambiente/import (`looksEnvironmental`) recusa o check em vez de aceitá-lo.
+- **Sandbox do verificador:** a cópia isolada roda em `bwrap` com mounts mínimos (sem `/` inteiro), `HOME=/nonexistent`, sem rede, `--unshare-user/pid`, ambiente reduzido e **sem a raiz do verificador nem a chave privada** ao alcance do código avaliado.
+- **Sem bwrap não há aceitação:** se o host não tem `bwrap`, o `run` **bloqueia** (exit `2`) em vez de degradar para execução no host.
+- **Gate global com recibo próprio:** cada item de `## Global gates` é aprovado e verificado (`--global G-1`) com recibo próprio; `COMPLETE` deriva só de recibos válidos.
+- **Limites de confiança (reais):** a aprovação é **ato do operador** e não é protegida contra um agente que rode como o **mesmo usuário do SO** (ele alcança a raiz protegida). A chave default vive no host — é uma raiz protegida `0700`, **não um HSM**. O `node_modules` é montado **read-only** a partir do repositório: a integridade de dependência é vinculada apenas pelo **digest dos manifestos** (`package.json`, `bun.lock`, `tsconfig.json`…). E testes fracos, uma vez aprovados, continuam aprovando. Congelar testes protege a **imutabilidade**, não a **suficiência**. Veja [os limites](docs/LIMITES.md).
 
 ### 6. Fila Assíncrona AFK (*Away From Keyboard*)
 
@@ -203,6 +234,7 @@ pwn/
 │   ├── cli.ts                 # Despacho de subcomandos e tratamento de flags
 │   ├── commands/              # Handlers de comandos CLI
 │   │   ├── work.ts            # Gestão da cadeia de Works, gates, scaffold e audit
+│   │   ├── verify.ts          # Aceitação independente (init/approve/run/status/show)
 │   │   ├── task.ts            # Execução de tarefas isoladas e cápsula de contexto
 │   │   ├── queue.ts           # Fila de aprovação humana AFK
 │   │   ├── target.ts          # Materialização de alvos (Pi, OpenCode, omp)
@@ -215,6 +247,11 @@ pwn/
 │   │   ├── contract-guard.ts  # Diff Guard mecânico (write_allow / write_deny)
 │   │   ├── router.ts          # Roteamento econômico de modelos por risco (L0-L4)
 │   │   ├── sandbox.ts         # Isolamento via Git Worktree
+│   │   ├── verifier-home.ts   # Raiz protegida do verificador (chaves Ed25519, prontidão)
+│   │   ├── acceptance-approval.ts # Pacote aprovado imutável (checks + testes congelados)
+│   │   ├── candidate-snapshot.ts # Snapshot determinístico da entrega e digest de deps
+│   │   ├── verification-runner.ts # Execução dos checks em bwrap com mounts mínimos
+│   │   ├── verification-receipt.ts # Recibo assinado e avaliação de aceitação
 │   │   ├── validator.ts       # Validador Ajv com leis embutidas (drift detector)
 │   │   ├── self_check_mutate.ts # Mutation testing dos próprios portões
 │   │   └── tool-api.ts        # Execução confinada com bloqueio de path traversal
@@ -262,7 +299,7 @@ bun run check
 | `pwn work gate <GATE> [--work NNNN]` | Avalia um portão específico (`GATE-DISC-REQ`, `GATE-REQ-PRD`, etc.) usando cache |
 | `pwn work gate --clear-cache` | Limpa o cache de vereditos (`.pwn/gate-cache/`) |
 | `pwn work status --coverage` | Exibe matriz de rastreabilidade (requisitos → caps → tasks → contratos → ACs) |
-| `pwn work status` | Reporta o progresso: só conta task concluída com atestação v3 válida e arquivos inalterados (`ACCEPTED`); gates globais sem evidência assinada deixam o Work em `TASKS COMPLETE` (não `COMPLETE`) |
+| `pwn work status` | Reporta o progresso: só conta task concluída com **recibo de aceitação independente** válido para a árvore atual (`ACCEPTED`); gates globais sem recibo próprio deixam o Work em `TASKS COMPLETE` (não `COMPLETE`) |
 | `pwn work plan [--work NNNN]` | Renderiza ou valida o `plan.md` a partir do `plan.json` normativo |
 
 ### 🛡️ Execução, Sandboxes & Auditoria TDD
@@ -275,10 +312,22 @@ bun run check
 | `pwn work audit red --work NNNN --task <T> --expect "..." -- <cmd do plano>` | Registra a fase RED: `--expect` não-genérico e literal no teste; comando tem que ser o RED do plano |
 | `pwn work audit green --work NNNN --task <T> -- <cmd do plano>` | Registra a fase GREEN; o mutation check restaura a implementação ao commit do baseline e exige que a asserção volte a falhar |
 | `pwn work audit check --work NNNN --task <T> --name AC-n\|VISUAL\|DOCUMENTATION\|REGRESSION\|LOCAL-GATES -- <cmd do plano>` | Roda um check do plano sobre o snapshot do GREEN; `AC-*` também roda sem a implementação (recusa critério vácuo) |
-| `pwn work audit candidate --work NNNN --task <T> -- <cmd do plano>` | Exige todos os checks do plano PASS e emite a atestação v3 **assinada (HMAC)** da task |
-| `pwn work audit gate --work NNNN --name G-n -- <cmd do plano>` | Registra evidência assinada de um item de `## Global gates`, com log e árvore das tasks |
-| `pwn work audit --task <T> -- <cmd>` | Atalho legado: sem ação explícita, roda a verificação de evidência (`verify`) |
+| `pwn work audit verify --work NNNN --task <T> -- <cmd do plano>` | Re-executa o comando do plano sobre a árvore atual (exit `0` + `expect`); diagnóstico local, **não** conclui |
+| `pwn work audit --task <T> -- <cmd>` | Atalho legado: sem ação explícita, roda `verify` |
 | `pwn work contract --work NNNN --task <T> --freeze-tests <arquivos>` | Congela (`sha256`) os testes de aceitação no contrato; exigido a partir de risco L3 |
+
+> `pwn work audit candidate` e `pwn work audit gate` foram **removidos**: nenhum deles autoriza conclusão.
+
+### ✅ Aceitação Independente (`pwn verify`)
+| Comando | Descrição |
+|---|---|
+| `pwn verify init` | Cria a raiz protegida **fora do repositório** (`~/.config/pwn/verifier` ou `PWN_VERIFIER_HOME`): chaves Ed25519, runtime aprovado e suporte a `bwrap` detectado |
+| `pwn verify approve --work NNNN --task <T> --by <responsável>` | O operador aprova o **pacote imutável** da task: checks do plano + cópia dos testes de aceitação congelados |
+| `pwn verify approve --work NNNN --global G-n --by <responsável>` | Aprova um item de `## Global gates` (recibo próprio) |
+| `pwn verify run --work NNNN --task <T>` | Executa a aceitação: snapshot da entrega, cópia isolada, restaura o teste aprovado, checks em `bwrap` (sem HOME do operador, sem rede, sem a chave) e emite o **recibo assinado Ed25519** |
+| `pwn verify run --work NNNN --global G-n` | Executa a aceitação independente de um gate global |
+| `pwn verify status --work NNNN --task <T>` | Informa se a árvore atual tem aceitação independente válida |
+| `pwn verify show --work NNNN [--task <T>]` | Mostra a aprovação vigente e o último recibo |
 
 ### ⏸️ Fila Humana AFK & Cápsula
 | Comando | Descrição |
@@ -302,16 +351,21 @@ bun run check
 
 Para que pipelines de CI/CD e orquestradores não supervisionados operem sem ambiguidades, o PWN utiliza códigos de saída estritos por classe:
 
-### Em `work run` e `task run`:
-- `0`: **Sucesso** — Execução concluída dentro do orçamento e sem violações.
-- `1`: **Violação / Bloqueio** — Portão bloqueado, violação do Diff Guard, estouro de orçamento ou comando falhou.
+### Em `work run` (`--task`) e `task run`:
+- `0`: **Sucesso** — Execução concluída dentro do orçamento e sem violações. Com `--task`, dispara a aceitação independente logo em seguida (quando existe aprovação vigente).
+- `1`: **Violação / Bloqueio** — Portão bloqueado, violação do Diff Guard, estouro de orçamento, comando falhou ou a aceitação independente automática não foi `pass`.
 - `3`: **Suspenso para Revisão Humana** — Tarefa de risco L4 ou com limite de tentativas esgotado colocada na fila `queue/review/`. Permite que loops AFK saibam que a tarefa **não** executou e **não** é uma falha irrecuperável.
 
-### Em `work audit` (`baseline`, `red`, `green`, `verify`, `check`, `candidate`, `gate`):
-- `0`: **Sucesso** — Ação aceita: ciclo TDD comprovado, check/vácuo aprovado ou atestação emitida.
-- `1`: **Violação** — Procedimento inválido (ex.: comando divergente do plano, `--expect` genérico, implementação alterada antes do RED, teste modificado após o GREEN, check vácuo, gate global `FAIL`).
-- `2`: **Incompleto** — Evidência ou pré-requisito ausente. O relatório lista exatamente o que falta fazer antes de tentar atestar.
+### Em `work audit` (`baseline`, `red`, `green`, `verify`, `check`):
+- `0`: **Sucesso** — Ação aceita: ciclo TDD comprovado ou check/vácuo aprovado. **Diagnóstico local; não conclui a task.**
+- `1`: **Violação** — Procedimento inválido (ex.: comando divergente do plano, `--expect` genérico, implementação alterada antes do RED, teste modificado após o GREEN, check vácuo).
+- `2`: **Incompleto** — Evidência ou pré-requisito ausente. O relatório lista exatamente o que falta fazer.
 - `3`: **Suspenso** — Tarefa aguardando aprovação na fila.
+
+### Em `verify` (`init`, `approve`, `run`, `status`, `show`):
+- `0`: **Aceito / pronto** — `run` emitiu recibo `pass`; `status` encontrou aceitação válida; `init`/`approve`/`show` concluíram.
+- `1`: **Não aceito / erro** — `run` com recibo `fail` (inclui check `blocked` por timeout); `status` sem aceitação válida; erro de comando.
+- `2`: **Bloqueado** — verificador indisponível (`bwrap`, runtime ou chave ausentes) ou sem aprovação vigente. **Nunca** vira "aceito".
 
 ---
 

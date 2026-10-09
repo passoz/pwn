@@ -4,6 +4,7 @@ import { handleValidateCommand, handleSelfCheckCommand } from './commands/valida
 import { handleQueueCommand } from './commands/queue.js';
 import { handleTargetCommand } from './commands/target.js';
 import { handleMetricsCommand } from './commands/metrics.js';
+import { handleVerifyCommand } from './commands/verify.js';
 import { assertLawsPinned } from './core/validator.js';
 
 const VERSION = '0.1.0';
@@ -26,6 +27,8 @@ COMANDOS DISPONÍVEIS:
                       (list, optimize)
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
+  verify <subcomando> Aceitação independente: aprova critérios, executa checks isolados
+                      e emite o recibo assinado (init, approve, run, status, show)
   validate [--work NNNN]  Valida documentos normativos JSON do projeto contra JSON Schemas
   self-check [--mutate [--work NNNN]]
                       Valida os documentos normativos do framework
@@ -44,6 +47,9 @@ EXEMPLOS:
   pwn work status --coverage 0001
   pwn work run --work 0001 -- bun test
   pwn task capsule 1.1 0001
+  pwn verify init
+  pwn verify approve --work 0001 --task 1.1 --by operador
+  pwn verify run --work 0001 --task 1.1
 `);
 }
 
@@ -97,6 +103,10 @@ export function main(): void {
 
     case 'metrics':
       handleMetricsCommand(subcommand, commandArgs);
+      break;
+
+    case 'verify':
+      handleVerifyCommand(subcommand, commandArgs);
       break;
 
     default:

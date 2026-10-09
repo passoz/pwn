@@ -1,5 +1,5 @@
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   chmodSync,
@@ -21,17 +21,12 @@ import {
   displayCommand,
   genericExpectReason,
   normalizeCommand,
-  parseGlobalGates,
   parsePlanTask,
-  parsePlanTasks,
   placeholderPathReason,
-  requiredAuditChecks,
   taskDefinitionDigest,
   type PlanTaskDefinition,
 } from "./acceptance.js";
-import { getVerifierKey, readVerifierKey } from "./gate-cache.js";
 import { loadPlan, planMatchesMarkdown } from "./plan-renderer.js";
-import harnessManifest from "../../package.json" with { type: "json" };
 
 let STATE_DIR: string;
 let LOG_DIR: string;
@@ -48,24 +43,14 @@ export const EXIT_INCOMPLETE = 2;
 /** Código de saída reservado para suspensão (espelha run-orchestrator.ts); não emitido por este módulo. */
 export const EXIT_SUSPENDED = 3;
 
-/**
- * Versão do formato de atestação de aceitação gerado por este módulo.
- * v3: checks amarrados ao plano e ao snapshot do GREEN, definição da task
- * congelada e assinatura HMAC — v1/v2 não provam nada disso e não contam como aceitas.
- */
-const ATTESTATION_VERSION = 3;
-/** Versão do schema de gates referenciado pela atestação. */
-const GATE_VERSION = "1";
-/** Versão do estado por task; 2 = baseline amarrado ao plano. */
-const STATE_VERSION = 2;
-/** Pseudo-task que guarda a evidência dos gates globais do Work. */
-const GLOBAL_TASK = "GLOBAL";
-
 /** Hash of a single file at snapshot time. */
 interface FileDigest {
   exists: boolean;
   sha256: string | null;
 }
+
+/** Versão do estado por task; 2 = baseline amarrado ao plano. */
+const STATE_VERSION = 2;
 
 /** Map of file path to its digest. */
 type Snapshot = Record<string, FileDigest>;
@@ -113,26 +98,6 @@ interface EvidenceState {
   green_expect?: string | null;
   audit_checks?: Record<string, AuditCheckRecord>;
 }
-
-/** Evidência de um gate global (G-n) do Work. */
-interface GlobalGateRecord {
-  command: string[];
-  gate_command: string;
-  exit_code: number;
-  verdict: string;
-  log: string;
-  log_sha256: string | null;
-  recorded_at: string;
-  /** Digest dos arquivos de implementação/teste de todas as tasks no momento da execução. */
-  tree: Snapshot;
-  signature: string;
-}
-
-interface GlobalGatesState {
-  work: string;
-  gates: Record<string, GlobalGateRecord>;
-}
-
 interface RunOptions {
   encoding?: null;
   input?: Buffer | string;
@@ -153,7 +118,7 @@ interface BufferResult {
 
 type RunResult = TextResult | BufferResult;
 
-const ACTIONS = ["baseline", "red", "green", "verify", "check", "candidate", "gate"] as const;
+const ACTIONS = ["baseline", "red", "green", "verify", "check"] as const;
 type Action = (typeof ACTIONS)[number];
 
 function isAction(value: string | undefined): value is Action {
@@ -210,14 +175,7 @@ interface VerifyArgs {
   command: string[];
 }
 
-interface GateArgs {
-  action: "gate";
-  work: string;
-  name: string;
-  command: string[];
-}
-
-type ParsedArgs = BaselineArgs | RedArgs | GreenArgs | CheckArgs | VerifyArgs | GateArgs;
+type ParsedArgs = BaselineArgs | RedArgs | GreenArgs | CheckArgs | VerifyArgs;
 
 /** Erro de pré-requisito ausente: vira EXIT_INCOMPLETE em vez de violação. */
 class IncompleteError extends Error {
@@ -402,6 +360,10 @@ interface ChainEntry {
 
 const GENESIS_HASH = "0".repeat(64);
 
+/**
+ * Cadeia de hash local: ordena os logs do diagnóstico TDD. NÃO é mecanismo de
+ * aceitação — a autoridade de conclusão é o recibo do verificador independente.
+ */
 function appendEvidenceChain(task: string, check: string, command: string[], exitCode: number, output: string): ChainEntry {
   mkdirSync(LOG_DIR, { recursive: true });
   const chainPath = path.join(LOG_DIR, `${task}-chain.jsonl`);
@@ -452,55 +414,6 @@ function appendEvidenceChain(task: string, check: string, command: string[], exi
 
   appendFileSync(chainPath, JSON.stringify(entry) + "\n", "utf8");
   return entry;
-}
-
-export function verifyEvidenceChain(task: string): { valid: boolean; reason?: string; headHash?: string } {
-  const chainPath = path.join(LOG_DIR, `${task}-chain.jsonl`);
-  if (!existsSync(chainPath)) {
-    return { valid: false, reason: `cadeia de evidências não encontrada: ${chainPath}` };
-  }
-  try {
-    const lines = readFileSync(chainPath, "utf8").trim().split("\n").filter(Boolean);
-    if (!lines.length) return { valid: false, reason: "cadeia de evidências vazia" };
-    let prev = GENESIS_HASH;
-    const latestForCheck: Record<string, string> = {};
-    for (let i = 0; i < lines.length; i++) {
-      const entry: ChainEntry = JSON.parse(lines[i]);
-      if (entry.sequence !== i + 1) return { valid: false, reason: `lacuna de sequência no passo ${i + 1}` };
-      if (entry.prev_hash !== prev) return { valid: false, reason: `elo quebrado na cadeia no passo ${i + 1}` };
-      const expectedPayload = JSON.stringify([
-        entry.prev_hash,
-        entry.sequence,
-        entry.timestamp,
-        entry.task,
-        entry.check,
-        entry.command,
-        entry.exit_code,
-        entry.output_sha256,
-      ]);
-      const expectedHash = sha256Hex(expectedPayload);
-      if (entry.entry_hash !== expectedHash) {
-        return { valid: false, reason: `hash divergente na entrada ${i + 1}` };
-      }
-      prev = entry.entry_hash;
-      latestForCheck[entry.check.toLowerCase()] = entry.entry_hash;
-    }
-
-    // Verificar que cada log persistido no disco corresponde ao último registro de sua classe na cadeia
-    for (const [checkName, expectedHash] of Object.entries(latestForCheck)) {
-      const logFile = path.join(LOG_DIR, `${task}-${checkName}.log`);
-      if (existsSync(logFile)) {
-        const logContent = readFileSync(logFile, "utf8");
-        if (!logContent.includes(`CHAIN_HASH: ${expectedHash}`)) {
-          return { valid: false, reason: `log ${checkName.toUpperCase()} adulterado (CHAIN_HASH não confere com o elo da cadeia)` };
-        }
-      }
-    }
-
-    return { valid: true, headHash: prev };
-  } catch (err) {
-    return { valid: false, reason: (err as Error).message };
-  }
 }
 
 function writeLog(task: string, check: string, command: string[], exitCode: number, output: string, verdict: string, extra = ""): string {
@@ -713,16 +626,6 @@ function sameSet(left: string[], right: string[]): boolean {
 function greenDigest(state: EvidenceState): string {
   return sha256Hex(canonicalJson({ implementation: state.green_implementation ?? null, tests: state.green_tests ?? null }));
 }
-
-function signPayload(payload: unknown, key: string): string {
-  return createHmac("sha256", key).update(canonicalJson(payload)).digest("hex");
-}
-
-function signatureMatches(payload: unknown, signature: unknown, key: string): boolean {
-  if (typeof signature !== "string" || !/^[0-9a-f]{64}$/.test(signature)) return false;
-  return timingSafeEqual(Buffer.from(signPayload(payload, key), "hex"), Buffer.from(signature, "hex"));
-}
-
 // ── Ações ──────────────────────────────────────────────────────────
 
 function baseline(args: BaselineArgs): number {
@@ -997,309 +900,6 @@ function auditCheck(args: CheckArgs): number {
   console.log(`PASS: ${args.name} captured for ${args.work}/${args.task}; evidence: ${log}`);
   return 0;
 }
-
-function candidate(args: VerifyArgs): number {
-  const verifyExit = verify(args);
-  if (verifyExit !== 0) return verifyExit;
-  const state = loadState(args.task);
-  const plan = guardDefinition(state, args.work, args.task);
-
-  const violations: string[] = [];
-  if (!plan.task.red || !state.red_command || !commandMatches(plan.task.red.command, state.red_command)) {
-    violations.push(`RED registrado não corresponde ao comando do plano (${plan.task.red?.command ?? "ausente"})`);
-  }
-  if (!sameSet(state.implementation_files, plan.task.implementationFiles) || !sameSet(state.test_files, plan.task.testFiles)) {
-    violations.push("arquivos do baseline não correspondem aos declarados no plano");
-  }
-  violations.push(...frozenTestViolations(state.frozen_tests ?? []));
-
-  const requiredNames = requiredAuditChecks(plan.task);
-  const missing: string[] = [];
-  const alteredLogs: string[] = [];
-  const currentGreen = greenDigest(state);
-  for (const name of requiredNames) {
-    const check = state.audit_checks?.[name];
-    if (!check || check.verdict !== "PASS") {
-      missing.push(`${name} (não observado)`);
-      continue;
-    }
-    const allowed = allowedCheckCommands(plan.text, plan.task, name);
-    if (allowed.error || !allowed.commands.some((command) => commandMatches(command, check.command))) {
-      violations.push(`${name}: comando registrado (\`${displayCommand(check.command)}\`) não é o declarado no plano`);
-      continue;
-    }
-    if (check.green_sha256 !== currentGreen) {
-      missing.push(`${name} (registrado sobre outro snapshot; reexecute sobre o GREEN atual)`);
-      continue;
-    }
-    if (name.startsWith("AC-") && check.vacuity?.verdict !== "PASS") {
-      missing.push(`${name} (sem prova de que falha sem a implementação)`);
-      continue;
-    }
-    if (!existsSync(check.log)) alteredLogs.push(`log ausente após ${name}: ${check.log}`);
-    else if (digest(check.log).sha256 !== check.log_sha256) alteredLogs.push(`log alterado após ${name}: ${check.log}`);
-  }
-  const evidenceFiles = ["red", "green", "verify"].map((check) => path.join(LOG_DIR, `${args.task}-${check}.log`));
-  for (const filePath of evidenceFiles) if (!existsSync(filePath)) missing.push(`evidência ausente: ${filePath}`);
-
-  const chainCheck = verifyEvidenceChain(args.task);
-  const chainProblems = chainCheck.valid ? [] : [`cadeia de evidências (${chainCheck.reason})`];
-  if (violations.length) return reportViolations(violations);
-  const problems = [...missing, ...alteredLogs, ...chainProblems];
-  if (problems.length) return reportIncomplete(problems);
-
-  const evidenceDigest = createHash("sha256");
-  for (const filePath of evidenceFiles) evidenceDigest.update(readFileSync(filePath));
-  const subject = {
-    version: ATTESTATION_VERSION,
-    kind: "task-acceptance-candidate",
-    harness_version: harnessManifest.version,
-    gate_version: GATE_VERSION,
-    work_id: args.work,
-    task_id: args.task,
-    result: "pass",
-    plan: {
-      path: plan.path,
-      sha256: digest(plan.path).sha256,
-      task_definition_sha256: state.task_definition_sha256,
-    },
-    contract: state.contract ?? null,
-    baseline_commit: state.baseline_commit,
-    red: { command: state.red_command, expect: state.red_expect },
-    implementation: state.green_implementation,
-    tests: state.green_tests,
-    frozen_tests: state.frozen_tests ?? [],
-    evidence_sha256: evidenceDigest.digest("hex"),
-    evidence_chain_head: chainCheck.headHash ?? null,
-    audit_checks: Object.fromEntries(requiredNames.map((name) => [name, state.audit_checks![name]])),
-    generated_at: new Date().toISOString(),
-  };
-  const attestation = { ...subject, signature: signPayload(subject, getVerifierKey(process.cwd())) };
-  mkdirSync(ATTESTATION_DIR, { recursive: true });
-  const target = path.join(ATTESTATION_DIR, `${args.task}-candidate.json`);
-  writeFileSync(target, `${JSON.stringify(attestation, null, 2)}\n`, "utf8");
-  console.log(`PASS: acceptance candidate generated for ${args.work}/${args.task}: ${target}`);
-  return 0;
-}
-
-/** Arquivos concretos (implementação + teste) de todas as tasks do plano. */
-function planTreeFiles(planText: string): string[] {
-  const files = parsePlanTasks(planText).flatMap((task) => [...task.implementationFiles, ...task.testFiles]);
-  return [...new Set(files)].filter((filePath) => !placeholderPathReason(filePath)).sort();
-}
-
-function globalStatePath(): string {
-  return statePath(GLOBAL_TASK);
-}
-
-function globalGatePayload(work: string, name: string, record: Omit<GlobalGateRecord, "signature">): unknown {
-  return { work, name, ...record };
-}
-
-function auditGate(args: GateArgs): number {
-  const match = args.name.match(/^G-([1-9]\d*)$/);
-  if (!match) throw new Error(`invalid global gate name: ${args.name} (esperado G-1, G-2, ...)`);
-  if (!args.command.length) throw new Error("global gate command is required after --");
-  const planPath = planPathFor(args.work);
-  if (!existsSync(planPath)) return reportIncomplete([`plano do Work (plan not found: ${planPath})`]);
-  const planText = readFileSync(planPath, "utf8");
-  const drift = planDrift(args.work, planText);
-  if (drift) throw new Error(drift);
-  const gates = parseGlobalGates(planText) ?? [];
-  const gate = gates[Number(match[1]) - 1];
-  if (!gate) throw new Error(`${args.name} não existe no plano: ## Global gates declara ${gates.length} item(ns)`);
-  if (!gate.command) throw new Error(`${args.name} não declara comando executável (use crase: \`comando\`) em ## Global gates`);
-  if (!commandMatches(gate.command, args.command)) {
-    throw new Error(`${args.name}: comando diverge do plano (plano: \`${gate.command}\`; operador: \`${displayCommand(args.command)}\`)`);
-  }
-
-  const result = run(args.command);
-  const verdict = result.exitCode === 0 ? "PASS" : "FAIL";
-  const log = writeLog(GLOBAL_TASK, args.name, args.command, result.exitCode, result.output, verdict);
-  const record: Omit<GlobalGateRecord, "signature"> = {
-    command: args.command,
-    gate_command: gate.command,
-    exit_code: result.exitCode,
-    verdict,
-    log,
-    log_sha256: digest(log).sha256,
-    recorded_at: new Date().toISOString(),
-    tree: snapshot(planTreeFiles(planText)),
-  };
-  const statePathname = globalStatePath();
-  let current: GlobalGatesState = { work: args.work, gates: {} };
-  if (existsSync(statePathname)) {
-    try {
-      current = JSON.parse(readFileSync(statePathname, "utf8")) as GlobalGatesState;
-    } catch {
-      current = { work: args.work, gates: {} };
-    }
-  }
-  current.gates[args.name] = { ...record, signature: signPayload(globalGatePayload(args.work, args.name, record), getVerifierKey(process.cwd())) };
-  mkdirSync(STATE_DIR, { recursive: true });
-  writeFileSync(statePathname, `${JSON.stringify(current, null, 2)}\n`, "utf8");
-  if (verdict === "FAIL") {
-    console.error(`FAIL: ${args.name} (\`${gate.command}\`) falhou; evidence: ${log}`);
-    return 1;
-  }
-  console.log(`PASS: ${args.name} captured for ${args.work}; evidence: ${log}`);
-  return 0;
-}
-
-// ── Verificação para o status (somente leitura) ────────────────────
-
-/** Resultado da conferência de uma atestação de aceitação. */
-export interface AttestationStatus {
-  present: boolean;
-  valid: boolean;
-  stale: boolean;
-  reason?: string;
-}
-
-function readDigest(filePath: string, rootDir: string): FileDigest {
-  const absolute = path.resolve(rootDir, filePath);
-  if (!existsSync(absolute) || !statSync(absolute).isFile()) return { exists: false, sha256: null };
-  return { exists: true, sha256: sha256Hex(readFileSync(absolute)) };
-}
-
-function snapshotDiffers(recorded: unknown, rootDir: string): boolean {
-  if (!recorded || typeof recorded !== "object") return true;
-  return Object.entries(recorded as Snapshot).some(([filePath, expected]) => JSON.stringify(readDigest(filePath, rootDir)) !== JSON.stringify(expected));
-}
-
-/**
- * Confere a atestação de aceitação de uma task sem escrever nada: assinatura
- * HMAC com a chave do verificador, versão amarrada ao plano, definição da task
- * inalterada e arquivos iguais aos atestados (`stale` quando mudaram).
- */
-export function verifyTaskAttestation(options: {
-  rootDir: string;
-  todoDirectory: string;
-  workId: string | null;
-  taskId: string;
-  planText: string;
-}): AttestationStatus {
-  const work = options.workId ?? "legacy";
-  const file = path.join(options.todoDirectory, "attestations", work, `${options.taskId}-candidate.json`);
-  if (!existsSync(file)) return { present: false, valid: false, stale: false, reason: "atestação de aceitação ausente" };
-  let record: Record<string, any>;
-  try {
-    record = JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return { present: true, valid: false, stale: false, reason: "atestação ilegível" };
-  }
-  if (record?.version !== ATTESTATION_VERSION) {
-    return { present: true, valid: false, stale: false, reason: `atestação v${record?.version ?? "?"} não amarra os ACs ao plano; regenere com 'pwn work audit candidate'` };
-  }
-  const key = readVerifierKey(options.rootDir);
-  if (!key) return { present: true, valid: false, stale: false, reason: "chave do verificador ausente (PWN_VERIFIER_KEY ou .pwn/.verifier_key)" };
-  const { signature, ...subject } = record;
-  if (!signatureMatches(subject, signature, key)) return { present: true, valid: false, stale: false, reason: "assinatura da atestação inválida" };
-  if (record.result !== "pass" || record.work_id !== work || record.task_id !== options.taskId) {
-    return { present: true, valid: false, stale: false, reason: "atestação não corresponde a esta task" };
-  }
-  const drift = planDrift(work, options.planText, options.rootDir);
-  if (drift) return { present: true, valid: false, stale: false, reason: drift };
-  try {
-    const contract = loadContractInfo(work, options.taskId, options.rootDir);
-    if ((contract?.id ?? null) !== (record.contract?.id ?? null)
-      || (contract?.sha256 ?? null) !== (record.contract?.sha256 ?? null)) {
-      return { present: true, valid: false, stale: false, reason: "o contrato da task mudou depois da atestação" };
-    }
-  } catch (error) {
-    return { present: true, valid: false, stale: false, reason: (error as Error).message };
-  }
-  const task = parsePlanTask(options.planText, options.taskId);
-  if (!task || taskDefinitionDigest(options.planText, task) !== record.plan?.task_definition_sha256) {
-    return { present: true, valid: false, stale: false, reason: "a definição da task mudou depois da atestação" };
-  }
-  const frozen = Array.isArray(record.frozen_tests) ? (record.frozen_tests as FrozenTest[]) : [];
-  const stale = snapshotDiffers(record.implementation, options.rootDir)
-    || snapshotDiffers(record.tests, options.rootDir)
-    || frozen.some((entry) => readDigest(entry.path, options.rootDir).sha256 !== entry.sha256);
-  return { present: true, valid: true, stale };
-}
-
-/** Situação da evidência de cada gate global do plano (G-1, G-2, ...). */
-export interface GlobalGateEvidence {
-  name: string;
-  command: string | null;
-  ok: boolean;
-  reason?: string;
-}
-
-/**
- * Confere, sem escrever nada, a evidência assinada de cada item de
- * `## Global gates`: mesmo comando do plano, PASS, log intacto e árvore de
- * arquivos das tasks igual à do momento da execução.
- */
-export function verifyGlobalGates(options: {
-  rootDir: string;
-  todoDirectory: string;
-  workId: string | null;
-  planText: string;
-}): GlobalGateEvidence[] {
-  const gates = parseGlobalGates(options.planText) ?? [];
-  const work = options.workId ?? "legacy";
-  const evidenceRoot = options.workId ? path.join(options.todoDirectory, "evidence", options.workId) : path.join(options.todoDirectory, "evidence");
-  const stateFile = path.join(evidenceRoot, "state", `${GLOBAL_TASK}.json`);
-  let state: GlobalGatesState | null = null;
-  try {
-    state = existsSync(stateFile) ? (JSON.parse(readFileSync(stateFile, "utf8")) as GlobalGatesState) : null;
-  } catch {
-    state = null;
-  }
-  const key = readVerifierKey(options.rootDir);
-  const treeFiles = planTreeFiles(options.planText);
-  const drift = planDrift(work, options.planText, options.rootDir);
-
-  return gates.map((gate, index) => {
-    const name = `G-${index + 1}`;
-    const fail = (reason: string): GlobalGateEvidence => ({ name, command: gate.command, ok: false, reason });
-    if (drift) return fail(drift);
-    if (!gate.command) return fail("item sem comando executável");
-    const record = state?.gates?.[name];
-    if (!record) return fail("sem evidência");
-    if (!key) return fail("chave do verificador ausente");
-    const { signature, ...unsigned } = record;
-    if (!signatureMatches(globalGatePayload(work, name, unsigned), signature, key)) return fail("assinatura inválida");
-    if (record.verdict !== "PASS") return fail("última execução falhou");
-    if (normalizeCommand(record.gate_command) !== normalizeCommand(gate.command)) return fail("comando do plano mudou");
-    if (readDigest(record.log, options.rootDir).sha256 !== record.log_sha256) return fail("log alterado");
-    const recordedFiles = Object.keys(record.tree ?? {}).sort();
-    if (recordedFiles.length !== treeFiles.length || recordedFiles.some((filePath, position) => filePath !== treeFiles[position])) {
-      return fail("arquivos das tasks mudaram desde a execução");
-    }
-    if (snapshotDiffers(record.tree, options.rootDir)) return fail("arquivos das tasks mudaram desde a execução");
-    return { name, command: gate.command, ok: true };
-  });
-}
-
-/**
- * Lê uma atestação de aceitação e informa se foi gerada por uma versão compatível do harness.
- * Compatível: `version` 1 (legado), 2 ou 3 (que exigem `harness_version` presente).
- * Compatibilidade de formato não é aceitação: só a v3 assinada conta como aceita
- * (ver {@link verifyTaskAttestation}).
- * Devolve `null` quando o arquivo não existe, não é JSON válido ou não declara `version` numérica.
- */
-export function readAttestation(
-  filePath: string,
-): { version: number; harness_version: string | null; compatible: boolean } | null {
-  if (!existsSync(filePath)) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(filePath, "utf8"));
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const record = parsed as { version?: unknown; harness_version?: unknown };
-  const version = typeof record.version === "number" ? record.version : Number(record.version);
-  if (!Number.isInteger(version)) return null;
-  const harness_version = typeof record.harness_version === "string" && record.harness_version ? record.harness_version : null;
-  return { version, harness_version, compatible: version === 1 || ((version === 2 || version === 3) && harness_version !== null) };
-}
-
 function takeOption(tokens: string[], name: string, options: { multiple: true; required?: boolean }): string[];
 function takeOption(tokens: string[], name: string, options: { multiple?: false; required: true }): string;
 function takeOption(tokens: string[], name: string, options?: { multiple?: false; required?: boolean }): string | null;
@@ -1344,8 +944,6 @@ function usage(): void {
   console.error("       task_evidence.js green --work NNNN|legacy --task ID [--expect TEXT] -- COMMAND...");
   console.error("       task_evidence.js verify --work NNNN|legacy --task ID -- COMMAND...");
   console.error("       task_evidence.js check --work NNNN|legacy --task ID --name NAME [--expect TEXT] [--expect-literal] -- COMMAND...");
-  console.error("       task_evidence.js candidate --work NNNN|legacy --task ID -- COMMAND...");
-  console.error("       task_evidence.js gate --work NNNN|legacy --name G-N -- COMMAND...");
   console.error("O comando após `--` é sempre obrigatório e precisa ser o declarado no plano: o harness nunca executa comandos lidos do repositório.");
 }
 
@@ -1356,14 +954,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   const options = separator === -1 ? [...rest] : rest.slice(0, separator);
   const command = separator === -1 ? [] : rest.slice(separator + 1);
   const work = takeOption(options, "--work", { required: true });
-
-  if (action === "gate") {
-    configureWork(work);
-    const name = takeOption(options, "--name", { required: true });
-    if (options.length) throw new Error(`unexpected arguments: ${options.join(" ")}`);
-    if (!command.length) throw new Error("GATE command is required after --");
-    return { action, work, name, command };
-  }
 
   const task = takeOption(options, "--task", { required: true });
   configureWork(work);
@@ -1410,8 +1000,6 @@ export function main(argv: string[] = process.argv.slice(2)): number {
     if (args.action === "red") return red(args);
     if (args.action === "green") return green(args);
     if (args.action === "check") return auditCheck(args);
-    if (args.action === "candidate") return candidate(args);
-    if (args.action === "gate") return auditGate(args);
     return verify(args);
   } catch (error) {
     if (error instanceof IncompleteError) return reportIncomplete(error.items);

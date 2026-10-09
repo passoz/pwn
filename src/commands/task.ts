@@ -6,6 +6,7 @@ import { tasksMarkdownPath } from '../core/plan-renderer.js';
 import { getLatestWorkId } from '../core/work-artifacts.js';
 import { loadTaskContract } from '../core/task-contract.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
+import { reportAutoVerification, verifyAfterRun } from '../core/acceptance-flow.js';
 
 function flagValue(args: string[], name: string): string | null {
   const index = args.indexOf(name);
@@ -29,6 +30,18 @@ function planContextFor(workId: string, taskId: string): CapsulePlanContext | un
     checks: requiredAuditChecks(task).map((name) => ({ name, ...allowedCheckCommands(planText, task, name) })),
     globalGates: (parseGlobalGates(planText) ?? []).map((gate) => gate.command).filter((command): command is string => Boolean(command)),
   };
+}
+
+/**
+ * Aceitação independente após a execução: o agente entrega código; quem decide que
+ * a task está concluída é o verificador, executando os critérios aprovados.
+ */
+function ctxVerify(workId: string, taskId: string, timeoutSeconds: number): ReturnType<typeof verifyAfterRun> {
+  try {
+    return verifyAfterRun({ rootDir: process.cwd(), workId, taskId, timeoutSeconds });
+  } catch (error) {
+    return { attempted: true, outcome: 'blocked', reason: (error as Error).message };
+  }
 }
 
 export function handleTaskCommand(subcommand: string, args: string[]): void {
@@ -55,10 +68,16 @@ export function handleTaskCommand(subcommand: string, args: string[]): void {
           console.error('\n[DIFF VIOLATION] Arquivos fora do escopo do contrato:');
           result.diffViolations.forEach((v) => console.error(`  - ${v}`));
         }
+        let verification: ReturnType<typeof verifyAfterRun> | null = null;
         if (result.suspended) {
           console.error(`\n[SUSPENDED] A task ${taskId} do Work ${workId} não foi executada: aguarda decisão humana na fila AFK.`);
           console.error(`Use 'pwn queue approve ${result.runId}' para destravar (exit code ${result.status}).`);
+        } else if (result.status === 0) {
+          // A execução terminou: a aceitação independente roda sem depender do agente.
+          verification = ctxVerify(workId, taskId, timeoutSeconds);
+          reportAutoVerification(verification);
         }
+        if (verification && verification.attempted && verification.outcome !== 'pass') process.exit(1);
         process.exit(result.status);
       }
       break;
