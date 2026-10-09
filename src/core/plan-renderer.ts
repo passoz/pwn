@@ -186,7 +186,10 @@ export function loadPlan(workId: string, rootDir: string = process.cwd()): Plan 
  * checkbox state. Returns true when the structural content matches.
  */
 export function planMatchesMarkdown(plan: Plan, existingMarkdown: string): boolean {
-  return normalizeMarkers(renderTasksMarkdown(plan)) === normalizeMarkers(existingMarkdown);
+  // Espaço em branco no fim do arquivo (newline extra do editor/gerador) não é
+  // divergência de plano: comparar bytes crus transformaria isso em DRIFT e
+  // bloquearia auditoria e status por ruído de formatação.
+  return normalizeMarkers(renderTasksMarkdown(plan)).trimEnd() === normalizeMarkers(existingMarkdown).trimEnd();
 }
 
 /**
