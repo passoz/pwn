@@ -21,6 +21,10 @@ queue/review/
 # Material de marketing (não versionado)
 .marketing/
 
+# Lixo de sessão de agente na raiz (transcrições e dumps exportados)
+/continue.txt
+/omp-session-*.html
+
 # Variáveis de ambiente (podem conter segredos)
 .env*
 !.env.example
