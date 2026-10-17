@@ -1,3 +1,5 @@
+import path from "node:path";
+import { defaultConcurrency, runPool, type PoolJob, type PoolResult } from "../core/process-pool.js";
 import {
   createApproval,
   currentApproval,
@@ -21,6 +23,85 @@ import {
 } from "../core/verifier-home.js";
 import { getLatestWorkId } from "../core/work-artifacts.js";
 
+/** Monta um job `verify run` por aprovação vigente do Work (gates globais incluídos). */
+export function buildVerifyJobs(
+  approvals: Array<Pick<Approval, "work_id" | "task_id" | "kind">>,
+  workId: string,
+  cli: { execPath: string; cliPath: string; timeoutSeconds: number },
+  isCurrent: (taskId: string) => boolean = () => true,
+): PoolJob[] {
+  const seen = new Set<string>();
+  const jobs: PoolJob[] = [];
+  for (const approval of approvals) {
+    if (approval.work_id !== workId || seen.has(approval.task_id) || !isCurrent(approval.task_id)) continue;
+    seen.add(approval.task_id);
+    const isGlobal = /^G-\d+$/.test(approval.task_id);
+    jobs.push({
+      id: approval.task_id,
+      command: [
+        cli.execPath,
+        cli.cliPath,
+        "verify",
+        "run",
+        "--work",
+        workId,
+        isGlobal ? "--global" : "--task",
+        approval.task_id,
+        "--timeout-seconds",
+        String(cli.timeoutSeconds),
+      ],
+    });
+  }
+  return jobs;
+}
+
+export type VerifyVerdict = "ACCEPTED" | "NOT ACCEPTED" | "BLOCKED";
+
+export function verdictOf(result: Pick<PoolResult, "status" | "timedOut">): VerifyVerdict {
+  if (result.status === 0 && !result.timedOut) return "ACCEPTED";
+  if (result.status === 2) return "BLOCKED";
+  return "NOT ACCEPTED";
+}
+
+/** 0 se todas passaram; 2 se alguma BLOCKED; senão 1. */
+export function aggregateExit(results: Array<Pick<PoolResult, "status" | "timedOut">>): number {
+  const verdicts = results.map(verdictOf);
+  if (verdicts.includes("BLOCKED")) return 2;
+  if (verdicts.includes("NOT ACCEPTED")) return 1;
+  return 0;
+}
+
+async function runAll(args: string[]): Promise<never> {
+  const workId = requireWorkId(args);
+  const timeoutSeconds = Number(flagValue(args, "--timeout-seconds") ?? "600");
+  const concurrency = Number(flagValue(args, "--jobs") ?? defaultConcurrency());
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error("--jobs deve ser inteiro >= 1");
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) throw new Error("--timeout-seconds inválido");
+  const jobs = buildVerifyJobs(
+    listApprovals(),
+    workId,
+    { execPath: process.execPath, cliPath: path.resolve(import.meta.dirname, "../cli.ts"), timeoutSeconds },
+    (taskId) => currentApproval(workId, taskId) !== null,
+  );
+  console.log(`=== [pwn verify run-all] Work ${workId}: ${jobs.length} task(s), jobs=${concurrency} ===`);
+  if (!jobs.length) {
+    console.error(`[VERIFICATION BLOCKED] nenhuma aprovação vigente para o Work ${workId}.`);
+    process.exit(2);
+  }
+  const results = await runPool(jobs, {
+    concurrency,
+    timeoutMs: (timeoutSeconds + 60) * 1000 * 2,
+    onResult: (r) => console.log(`  ${verdictOf(r).padEnd(12)} ${r.id.padEnd(8)} ${(r.durationMs / 1000).toFixed(1)}s${r.timedOut ? " (timeout)" : ""}`),
+  });
+  const counts = { ACCEPTED: 0, "NOT ACCEPTED": 0, BLOCKED: 0 };
+  for (const r of results) counts[verdictOf(r)]++;
+  console.log(`\nResumo: ${counts.ACCEPTED} accepted, ${counts["NOT ACCEPTED"]} not accepted, ${counts.BLOCKED} blocked`);
+  for (const r of results) {
+    if (verdictOf(r) !== "ACCEPTED") console.error(`\n--- ${r.id} ---\n${(r.stderr || r.stdout).trim()}`);
+  }
+  process.exit(aggregateExit(results));
+}
+
 function flagValue(args: string[], name: string): string | null {
   const index = args.indexOf(name);
   if (index === -1 || index + 1 >= args.length || args[index + 1].startsWith("--")) return null;
@@ -35,6 +116,8 @@ const USAGE = [
   "                                           Aprova um item de ## Global gates",
   "pwn verify run --work NNNN --task T        Executa a aceitação independente e emite o recibo assinado",
   "pwn verify run --work NNNN --global G-1    Executa a aceitação independente de um gate global",
+  "pwn verify run-all --work NNNN [--jobs N] [--timeout-seconds S]",
+  "                                           Executa em paralelo (subprocessos) todas as aprovações vigentes do Work",
   "pwn verify status --work NNNN --task T     Informa se a árvore atual tem aceitação independente válida",
   "pwn verify show --work NNNN [--task T]     Mostra a aprovação vigente e o último recibo",
 ].join("\n");
@@ -64,7 +147,24 @@ function describeApproval(approval: Approval): string {
   return lines.join("\n");
 }
 
-export function handleVerifyCommand(subcommand: string, args: string[]): void {
+export function handleVerifyCommand(subcommand: string, args: string[]): void | Promise<void> {
+  if (subcommand === "run-all") {
+    return runAll(args).catch(reportError);
+  }
+  return handleVerifySync(subcommand, args);
+}
+
+function reportError(error: unknown): never {
+  if (error instanceof VerificationUnavailable) {
+    console.error(`[VERIFICATION BLOCKED] ${error.message}`);
+    console.error(`  ${error.detail}`);
+    process.exit(2);
+  }
+  console.error(`[VERIFY ERROR] ${(error as Error).message}`);
+  process.exit(1);
+}
+
+function handleVerifySync(subcommand: string, args: string[]): void {
   try {
     switch (subcommand) {
       case "init": {

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withFileLock, type LockOptions } from './fs-lock.js';
 export class SandboxError extends Error {
   constructor(message: string, public readonly runId: string, public readonly reason: string) {
     super(message);
@@ -31,6 +32,14 @@ export function resolveGitDir(cwd: string): string | null {
   return gitDir.length > 0 ? gitDir : null;
 }
 
+/**
+ * Opções do lock que serializa as operações que mutam o repositório
+ * (`worktree add/remove`, `branch -D`): runs paralelas disputam `.git/index.lock`,
+ * `.git/config` e `.git/worktrees`. O timeout cobre a fila de N checkouts; o stale
+ * (menor) recupera o lock de um processo morto.
+ */
+const WORKTREE_LOCK: LockOptions = { timeoutMs: 180_000, staleMs: 120_000 };
+
 export function createGitWorktreeSandbox(runId: string, rootDir: string = process.cwd()): SandboxSession {
   const sanitizeId = runId.replace(/[^a-zA-Z0-9_-]/g, '_');
   const worktreeDir = path.resolve(rootDir, '.pwn/sandboxes', sanitizeId);
@@ -40,61 +49,64 @@ export function createGitWorktreeSandbox(runId: string, rootDir: string = proces
     fs.mkdirSync(path.resolve(rootDir, '.pwn/sandboxes'), { recursive: true });
   }
 
-  if (fs.existsSync(worktreeDir)) {
-    // Run id previsível pode colidir com uma sobra de execução anterior. Reusar um
-    // diretório que NÃO é um worktree faria o comando rodar em qualquer lugar — e o
-    // diff guard inventariaria outra árvore. Recusa em vez de adotar.
-    const existingGitDir = resolveGitDir(worktreeDir);
-    if (!existingGitDir) {
+  return withFileLock(path.resolve(rootDir, '.pwn', 'git-worktree'), () => {
+    if (fs.existsSync(worktreeDir)) {
+      // O run id é único por construção (timestamp + bytes aleatórios): um caminho
+      // preexistente é sobra de execução anterior ou corrida entre runs — nunca algo a
+      // adotar. Reusar um diretório que NÃO é um worktree faria o comando rodar em
+      // qualquer lugar (e o diff guard inventariaria outra árvore); reusar um worktree
+      // válido faria duas runs compartilharem a mesma árvore. Recusa nos dois casos.
+      const existingGitDir = resolveGitDir(worktreeDir);
+      if (!existingGitDir) {
+        throw new SandboxError(
+          `[SANDBOX ABORT] ${worktreeDir} já existe e não é um worktree Git válido (${runId}). ` +
+          `Remova o diretório antes de reexecutar.`,
+          runId,
+          'pre-existing path is not a git worktree',
+        );
+      }
       throw new SandboxError(
-        `[SANDBOX ABORT] ${worktreeDir} já existe e não é um worktree Git válido (${runId}). ` +
-        `Remova o diretório antes de reexecutar.`,
+        `[SANDBOX ABORT] colisão de run id: o worktree ${worktreeDir} já existe (${runId}). ` +
+        `Run ids são únicos por construção; reuso indica corrida ou sobra de execução anterior.`,
         runId,
-        'pre-existing path is not a git worktree',
+        'run id collision: worktree already exists',
       );
     }
+
+    const proc = spawnSync('git', ['worktree', 'add', '-b', branchName, worktreeDir, 'HEAD'], {
+      cwd: rootDir,
+      encoding: 'utf8',
+    });
+
+    if (proc.status !== 0) {
+      const stderr = proc.stderr || '';
+      const reason = proc.error?.message || stderr || `git worktree add exited with code ${proc.status}`;
+      throw new SandboxError(
+        `[SANDBOX ABORT] Falha ao criar worktree para run ${sanitizeId}. ` +
+        `Execução bloqueada — agente NÃO será executado no rootDir. ` +
+        `Motivo: ${reason}`,
+        runId,
+        reason,
+      );
+    }
+
+    const gitDir = resolveGitDir(worktreeDir);
+    if (!gitDir) {
+      throw new SandboxError(
+        `[SANDBOX ABORT] Worktree recém-criado em ${worktreeDir} não resolve para um repositório Git (${runId}).`,
+        runId,
+        'git worktree add succeeded but rev-parse failed',
+      );
+    }
+
     return {
       runId,
       worktreePath: worktreeDir,
       branchName,
       created: true,
-      gitDir: existingGitDir,
+      gitDir,
     };
-  }
-
-  const proc = spawnSync('git', ['worktree', 'add', '-b', branchName, worktreeDir, 'HEAD'], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
-
-  if (proc.status !== 0) {
-    const stderr = proc.stderr || '';
-    const reason = proc.error?.message || stderr || `git worktree add exited with code ${proc.status}`;
-    throw new SandboxError(
-      `[SANDBOX ABORT] Falha ao criar worktree para run ${sanitizeId}. ` +
-      `Execução bloqueada — agente NÃO será executado no rootDir. ` +
-      `Motivo: ${reason}`,
-      runId,
-      reason,
-    );
-  }
-
-  const gitDir = resolveGitDir(worktreeDir);
-  if (!gitDir) {
-    throw new SandboxError(
-      `[SANDBOX ABORT] Worktree recém-criado em ${worktreeDir} não resolve para um repositório Git (${runId}).`,
-      runId,
-      'git worktree add succeeded but rev-parse failed',
-    );
-  }
-
-  return {
-    runId,
-    worktreePath: worktreeDir,
-    branchName,
-    created: true,
-    gitDir,
-  };
+  }, WORKTREE_LOCK);
 }
 
 export function cleanupGitWorktreeSandbox(session: SandboxSession, rootDir: string = process.cwd()): void {
@@ -102,15 +114,17 @@ export function cleanupGitWorktreeSandbox(session: SandboxSession, rootDir: stri
     return;
   }
 
-  spawnSync('git', ['worktree', 'remove', '--force', session.worktreePath], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
+  withFileLock(path.resolve(rootDir, '.pwn', 'git-worktree'), () => {
+    spawnSync('git', ['worktree', 'remove', '--force', session.worktreePath], {
+      cwd: rootDir,
+      encoding: 'utf8',
+    });
 
-  spawnSync('git', ['branch', '-D', session.branchName], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
+    spawnSync('git', ['branch', '-D', session.branchName], {
+      cwd: rootDir,
+      encoding: 'utf8',
+    });
+  }, WORKTREE_LOCK);
 }
 
 let cachedBwrapSupport: boolean | null = null;

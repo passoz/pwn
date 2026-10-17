@@ -13,13 +13,197 @@ import { main as validatePromptMain } from '../core/validate_prompt.js';
 import { main as validateTasksMain } from '../core/validate_tasks.js';
 import { main as taskEvidenceMain } from '../core/task_evidence.js';
 import { main as projectStatusMain } from '../core/project_status.js';
+import { handleBatchCommand } from './batch.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { listWorks } from '../core/work-manifest.js';
+import { loadWorkContracts } from '../core/task-contract.js';
+import { globsMayOverlap } from '../core/scope-overlap.js';
+import { defaultConcurrency, runPool, type PoolJob, type PoolResult } from '../core/process-pool.js';
 
 function flagValue(args: string[], name: string): string | null {
   const index = args.indexOf(name);
   if (index === -1 || index + 1 >= args.length || args[index + 1].startsWith('--')) return null;
   return args[index + 1];
+}
+
+// ── run-all: pool de subprocessos `pwn work run`, um por Work ──────────────────
+// O core é síncrono; a paralelização é na camada de PROCESSO. Cada subprocesso cria
+// o próprio worktree (RUN-<id único>) e roda o Diff Guard; Works distintos têm
+// árvores de artefatos separadas.
+
+const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'cli.ts');
+const EXIT_TIMEOUT = 124;
+
+export interface RunAllOptions {
+  /** `--works` explícito; `null` = todos os Works com plano. */
+  works: string[] | null;
+  jobs: number | null;
+  timeoutSeconds: number;
+  noGate: boolean;
+  /** Comando de aceitação após `--` (vazio se ausente). */
+  command: string[];
+}
+
+/** Interpreta os argumentos de `pwn work run-all`; lança `Error` (pt-BR) em uso inválido. */
+export function parseRunAllArgs(args: string[]): RunAllOptions {
+  const separator = args.indexOf('--');
+  const own = separator === -1 ? args : args.slice(0, separator);
+  const command = separator === -1 ? [] : args.slice(separator + 1);
+
+  const worksRaw = flagValue(own, '--works');
+  if (own.includes('--works') && worksRaw === null) throw new Error('--works exige uma lista separada por vírgula (ex.: --works 0001,0002)');
+  const works = worksRaw === null
+    ? null
+    : [...new Set(worksRaw.split(',').map((id) => id.trim()).filter(Boolean))];
+  if (works && works.length === 0) throw new Error('--works está vazio');
+
+  const jobsRaw = flagValue(own, '--jobs');
+  if (own.includes('--jobs') && jobsRaw === null) throw new Error('--jobs exige um inteiro positivo');
+  const jobs = jobsRaw === null ? null : Number(jobsRaw);
+  if (jobs !== null && (!Number.isInteger(jobs) || jobs < 1)) throw new Error(`--jobs inválido: '${jobsRaw}' (esperado inteiro >= 1)`);
+
+  const timeoutRaw = flagValue(own, '--timeout-seconds');
+  if (own.includes('--timeout-seconds') && timeoutRaw === null) throw new Error('--timeout-seconds exige um número positivo');
+  const timeoutSeconds = timeoutRaw === null ? 600 : Number(timeoutRaw);
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) throw new Error(`--timeout-seconds inválido: '${timeoutRaw}' (esperado número > 0)`);
+
+  return { works, jobs, timeoutSeconds, noGate: own.includes('--no-gate'), command };
+}
+
+/** Monta um job `bun cli.ts work run --work W …` por Work, repassando flags e o `--`. */
+export function buildRunAllJobs(args: string[], works: string[]): PoolJob[] {
+  const options = parseRunAllArgs(args);
+  return works.map((workId) => ({
+    id: workId,
+    command: [
+      process.execPath,
+      CLI_PATH,
+      'work',
+      'run',
+      '--work',
+      workId,
+      ...(options.noGate ? ['--no-gate'] : []),
+      '--timeout-seconds',
+      String(options.timeoutSeconds),
+      '--',
+      ...options.command,
+    ],
+  }));
+}
+
+export interface ScopeOverlap {
+  works: [string, string];
+  /** Pares de globs (um de cada Work) que podem casar o mesmo arquivo. */
+  patterns: Array<[string, string]>;
+}
+
+export interface ScopedContract {
+  scope_contract: { write_allow: string[] };
+}
+
+/** Detecta, para cada par de Works, globs de `write_allow` (união dos contratos) que se sobrepõem. */
+export function findScopeOverlaps(contractsByWork: Record<string, ScopedContract[]>): ScopeOverlap[] {
+  const unions = Object.entries(contractsByWork).map(([workId, contracts]) => ({
+    workId,
+    patterns: [...new Set(contracts.flatMap((contract) => contract.scope_contract?.write_allow ?? []))],
+  }));
+  const overlaps: ScopeOverlap[] = [];
+  for (let i = 0; i < unions.length; i++) {
+    for (let j = i + 1; j < unions.length; j++) {
+      const patterns: Array<[string, string]> = [];
+      for (const a of unions[i].patterns) {
+        for (const b of unions[j].patterns) {
+          if (globsMayOverlap(a, b)) patterns.push([a, b]);
+        }
+      }
+      if (patterns.length > 0) overlaps.push({ works: [unions[i].workId, unions[j].workId], patterns });
+    }
+  }
+  return overlaps;
+}
+
+/** Exit code agregado: 0 só se todos 0; senão o maior exit code não-zero (timeout conta 124). */
+export function aggregateExitCodes(results: Array<Pick<PoolResult, 'status' | 'timedOut'>>): number {
+  let worst = 0;
+  for (const result of results) {
+    const code = result.timedOut ? EXIT_TIMEOUT : result.status;
+    if (code !== 0 && code > worst) worst = code;
+  }
+  return worst;
+}
+
+function prefixLines(workId: string, text: string): string[] {
+  return text.replace(/\n+$/, '').split('\n').map((line) => `[${workId}] ${line}`);
+}
+
+function parseRunId(result: PoolResult): string | null {
+  return /\bRUN-[A-Za-z0-9_-]+/.exec(`${result.stdout}\n${result.stderr}`)?.[0] ?? null;
+}
+
+async function runAllCommand(args: string[]): Promise<number> {
+  console.log('=== [pwn work run-all] Executando Works em paralelo (um subprocesso por Work) ===');
+  let options: RunAllOptions;
+  try {
+    options = parseRunAllArgs(args);
+  } catch (err) {
+    console.error(`✗ ${(err as Error).message}`);
+    console.error('Uso: pwn work run-all [--works 0001,0002] [--jobs N] [--timeout-seconds S] [--no-gate] -- <comando de aceitação>');
+    return 1;
+  }
+  if (options.command.length === 0) {
+    console.error('Nenhum comando informado. Uso: pwn work run-all [--works 0001,0002] [--jobs N] [--timeout-seconds S] [--no-gate] -- <comando>');
+    return 1;
+  }
+
+  const rootDir = process.cwd();
+  const works = options.works
+    ?? listWorks(rootDir).filter((work) => work.work_id !== 'legacy' && work.plan_exists).map((work) => work.work_id);
+  if (works.length === 0) {
+    console.error('Nenhum Work com plano encontrado. Informe --works NNNN,NNNN ou rode `pwn work scaffold`.');
+    return 1;
+  }
+
+  // Pré-checagem (não bloqueia): escopos sobrepostos entre Works podem conflitar no merge.
+  const contractsByWork: Record<string, ScopedContract[]> = {};
+  for (const workId of works) {
+    try {
+      contractsByWork[workId] = loadWorkContracts(workId, rootDir);
+    } catch (err) {
+      console.warn(`⚠  Work ${workId}: contratos não carregados para a checagem de escopo (${(err as Error).message}).`);
+    }
+  }
+  for (const overlap of findScopeOverlaps(contractsByWork)) {
+    const sample = overlap.patterns.slice(0, 3).map(([a, b]) => `${a} ↔ ${b}`).join('; ');
+    console.warn(`⚠  Possível conflito de merge entre Works ${overlap.works[0]} e ${overlap.works[1]}: write_allow sobreposto (${sample}${overlap.patterns.length > 3 ? '; …' : ''}). Cada um roda em worktree isolado.`);
+  }
+
+  const jobs = buildRunAllJobs(args, works);
+  const concurrency = options.jobs ?? defaultConcurrency();
+  console.log(`· ${jobs.length} Work(s): ${works.join(', ')} | jobs=${Math.min(concurrency, jobs.length)}`);
+
+  const results = await runPool(jobs, {
+    concurrency,
+    // Rede de segurança acima do timeout do comando (gates + sandbox + verificação).
+    timeoutMs: options.timeoutSeconds * 1000 + 60_000,
+    onResult: (result) => {
+      for (const line of prefixLines(result.id, result.stdout)) console.log(line);
+      for (const line of prefixLines(result.id, result.stderr)) console.error(line);
+      if (result.timedOut) console.error(`[${result.id}] ✗ Subprocesso excedeu o tempo limite e foi encerrado.`);
+    },
+  });
+
+  console.log('\n── Resumo run-all ──');
+  for (const result of results) {
+    const code = result.timedOut ? EXIT_TIMEOUT : result.status;
+    const runId = parseRunId(result);
+    console.log(`${code === 0 ? '✓' : '✗'} Work ${result.id}: exit ${code}${result.timedOut ? ' (timeout)' : ''} | ${(result.durationMs / 1000).toFixed(1)}s${runId ? ` | ${runId}` : ''}`);
+  }
+  const exitCode = aggregateExitCodes(results);
+  const failed = results.filter((result) => (result.timedOut ? EXIT_TIMEOUT : result.status) !== 0).length;
+  console.log(exitCode === 0 ? `[RUN-ALL]: ${results.length} Work(s) concluído(s) com sucesso.` : `[RUN-ALL]: ${failed}/${results.length} Work(s) falharam (exit ${exitCode}).`);
+  return exitCode;
 }
 
 /** Mapa canônico gate → avaliador determinístico. */
@@ -326,6 +510,35 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       }
       break;
 
+    case 'batch': {
+      // Flags valem só ANTES do `--`; depois dele vem o comando de regressão do operador, intacto.
+      const separator = args.indexOf('--');
+      const own = separator === -1 ? args : args.slice(0, separator);
+      const timeoutSeconds = Number(flagValue(own, '--timeout-seconds') ?? '600');
+      if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+        console.error(`--timeout-seconds inválido: '${flagValue(own, '--timeout-seconds')}' (esperado número > 0)`);
+        process.exit(1);
+      }
+      process.exit(handleBatchCommand(own[0] ?? '', {
+        workId: flagValue(own, '--work'),
+        jobs: flagValue(own, '--jobs'),
+        tasks: flagValue(own, '--tasks'),
+        taskArg: own[1] && !own[1].startsWith('--') ? own[1] : null,
+        command: separator === -1 ? [] : args.slice(separator + 1),
+        timeoutSeconds,
+      }));
+    }
+
+    case 'run-all':
+      runAllCommand(args).then(
+        (code) => process.exit(code),
+        (err: unknown) => {
+          console.error(`✗ run-all falhou: ${(err as Error).message}`);
+          process.exit(1);
+        },
+      );
+      break;
+
     case 'run':
       console.log('=== [pwn work run] Executando Work via Pipeline ===');
       {
@@ -559,6 +772,8 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
       console.log('  pwn work contract --task <t> --freeze-tests <arquivos>  Congela testes de aceitação antes da implementação');
       console.log('  pwn work plan      Valida o grafo e o plano de tarefas');
       console.log('  pwn work run       Executa tarefas do work de forma autônoma (--no-gate, --no-isolation, --no-sync, --dry-run)');
+      console.log('  pwn work run-all   Executa vários Works em paralelo, um subprocesso `work run` por Work (--works 0001,0002 --jobs N --timeout-seconds S --no-gate -- <comando>)');
+      console.log('  pwn work batch     Lotes paralelos de tasks de um Work em worktrees: plan|prepare|integrate|rebase|abort (--work NNNN --jobs N --tasks 1.2,1.3 -- <regressão do plano>)');
       console.log('  pwn work audit     Diagnóstico TDD local: baseline|red|green|verify|check (NÃO conclui a task — a aceitação é do pwn verify)');
       console.log('  pwn work status    Exibe o status do progresso do projeto');
       console.log('  pwn work sync      Sincroniza o estado do manifest .work/NNNN.json com o plano');

@@ -18,7 +18,7 @@ USO:
 
 COMANDOS DISPONÍVEIS:
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
-                      (init, import, scaffold, gate, specify, contract, plan, run, audit, status, sync)
+                      (init, import, scaffold, gate, specify, contract, plan, run, run-all, batch, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
   target <subcomando> Gerencia runtimes e materialização de targets
@@ -28,7 +28,7 @@ COMANDOS DISPONÍVEIS:
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   verify <subcomando> Aceitação independente: aprova critérios, executa checks isolados
-                      e emite o recibo assinado (init, approve, run, status, show)
+                      e emite o recibo assinado (init, approve, run, run-all, status, show)
   validate [--work NNNN]  Valida documentos normativos JSON do projeto contra JSON Schemas
   self-check [--mutate [--work NNNN]]
                       Valida os documentos normativos do framework
@@ -46,10 +46,13 @@ EXEMPLOS:
   pwn work run --dry-run --work 0001 -- bun test
   pwn work status --coverage 0001
   pwn work run --work 0001 -- bun test
+  pwn work run-all --works 0001,0002 --jobs 2 -- bun test
+  pwn work batch prepare --work 0001 --jobs 3
   pwn task capsule 1.1 0001
   pwn verify init
   pwn verify approve --work 0001 --task 1.1 --by operador
   pwn verify run --work 0001 --task 1.1
+  pwn verify run-all --work 0001 --jobs 4
 `);
 }
 

@@ -46,7 +46,7 @@ export interface DependencyDigest {
   digest: string;
 }
 
-const DEPENDENCY_MANIFESTS = ["package.json", "bun.lock", "bun.lockb", "bunfig.toml", "tsconfig.json"];
+export const DEPENDENCY_MANIFESTS = ["package.json", "bun.lock", "bun.lockb", "bunfig.toml", "tsconfig.json"];
 
 function excludedRoot(target: string): boolean {
   return [...HARNESS_STATE_PATHS, ...DEPENDENCY_PATHS].includes(target);

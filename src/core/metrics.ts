@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { appendLine } from './fs-lock.js';
 
 export interface MetricsEntry {
   timestamp: string;
@@ -36,9 +37,7 @@ export function getMetricsFilePath(rootDir: string = process.cwd()): string {
 }
 
 export function recordMetrics(entry: MetricsEntry, rootDir: string = process.cwd()): void {
-  const filePath = getMetricsFilePath(rootDir);
-  const line = JSON.stringify(entry) + '\n';
-  fs.appendFileSync(filePath, line, 'utf8');
+  appendLine(getMetricsFilePath(rootDir), JSON.stringify(entry));
 }
 
 export function readMetrics(rootDir: string = process.cwd()): MetricsEntry[] {

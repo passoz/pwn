@@ -332,3 +332,53 @@ proteção contra o operador/agente que roda como o mesmo usuário do SO (seçã
 `## Global gates` ao fim do Work; ao endurecer um gate, mude o caso correspondente para
 `expect_blocked: true` — essa mudança é o registro de que o gate deixou de ser
 decorativo.
+
+## 10. Lotes paralelos: escopo disjunto não é independência semântica
+
+**Afirmação.** `pwn work batch` só junta no mesmo lote tasks sem dependência declarada
+entre si, com `write_allow` disjuntos, sem componente em comum e fora de L4/manifesto de
+dependências. Cada uma é implementada num worktree que nasce do mesmo commit. Isso
+garante arquivos disjuntos, e por isso a evidência local de uma task (snapshot por
+arquivo declarado) continua válida quando as outras entram. **Não** garante que uma task
+não dependa de comportamento que outra altera sem tocar os mesmos arquivos (ex.: 1.2 muda
+a assinatura de uma função que 1.3 consome, sem `Depends on`). Sem regressão, esse
+conflito só aparece na verificação independente da árvore integrada e custa uma correção
+mais a reverificação de todas as tasks, porque o recibo amarra a árvore inteira.
+
+`pwn work batch integrate -- <comando>` antecipa a detecção: cada entrega é aplicada
+num worktree temporário que já contém as anteriores do lote, roda o comando de
+regressão ali e só entra na árvore principal quem passa. Isso identifica a task que
+quebrou a suíte, mas **só pega o que o comando de regressão cobre** e só para
+comportamento exercitado por ele; sem o comando, nada roda (há aviso). O comando vem do
+operador e precisa coincidir com um declarado no plano (coluna Regression ou
+`## Global gates`).
+
+A heurística de sobreposição de globs é conservadora (`false` = disjunção garantida;
+`true` pode ser falso positivo e serializa a task). Há no máximo um lote ativo por
+repositório. Commits feitos na árvore principal durante o lote são recusados na
+integração, em vez de mesclados.
+
+**Conflito de arquivo não é resolvido pelo harness.** Quando duas entregas alteram o
+mesmo arquivo, a primeira em ordem de plano entra e a(s) outra(s) ficam retidas;
+`pwn work batch rebase <task>` refaz a task sobre o HEAD atual com `git apply --3way`
+e deixa os marcadores de conflito no worktree para o agente resolver. `integrate`
+recusa arquivo com marcadores (`<<<<<<<`, `=======`, `>>>>>>>`). A evidência local é
+copiada e **reavaliada**: se um arquivo declarado mudou na mescla, ela fica `STALE` e o
+audit (`baseline → red → green → verify`) precisa ser refeito. Uma resolução que deixa
+o conteúdo igual ao já provado mantém a evidência válida; isso confere conteúdo, não
+que a resolução esteja correta.
+
+**Evidência.** `src/core/batch.ts`: `planNextBatch` (dependências, aprovação prévia,
+escopo, componente, `soloReason`); `captureDelivery` e `inspectDelivery` (âncora do
+gitDir, assinatura dos artefatos injetados, Diff Guard sobre o diff contra o base,
+marcadores de conflito, evidência local `VERIFIED` e `baseline_commit` alcançável);
+`integrateBatch` (um commit por task, HEAD esperado, gate de regressão em worktree
+temporário via `runRegression`, comando checado por `assertDeclaredRegression`);
+`rebaseTask` (worktree novo no HEAD, `--3way`, evidência reavaliada);
+`src/core/verification-receipt.ts:201` (o recibo compara o digest da árvore inteira).
+
+**Em vez disso.** Declare `Depends on` sempre que uma task consome comportamento de outra,
+mesmo em arquivos diferentes; mantenha componentes honestos no plano, porque eles são o
+segundo filtro. Integre com o comando de regressão do plano. Rode `pwn verify run-all`
+uma vez, depois do último lote: verificar no worktree ou entre lotes só gera recibos que
+a próxima integração invalida.

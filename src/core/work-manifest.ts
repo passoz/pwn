@@ -1,5 +1,6 @@
 
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -14,6 +15,7 @@ import {
 import path from "node:path";
 
 import { isDirectEntry } from './entry-guard.js';
+import { withFileLock, writeFileAtomic } from './fs-lock.js';
 
 export const WORK_MANIFEST_VERSION = 1;
 export const WORK_ID = /^\d{4}$/;
@@ -251,12 +253,18 @@ export function reserveWork(root: string = process.cwd(), options: ReserveWorkOp
 
 export function updateManifest(root: string, workId: string, changes: Partial<WorkManifest>): WorkManifest {
   const repositoryRoot = path.resolve(root);
-  const manifest = loadManifest(repositoryRoot, workId);
-  if (changes.state && !isWorkManifestState(changes.state)) throw new Error(`invalid work state: ${changes.state}`);
-  const updated = orderedManifest({ ...manifest, ...changes, updated_at: new Date().toISOString() });
   const absolute = assertRepositoryPath(repositoryRoot, manifestPath(workId));
-  writeFileSync(absolute, `${JSON.stringify(updated, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  return updated;
+  // Ler-modificar-gravar sob lock: processos paralelos (sync de estado, mover plano,
+  // transição de fase) não podem sobrescrever a mudança uns dos outros.
+  return withFileLock(absolute, () => {
+    const manifest = loadManifest(repositoryRoot, workId);
+    if (changes.state && !isWorkManifestState(changes.state)) throw new Error(`invalid work state: ${changes.state}`);
+    const updated = orderedManifest({ ...manifest, ...changes, updated_at: new Date().toISOString() });
+    writeFileAtomic(absolute, `${JSON.stringify(updated, null, 2)}\n`);
+    // O rename troca o inode: restaura o 0600 com que `reserveWork` criou o manifest.
+    chmodSync(absolute, 0o600);
+    return updated;
+  });
 }
 
 export function resolvePlanTarget(root: string = process.cwd(), target?: string): PlanTarget {

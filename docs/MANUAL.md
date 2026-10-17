@@ -280,6 +280,36 @@ Para evitar que execuções mal sucedidas ou adversariais de agentes corrompam o
 4. Se o teste e a validação do contrato passarem com sucesso, o commit é integrado ao branch principal.
 5. Em seguida, `cleanupGitWorktreeSandbox` remove a worktree e a branch temporária.
 
+### Runs em paralelo (processos)
+
+O `runId` é `RUN-<timestamp base36>-<8 hex aleatórios>` — único entre processos, mesmo no mesmo milissegundo. Um worktree que já existe para o mesmo `runId` nunca é adotado: `createGitWorktreeSandbox` aborta com `SandboxError` (colisão, ou diretório que não é worktree). `git worktree add/remove` e `git branch -D` são serializados entre processos por um lock em `.pwn/git-worktree.lock`, para que checkouts simultâneos não disputem `.git/index.lock` e `.git/config`. As métricas (`.pwn/metrics.jsonl`), a cadeia de evidências (`*-chain.jsonl`) e a atualização do manifest `.work/NNNN.json` também ocorrem sob lock (`src/core/fs-lock.ts`).
+
+### Lotes paralelos de tasks (`pwn work batch`)
+
+Paraleliza a **implementação** das tasks de um Work: um worktree e um agente por task, sem retrabalho de evidência.
+
+1. **`plan`** mostra o próximo lote e o motivo de cada task ficar de fora. Uma task entra quando:
+   - as dependências do mesmo Work estão integradas e as de outros Works estão aceitas;
+   - tem aprovação independente vigente, cujo baseline é anterior à implementação;
+   - não está em andamento na árvore principal;
+   - não conflita com as demais do lote: `write_allow` que pode sobrepor, componente em comum, ou risco L4/escopo sobre `package.json`/lockfile (esses casos rodam sozinhos).
+2. **`prepare`** exige a árvore principal commitada e cria `.pwn/sandboxes/BATCH-*-<task>` a partir do HEAD, com `node_modules` linkado e o plano `.todo/NNNN-tasks.md` copiado. O manifesto do lote ativo fica em `.pwn/batch.json`.
+3. **No worktree**, o agente segue `pwn task capsule` e o audit local (`baseline → red → green → verify`). **Não** rode `pwn verify` ali: o recibo amarra a árvore inteira, e a integração a muda.
+4. **`integrate`** confere cada entrega antes de tocar a árvore principal:
+   - âncora do gitDir e assinatura dos artefatos injetados;
+   - Diff Guard sobre o diff contra o base, com renames listados como remoção;
+   - evidência local `VERIFIED`;
+   - `baseline_commit` alcançável a partir da árvore principal.
+
+   Para cada entrega aprovada, aplica o diff na árvore principal (**um commit por task**, em ordem de plano), copia a evidência local da task e remove o worktree. Uma entrega reprovada continua no lote para correção; as outras entram mesmo assim. Commits externos na árvore principal durante o lote são recusados.
+
+   **Regressão na integração.** Passe o comando de regressão do plano (`pwn work batch integrate -- <comando>`): cada entrega é aplicada primeiro num worktree temporário (sob `bwrap`, sem rede) que já contém as anteriores do lote. Quem quebra a suíte é identificado na hora e retido; sem o comando, nada roda e a integração avisa que conflitos de comportamento só aparecem na verificação final.
+
+   **Conflito de arquivo.** A primeira entrega em ordem de plano entra; a outra fica retida. `pwn work batch rebase <task>` recria o worktree dela no HEAD atual e reaplica a entrega com `--3way`; o harness nunca resolve o conflito, e `integrate` recusa arquivos com marcadores. A evidência é reavaliada: se um arquivo declarado mudou na mescla, o audit local precisa ser refeito (a entrega original fica em `<worktree>.delivery.patch`).
+5. Depois do último lote, rode **`pwn verify run-all --work NNNN`**, uma verificação na árvore final, e marque `[x]` em ordem de plano.
+
+O limite residual (conflito semântico entre tasks sem `Depends on`) está em [LIMITES.md §10](LIMITES.md).
+
 ### Working tree não commitada entra na sandbox
 
 `pwn work run` leva para a sandbox o **HEAD mais a working tree não commitada** do repositório: o diff rastreado contra `HEAD` e os arquivos novos não ignorados — exceto `.pwn`, `.todo`, `.work`, `queue/review` e os artefatos que o próprio harness injeta. O Diff Guard roda sobre esse inventário, então **qualquer arquivo sujo fora do `write_allow` — inclusive um rascunho seu no repositório — reprova o run com `DIFF VIOLATION`**. Na prática o comando de aceitação valida o seu **código não commitado**, não o `HEAD`: commite ou isole o que não pertence à task.
@@ -486,6 +516,17 @@ bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
 bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 ```
 
+### `pwn work run-all [--works 0001,0002] [--jobs N] [--timeout-seconds S] [--no-gate] -- <comando>...`
+Roda vários Works em paralelo: um subprocesso `pwn work run` por Work, cada um no próprio worktree e com o próprio Diff Guard. Sem `--works`, usa todos os Works com plano. Antes de disparar, avisa (sem bloquear) quando os `write_allow` de Works diferentes podem se sobrepor. Exit `0` só se todos saírem `0`; caso contrário, o maior exit code não-zero (`124` em timeout).
+
+### `pwn work batch <plan|prepare|integrate|rebase|abort> [--work <work-id>] [--jobs N] [--tasks 1.2,1.3]`
+Lotes paralelos de tasks de um Work (fluxo completo na seção 8).
+- **`plan`** mostra o lote ativo ou o próximo lote, com o motivo de cada task adiada.
+- **`prepare`** cria um worktree por task. Com `--tasks`, cada task pedida precisa estar pronta e ser compatível com as outras; senão, nada é criado.
+- **`integrate [-- <regressão do plano>] [--timeout-seconds S]`** aplica as entregas aprovadas, um commit por task. Com o comando após `--` (precisa ser um declarado no plano), cada entrega é testada num worktree temporário sobre o HEAD já integrado antes de entrar; a que quebra a suíte fica retida e a árvore principal não é tocada. Exit `1` se alguma continuar no lote.
+- **`rebase <task>`** refaz uma task retida sobre o HEAD atual (`git apply --3way` num worktree novo). Conflitos ficam no worktree com marcadores; o agente resolve e roda `git add`. Reavalia a evidência local e informa se o audit precisa ser refeito. Exit `1` se houver conflito.
+- **`abort`** remove os worktrees e o manifesto, e o trabalho não integrado se perde.
+
 ### `pwn work audit <ação> [--work <work-id>] [--task <task-id>] [--name <nome>] [--expect <texto>] -- <comando>...`
 Diagnóstico TDD local amarrado ao plano. Sem ação explícita, assume `verify`. As ações válidas são **`baseline`, `red`, `green`, `verify` e `check`**; `candidate` e `gate` foram **removidos**. Qualquer outra opção na posição de ação é rejeitada com mensagem clara. **Nenhum comando do audit conclui uma task**: o veredicto local é diagnóstico do agente; a autoridade de conclusão é do verificador independente (`pwn verify`).
 
@@ -543,6 +584,7 @@ bun bin/pwn.js work status --coverage --work 0001
 - **`init`** — cria a raiz protegida quando ausente (`config.json`, `keys/verifier-private.pem`, `keys/verifier-public.pem`, `approvals/`, `receipts/`). Detecta o runtime (`process.execPath`) e o `bwrap`; se `bwrap` não existir, a aceitação fica bloqueada. Imprime a impressão digital da chave pública.
 - **`approve --by <responsável> [--task T | --global G-n]`** — o **operador** aprova um pacote **imutável**: os checks do plano (comando exatamente como declarado) e uma **cópia do conteúdo** dos testes de aceitação congelados, gravada na raiz protegida. Exige `frozen_tests` no contrato e confere que o `sha256` do arquivo bate com o congelado. Recusa se a raiz do verificador estiver **dentro** do repositório avaliado.
 - **`run --task T` / `run --global G-n`** — executa a aceitação: captura o **snapshot determinístico** da árvore, materializa uma **cópia isolada**, **restaura** o teste aprovado por cima dela, roda cada check em `bwrap` com mounts mínimos (`HOME=/nonexistent`, sem rede, ambiente reduzido, sem a chave), confere a **causalidade** de cada `AC-*` (o baseline revertido precisa falhar) e emite o **recibo assinado Ed25519**. Exit `0` (recibo `pass`), `1` (recibo `fail`, incluindo check `blocked` por timeout) ou `2` (bloqueado: sem `bwrap`/runtime/chave ou sem aprovação).
+- **`run-all [--jobs N] [--timeout-seconds S]`** — um subprocesso `verify run` por aprovação vigente do Work (tasks e gates globais). Exit `0` se todas forem aceitas, `1` se alguma falhar, `2` se alguma estiver bloqueada ou se o Work não tiver aprovação. É o passo único depois do último lote de `pwn work batch`.
 - **`status --task T`** — informa `ACCEPTED`/`NOT ACCEPTED` para a árvore atual, conferindo assinatura, aprovação vigente, snapshot e digest de dependências.
 - **`show [--task T]`** — mostra a aprovação vigente e o último recibo.
 

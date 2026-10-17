@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { GateOutput } from './gates.js';
+import { withFileLock, writeFileAtomic } from './fs-lock.js';
 import { lawsDigest } from './validator.js';
 import harnessManifest from '../../package.json' with { type: 'json' };
 
@@ -48,9 +49,21 @@ export function getVerifierKey(workDir: string): string {
   if (sessionKey) return sessionKey;
   const generated = crypto.randomBytes(32).toString('hex');
   try {
-    const dir = path.dirname(keyPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(keyPath, generated, { encoding: 'utf8', mode: 0o600 });
+    // Criação sob lock: sem ele, dois processos sem chave gerariam chaves diferentes e
+    // os vereditos assinados por um seriam rejeitados pelo outro.
+    return withFileLock(keyPath, () => {
+      try {
+        const raced = fs.readFileSync(keyPath, 'utf8').trim();
+        if (raced) return raced;
+      } catch {
+        // ausente: este processo cria.
+      }
+      // tmp com 0600 + rename: leitores nunca veem chave pela metade nem com permissão frouxa.
+      const tmp = `${keyPath}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, generated, { encoding: 'utf8', mode: 0o600 });
+      fs.renameSync(tmp, keyPath);
+      return generated;
+    });
   } catch {
     // se não puder gravar em disco (ex: fs somente-leitura), retém chave em memória para a sessão
     sessionKey = generated;
@@ -235,7 +248,7 @@ export function writeGateCache(output: GateOutput, workDir: string): void {
       signature,
     };
     const file = cacheFilePath(output.gate, workDir, output.input_versions ?? {});
-    fs.writeFileSync(file, JSON.stringify(envelope, null, 2), 'utf8');
+    writeFileAtomic(file, JSON.stringify(envelope, null, 2));
   } catch {
     // Cache é uma otimização: falha de escrita nunca interrompe o gate.
   }

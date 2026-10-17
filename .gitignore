@@ -9,6 +9,8 @@ node_modules/
 .pwn/RUN-*.jsonl
 .pwn/learnings.json
 .pwn/sandboxes/
+.pwn/batch.json
+.pwn/*.lock/
 queue/review/
 
 # Segredos e caches de veredicto: nunca versionar (a chave HMAC assina os gates)

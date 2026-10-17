@@ -175,7 +175,7 @@ export function modifiedFiles(
  * arquivo no lugar e continuar invisível. Comparar a assinatura faz a substituição
  * aparecer como mudança real.
  */
-function pathFingerprint(target: string): string {
+export function pathFingerprint(target: string): string {
   try {
     const stats = fs.lstatSync(target);
     if (stats.isSymbolicLink()) return `link:${fs.readlinkSync(target)}`;
@@ -309,7 +309,7 @@ function failedMetrics(runId: string, options: OrchestratedOptions, startedAt: n
  */
 export function runOrchestrated(options: OrchestratedOptions): OrchestratedResult {
   const rootDir = options.rootDir ?? process.cwd();
-  const runId = `RUN-${Date.now().toString(36)}`;
+  const runId = `RUN-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
   const startedAt = Date.now();
 
   const contracts = (() => {

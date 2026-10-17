@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+import { withFileLock } from "./fs-lock.js";
 import { isDirectEntry } from "./entry-guard.js";
 import {
   allowedCheckCommands,
@@ -367,53 +368,57 @@ const GENESIS_HASH = "0".repeat(64);
 function appendEvidenceChain(task: string, check: string, command: string[], exitCode: number, output: string): ChainEntry {
   mkdirSync(LOG_DIR, { recursive: true });
   const chainPath = path.join(LOG_DIR, `${task}-chain.jsonl`);
-  const entries: ChainEntry[] = [];
-  if (existsSync(chainPath)) {
-    try {
-      const lines = readFileSync(chainPath, "utf8").trim().split("\n").filter(Boolean);
-      for (const line of lines) {
-        try {
-          entries.push(JSON.parse(line));
-        } catch {
-          // Linha corrompida: não reseta entradas anteriores já válidas
+  // Leitura (prev_hash/sequence) e append formam uma única seção crítica: dois processos
+  // sobre a mesma tarefa sem o lock gerariam entradas com a mesma sequência e prev_hash.
+  return withFileLock(chainPath, () => {
+    const entries: ChainEntry[] = [];
+    if (existsSync(chainPath)) {
+      try {
+        const lines = readFileSync(chainPath, "utf8").trim().split("\n").filter(Boolean);
+        for (const line of lines) {
+          try {
+            entries.push(JSON.parse(line));
+          } catch {
+            // Linha corrompida: não reseta entradas anteriores já válidas
+          }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
-  }
 
-  const prevHash = entries.length > 0 ? entries[entries.length - 1].entry_hash : GENESIS_HASH;
-  const sequence = entries.length + 1;
-  const timestamp = new Date().toISOString();
-  const outputSha256 = sha256Hex(output);
+    const prevHash = entries.length > 0 ? entries[entries.length - 1].entry_hash : GENESIS_HASH;
+    const sequence = entries.length + 1;
+    const timestamp = new Date().toISOString();
+    const outputSha256 = sha256Hex(output);
 
-  const entryPayload = JSON.stringify([
-    prevHash,
-    sequence,
-    timestamp,
-    task,
-    check,
-    command,
-    exitCode,
-    outputSha256,
-  ]);
-  const entryHash = sha256Hex(entryPayload);
+    const entryPayload = JSON.stringify([
+      prevHash,
+      sequence,
+      timestamp,
+      task,
+      check,
+      command,
+      exitCode,
+      outputSha256,
+    ]);
+    const entryHash = sha256Hex(entryPayload);
 
-  const entry: ChainEntry = {
-    sequence,
-    timestamp,
-    task,
-    check,
-    command,
-    exit_code: exitCode,
-    output_sha256: outputSha256,
-    prev_hash: prevHash,
-    entry_hash: entryHash,
-  };
+    const entry: ChainEntry = {
+      sequence,
+      timestamp,
+      task,
+      check,
+      command,
+      exit_code: exitCode,
+      output_sha256: outputSha256,
+      prev_hash: prevHash,
+      entry_hash: entryHash,
+    };
 
-  appendFileSync(chainPath, JSON.stringify(entry) + "\n", "utf8");
-  return entry;
+    appendFileSync(chainPath, JSON.stringify(entry) + "\n", "utf8");
+    return entry;
+  });
 }
 
 function writeLog(task: string, check: string, command: string[], exitCode: number, output: string, verdict: string, extra = ""): string {
