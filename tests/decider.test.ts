@@ -327,7 +327,8 @@ describe('fila L4 com decisor', () => {
 describe('políticas do decisor', () => {
   test('aprovação: aprova só com todos os limiares; rejeita testes vazios; o resto vai para o operador', () => {
     expect(taskApprovalPolicy.judge(approvalAnswers()).outcome).toBe('approve');
-    expect(taskApprovalPolicy.judge(approvalAnswers({ covers_behavior: noul(0.85) })).outcome).toBe('escalate');
+    expect(taskApprovalPolicy.judge(approvalAnswers({ covers_behavior: noul(0.8) })).outcome).toBe('escalate');
+    expect(taskApprovalPolicy.judge(approvalAnswers({ covers_behavior: noul(0.81) })).outcome).toBe('approve');
     expect(taskApprovalPolicy.judge(approvalAnswers({ specificity: score(1.9) })).outcome).toBe('escalate');
     expect(taskApprovalPolicy.judge(approvalAnswers({ scope: choice('adequate', 0.6) })).outcome).toBe('escalate');
     expect(taskApprovalPolicy.judge(approvalAnswers({ scope: choice('too_broad', 0.95) })).outcome).toBe('escalate');

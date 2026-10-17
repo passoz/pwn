@@ -136,10 +136,15 @@ requisito, `behavior` da task, ACs com comando e descrição, conteúdo dos test
 - `score` `especificidade` — de "só checa existência" até "checa o valor exato e casos de borda".
 - `choice` `escopo` — o `write_allow` é adequado, amplo demais ou estreito demais?
 
-**Política:** aprova se `cobre > 0,85`, `passa_sem < 0,15`, `especificidade ≥ 2`,
+**Política:** aprova se `cobre > 0,80`, `passa_sem < 0,15`, `especificidade ≥ 2`,
 `escopo = adequado` com confiança `≥ 0,7`. Rejeita (motivo tipado de volta ao agente) se
 `cobre < 0,2` ou `passa_sem > 0,85`. Qualquer outro caso vai para o operador. Os números são
 pontos de partida (`APPROVE_THRESHOLDS`); calibrá-los exige o modo sombra (F1).
+
+**Smoke com a API real (jev-latest → jev-1.13.0), teste correto `expect(a).toBe(2)`:** duas
+rodadas deram `cobre = 0.85` e `0.84`; com o limiar antigo (`> 0,85`) nenhuma aprovou. Por
+decisão do operador, `covers_min` passou a `0,80`. Teste trivial (`expect(1).toBe(1)`) segue
+rejeitado com `cobre = 0.04`, `passa_sem = 0.95`. Ainda sem calibração com dados de sombra (F1).
 
 ## 6. Limites que continuam existindo
 

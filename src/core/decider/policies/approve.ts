@@ -14,7 +14,7 @@ import type { Judgment, Policy } from "../engine.js";
  */
 
 export const APPROVE_THRESHOLDS = {
-  covers_min: 0.85,
+  covers_min: 0.8,
   passes_without_max: 0.15,
   specificity_min: 2,
   scope_confidence_min: 0.7,

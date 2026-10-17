@@ -425,6 +425,14 @@ Inicializa o PWN no projeto (precisa de um repositório Git) e **sempre pergunta
 ### `pwn decider <show|set|remove|log>`
 Altera a configuração do decisor depois do init. `show` mostra a atual; `set [--decider …] [--decider-key-env …] [--decider-max-risk …] [--decider-endpoint URL|default]` cria uma configuração ou altera só os campos informados; `remove` apaga a configuração, e o projeto passa a não usar decisor; `log [--work NNNN]` lista as decisões tomadas, com modelo, tokens, motivos e assinatura conferida.
 
+**Chave do Jev.** A chave nunca vai para o repositório nem para a configuração do decisor: o PWN lê a variável indicada em `--decider-key-env` (padrão `TYPESAFE_API_KEY`). Com o omp, a chave cadastrada para `typesafe` fica em `~/.omp/agent/agent.db` (tabela `auth_credentials`, campo `key` do JSON em `data`); para usá-la nesta sessão, sem copiar para arquivo:
+
+```
+export TYPESAFE_API_KEY="$(sqlite3 ~/.omp/agent/agent.db "select data from auth_credentials where provider='typesafe' order by id desc limit 1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')"
+```
+
+Esse arquivo é legível pelo mesmo usuário que roda o agente; o PWN não o lê. Os limiares de aprovação ainda não estão calibrados (ver `future/operador-decisor.md` §5).
+
 ### Operador-decisor
 Com decisor configurado, as decisões do operador passam ao modelo, por padrão:
 
