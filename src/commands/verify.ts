@@ -22,6 +22,10 @@ import {
   verifierRoot,
 } from "../core/verifier-home.js";
 import { getLatestWorkId } from "../core/work-artifacts.js";
+import { decide, decisionReference, describeDecision } from "../core/decider/engine.js";
+import { globalApprovalPolicy, globalApprovalRequest, taskApprovalPolicy, taskApprovalRequest } from "../core/decider/policies/approve.js";
+import { EXIT_SUSPENDED } from "../core/run-orchestrator.js";
+import { loadTaskContract } from "../core/task-contract.js";
 
 /** Monta um job `verify run` por aprovação vigente do Work (gates globais incluídos). */
 export function buildVerifyJobs(
@@ -110,9 +114,10 @@ function flagValue(args: string[], name: string): string | null {
 
 const USAGE = [
   "pwn verify init                            Inicializa a raiz protegida do verificador (chaves Ed25519, runtime, isolamento)",
-  "pwn verify approve --work NNNN --task T --by NOME",
-  "                                           Aprova os critérios de uma task (exige testes de aceitação congelados)",
-  "pwn verify approve --work NNNN --global G-1 --by NOME",
+  "pwn verify approve --work NNNN --task T [--by NOME]",
+  "                                           Aprova os critérios de uma task (exige testes de aceitação congelados);",
+  "                                           sem --by, o decisor do projeto decide (pwn decider)",
+  "pwn verify approve --work NNNN --global G-1 [--by NOME]",
   "                                           Aprova um item de ## Global gates",
   "pwn verify run --work NNNN --task T        Executa a aceitação independente e emite o recibo assinado",
   "pwn verify run --work NNNN --global G-1    Executa a aceitação independente de um gate global",
@@ -192,11 +197,38 @@ function handleVerifySync(subcommand: string, args: string[]): void {
         const workId = requireWorkId(args);
         const global = flagValue(args, "--global");
         const taskId = flagValue(args, "--task");
-        const approvedBy = flagValue(args, "--by");
         if (!global && !taskId) throw new Error("informe --task T ou --global G-n");
-        if (!approvedBy) throw new Error("informe --by <responsável> (a aprovação é ato do operador)");
+        const rootDir = process.cwd();
+        let approvedBy = flagValue(args, "--by");
+        if (!approvedBy) {
+          // Sem --by: o decisor do projeto aprova, se houver um configurado (senão, como sempre, exige --by).
+          const result = decide({
+            rootDir,
+            workId,
+            taskId: global ?? taskId!,
+            risk: global ? null : loadTaskContract(workId, taskId!, rootDir).risk.level,
+            policy: global ? globalApprovalPolicy : taskApprovalPolicy,
+            request: () => (global ? globalApprovalRequest(rootDir, workId, global) : taskApprovalRequest(rootDir, workId, taskId!)),
+          });
+          if (result.kind === "human") {
+            throw new Error(`informe --by <responsável> (a aprovação é ato do operador${result.reason ? `; ${result.reason}` : ""})`);
+          }
+          const { record } = result;
+          for (const line of describeDecision(record)) console.log(line);
+          const target = global ? `--global ${global}` : `--task ${taskId}`;
+          if (record.outcome === "reject") {
+            console.error(`\n[NOT APPROVED] o decisor rejeitou os critérios: corrija os testes congelados ou o plano e peça de novo.`);
+            console.error(`Para decidir você mesmo: pwn verify approve --work ${workId} ${target} --by <nome>`);
+            process.exit(1);
+          }
+          if (record.outcome === "escalate") {
+            console.error(`\n[OPERADOR] o decisor não decidiu: pwn verify approve --work ${workId} ${target} --by <nome>`);
+            process.exit(EXIT_SUSPENDED);
+          }
+          approvedBy = decisionReference(record);
+        }
         const approval = createApproval({
-          rootDir: process.cwd(),
+          rootDir,
           workId,
           taskId: taskId ?? GLOBAL_TASK_ID,
           approvedBy,

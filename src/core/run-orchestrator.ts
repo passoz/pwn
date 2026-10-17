@@ -8,12 +8,14 @@ import { loadTaskContract, loadWorkContracts } from './task-contract.js';
 import { DEFAULT_SHELL_POLICY, PolicyEngine, type PolicyConfig } from './policy-engine.js';
 import { resolvePolicy } from './policy-config.js';
 import { recordMetrics } from './metrics.js';
-import { enqueueReview } from './queue.js';
+import { enqueueReview, findApprovedReview } from './queue.js';
 import { selectForRisk } from './router.js';
 import { addLearning } from './learnings.js';
 import { invalidScopePattern } from './contract-guard.js';
 import { resolveGitDir } from './sandbox.js';
-import { splitCommandLine } from './acceptance.js';
+import { canonicalJson, splitCommandLine } from './acceptance.js';
+import { decide, describeDecision } from './decider/engine.js';
+import { queuePolicy, queueRequest } from './decider/policies/queue.js';
 
 export interface OrchestratedOptions {
   workId: string;
@@ -338,20 +340,48 @@ export function runOrchestrated(options: OrchestratedOptions): OrchestratedResul
   }
   const agentRole = selectForRisk(contract.risk.level).role;
 
-  // F2.5: L4 suspende e enfileira na revisão humana, sem executar.
+  // F2.5: L4 suspende e enfileira na revisão humana, sem executar — salvo aprovação
+  // vigente na fila (do operador ou do decisor) para ESTE contrato e ESTE comando.
   if (contract.risk.level === 'L4') {
-    enqueueReview({
-      runId,
-      workId: options.workId,
-      taskId: options.taskId ?? 'WORK',
-      title: contract.title,
-      pausedAtStep: 'pre-execution',
-      reason: 'Tarefa de risco L4 exige aprovação humana na fila AFK',
-      riskLevel: 'L4',
-    }, rootDir);
-    console.error(`⏸  Tarefa L4 suspensa e enviada para a fila de revisão (${runId}).`);
-    console.error(`   Aprove com 'pwn queue approve ${runId}' para destravar a execução (exit code ${EXIT_SUSPENDED}).`);
-    return { status: EXIT_SUSPENDED, stdout: '', stderr: '', runId, diffViolations: [], suspended: true };
+    const taskId = options.taskId ?? 'WORK';
+    const binding = { contract_sha256: crypto.createHash('sha256').update(canonicalJson(contracts)).digest('hex'), command: options.command };
+    const approved = findApprovedReview(options.workId, taskId, binding, rootDir);
+    if (approved) {
+      console.error(`▶  Tarefa L4 aprovada na fila (${approved.runId}): executando.`);
+    } else {
+      const verdict = decide({
+        rootDir,
+        workId: options.workId,
+        taskId,
+        risk: 'L4',
+        policy: queuePolicy,
+        request: () => queueRequest(contracts, options.command),
+      });
+      const record = verdict.kind === 'decided' ? verdict.record : null;
+      if (record) for (const line of describeDecision(record)) console.error(line);
+      else if (verdict.kind === 'human' && verdict.reason) console.error(`[DECISOR] ${verdict.reason}`);
+      const item = {
+        runId,
+        workId: options.workId,
+        taskId,
+        title: contract.title,
+        pausedAtStep: 'pre-execution',
+        reason: record ? `Tarefa de risco L4: ${record.reasons.join('; ')}` : 'Tarefa de risco L4 exige aprovação humana na fila AFK',
+        riskLevel: 'L4',
+        payload: { ...binding, decision_id: record?.decision_id ?? null },
+      };
+      if (record?.outcome === 'reject') {
+        enqueueReview(item, rootDir, 'rejected');
+        return { status: 1, stdout: '', stderr: `[DECIDER REJECTED] execução L4 recusada pelo decisor (${runId}): ${record.reasons.join('; ')}`, runId, diffViolations: [], suspended: false };
+      }
+      if (record?.outcome !== 'approve') {
+        enqueueReview(item, rootDir);
+        console.error(`⏸  Tarefa L4 suspensa e enviada para a fila de revisão (${runId}).`);
+        console.error(`   Aprove com 'pwn queue approve ${runId}' e rode de novo o mesmo comando (exit code ${EXIT_SUSPENDED}).`);
+        return { status: EXIT_SUSPENDED, stdout: '', stderr: '', runId, diffViolations: [], suspended: true };
+      }
+      enqueueReview(item, rootDir, 'approved');
+    }
   }
 
   const policyOverrides = buildPolicyOverrides(contract, rootDir);

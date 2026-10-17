@@ -12,6 +12,7 @@ node_modules/
 .pwn/batch.json
 .pwn/*.lock/
 queue/review/
+.pwn/decisions/
 
 # Segredos e caches de veredicto: nunca versionar (a chave HMAC assina os gates)
 .pwn/.verifier_key

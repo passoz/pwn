@@ -6,6 +6,7 @@ import {
   DEFAULT_KEY_ENV,
   DEFAULT_MAX_RISK,
   HOST_DECIDER_ENV,
+  projectIdentity,
   readDeciderConfig,
   removeDeciderConfig,
   validateDeciderInput,
@@ -13,11 +14,12 @@ import {
   type DeciderConfig,
   type DeciderInput,
 } from '../core/decider/config.js';
+import { decisionSignatureIsValid, listDecisions } from '../core/decider/ledger.js';
 import { verifierRoot } from '../core/verifier-home.js';
 
 const USAGE = [
   'pwn init                                   Inicializa o PWN no projeto e pergunta pela configuração do decisor',
-  'pwn init --decider <provedor:modelo> [--decider-key-env VAR] [--decider-max-risk L0..L4]',
+  'pwn init --decider <provedor:modelo> [--decider-key-env VAR] [--decider-max-risk L0..L4] [--decider-endpoint URL]',
   '                                           Configura o decisor sem perguntar (CI, terminal sem TTY)',
   'pwn init --no-decider                      Registra que o projeto não usa decisor',
 ].join('\n');
@@ -30,7 +32,7 @@ function flagValue(args: string[], name: string): string | null {
 
 function describe(config: DeciderConfig): string {
   return config.enabled
-    ? `decisor ${config.decider} (chave em $${config.key_env}, teto de risco ${config.max_risk})`
+    ? `decisor ${config.decider} (chave em $${config.key_env}, teto de risco ${config.max_risk}${config.endpoint ? `, endpoint ${config.endpoint}` : ''})`
     : 'sem decisor: as decisões do operador continuam com você';
 }
 
@@ -53,7 +55,7 @@ async function ask(previous: DeciderConfig | null): Promise<DeciderInput | null>
     const decider = await question('Decisor (<provedor>:<modelo>)', current?.decider ?? process.env[HOST_DECIDER_ENV]?.trim() ?? DEFAULT_DECIDER);
     const keyEnv = await question('Variável de ambiente com a chave da API', current?.key_env ?? DEFAULT_KEY_ENV);
     const maxRisk = await question('Teto de risco decidido pelo modelo; acima dele a decisão volta para você', current?.max_risk ?? DEFAULT_MAX_RISK);
-    return validateDeciderInput({ decider, keyEnv, maxRisk });
+    return validateDeciderInput({ decider, keyEnv, maxRisk, endpoint: current?.endpoint ?? null });
   } finally {
     prompt.close();
   }
@@ -90,7 +92,12 @@ export async function initCommand(args: string[]): Promise<number> {
 
   let input: DeciderInput | null;
   if (decider) {
-    input = { decider, keyEnv: flagValue(args, '--decider-key-env') ?? DEFAULT_KEY_ENV, maxRisk: flagValue(args, '--decider-max-risk') ?? DEFAULT_MAX_RISK };
+    input = {
+      decider,
+      keyEnv: flagValue(args, '--decider-key-env') ?? DEFAULT_KEY_ENV,
+      maxRisk: flagValue(args, '--decider-max-risk') ?? DEFAULT_MAX_RISK,
+      endpoint: flagValue(args, '--decider-endpoint'),
+    };
   } else if (args.includes('--no-decider')) {
     input = null;
   } else if (process.stdin.isTTY) {
@@ -116,9 +123,10 @@ export async function initCommand(args: string[]): Promise<number> {
 
 const DECIDER_USAGE = [
   'pwn decider show                           Mostra a configuração do decisor deste projeto',
-  'pwn decider set [--decider <provedor:modelo>] [--decider-key-env VAR] [--decider-max-risk L0..L4]',
+  'pwn decider set [--decider <provedor:modelo>] [--decider-key-env VAR] [--decider-max-risk L0..L4] [--decider-endpoint URL|default]',
   '                                           Cria ou altera a configuração; campos omitidos mantêm o valor atual',
   'pwn decider remove                         Remove a configuração: o projeto passa a não usar decisor',
+  'pwn decider log [--work NNNN]              Decisões tomadas pelo decisor, com motivos e assinatura conferida',
 ].join('\n');
 
 export function deciderCommand(action: string, args: string[]): number {
@@ -142,10 +150,12 @@ export function deciderCommand(action: string, args: string[]): number {
           console.error('✗ não há decisor configurado: informe --decider <provedor:modelo>');
           return 1;
         }
+        const endpoint = flagValue(args, '--decider-endpoint');
         const config = writeDeciderConfig(repositoryRoot, {
           decider,
           keyEnv: flagValue(args, '--decider-key-env') ?? current?.key_env ?? DEFAULT_KEY_ENV,
           maxRisk: flagValue(args, '--decider-max-risk') ?? current?.max_risk ?? DEFAULT_MAX_RISK,
+          endpoint: endpoint === 'default' ? null : (endpoint ?? current?.endpoint ?? null),
         });
         console.log(`✓ ${describe(config)}`);
         if (config.enabled && !process.env[config.key_env]) {
@@ -158,6 +168,22 @@ export function deciderCommand(action: string, args: string[]): number {
           ? '✓ configuração removida: o projeto não usa decisor'
           : 'nenhuma configuração para remover');
         return 0;
+      case 'log': {
+        const workId = flagValue(args, '--work');
+        const records = listDecisions(projectIdentity(repositoryRoot)).filter((record) => !workId || record.work_id === workId);
+        if (!records.length) {
+          console.log('nenhuma decisão registrada');
+          return 0;
+        }
+        for (const record of records) {
+          const tokens = record.usage ? `, ${record.usage.input_tokens}+${record.usage.output_tokens} tokens` : '';
+          const signature = decisionSignatureIsValid(record) ? 'assinatura ok' : 'ASSINATURA INVÁLIDA';
+          console.log(`${record.created_at}  ${record.point.padEnd(7)} ${record.work_id}/${record.task_id}  ${record.outcome}${record.action ? ` (${record.action})` : ''}`);
+          console.log(`  ${record.decision_id} — ${record.model ?? record.decider}${tokens}, ${signature}`);
+          for (const reason of record.reasons) console.log(`  · ${reason}`);
+        }
+        return 0;
+      }
       default:
         console.error(`Ação desconhecida para 'pwn decider': ${action || '(vazia)'}\n\nUso:\n${DECIDER_USAGE}`);
         return 1;

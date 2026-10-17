@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createDefaultContractV4, type RiskLevel, type TaskContractV4 } from './contract-engine.js';
 import type { Plan, PlanAC, PlanComponent, PlanTask } from './plan-renderer.js';
+import { decide } from './decider/engine.js';
+import { riskPolicy, riskRaises, riskRequest, type RiskTask } from './decider/policies/risk.js';
 
 // ── v3 → pwn import ──────────────────────────────────────────
 //
@@ -537,6 +539,34 @@ export function deriveTaskRisk(task: PlanTask): RiskLevel {
   return 'L2';
 }
 
+/**
+ * `--risk auto` com decisor no projeto: o modelo pode SUBIR o risco heurístico (até L3,
+ * com confiança mínima), nunca rebaixar. Sem decisor, ou indisponível, vale a heurística.
+ */
+function raiseRiskByDecider(rootDir: string, workId: string, tasks: PlanTask[], riskMapping: V3ImportResult['riskMapping'], warnings: string[]): void {
+  const candidates: RiskTask[] = tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.behavior,
+    files: task.files,
+    deterministic: riskMapping.find((entry) => entry.task === task.id)!.risk,
+  }));
+  const result = decide({ rootDir, workId, taskId: 'WORK', policy: riskPolicy(candidates), request: () => riskRequest(candidates) });
+  if (result.kind === 'human') {
+    if (result.reason) warnings.push(`--risk auto: ${result.reason}; risco heurístico mantido.`);
+    return;
+  }
+  const { record } = result;
+  if (!record.answers) {
+    warnings.push(`--risk auto: ${record.reasons.join('; ')}; risco heurístico mantido (registro ${record.decision_id}).`);
+    return;
+  }
+  for (const raise of riskRaises(record.answers, candidates)) {
+    riskMapping.find((entry) => entry.task === raise.task)!.risk = raise.to;
+    warnings.push(`Task ${raise.task}: risco elevado pelo decisor de ${raise.from} para ${raise.to} (confiança ${raise.confidence.toFixed(2)}, registro ${record.decision_id}).`);
+  }
+}
+
 /** Best-effort mapping of a task to a capability id from the map. */
 export function mapTaskToCapability(task: PlanTask, map: CapabilityMap): { id: string; score: number } {
   const haystack = tokens(capabilityHaystack(task));
@@ -617,6 +647,7 @@ export function importV3Work(options: V3ImportOptions): V3ImportResult {
     }
     riskMapping.push({ task: task.id, risk: risk === 'auto' ? deriveTaskRisk(task) : risk });
   }
+  if (risk === 'auto') raiseRiskByDecider(rootDir, workId, plan.tasks, riskMapping, warnings);
 
   const workDir = path.join(rootDir, '.pwn', 'work', workId);
   fs.mkdirSync(workDir, { recursive: true });

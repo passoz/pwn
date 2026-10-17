@@ -22,12 +22,16 @@ export function getQueueDir(rootDir: string = process.cwd()): string {
   return qDir;
 }
 
-export function enqueueReview(item: Omit<QueueItem, 'createdAt' | 'status'>, rootDir: string = process.cwd()): QueueItem {
+export function enqueueReview(
+  item: Omit<QueueItem, 'createdAt' | 'status'>,
+  rootDir: string = process.cwd(),
+  status: QueueItem['status'] = 'pending_review',
+): QueueItem {
   const qDir = getQueueDir(rootDir);
   const fullItem: QueueItem = {
     ...item,
     createdAt: new Date().toISOString(),
-    status: 'pending_review',
+    status,
   };
 
   const filePath = path.join(qDir, `${item.runId}.json`);
@@ -51,6 +55,27 @@ export function listQueueItems(rootDir: string = process.cwd()): QueueItem[] {
   }
 
   return items;
+}
+
+/** Vínculo de uma aprovação L4: vale só para o contrato e o comando que foram revisados. */
+export interface ReviewBinding {
+  contract_sha256: string;
+  command: string[];
+}
+
+/** Aprovação vigente na fila para a task, com o mesmo contrato e o mesmo comando. */
+export function findApprovedReview(workId: string, taskId: string, binding: ReviewBinding, rootDir: string = process.cwd()): QueueItem | null {
+  const wanted = JSON.stringify(binding.command);
+  return (
+    listQueueItems(rootDir).find(
+      (item) =>
+        item.status === 'approved' &&
+        item.workId === workId &&
+        item.taskId === taskId &&
+        item.payload?.contract_sha256 === binding.contract_sha256 &&
+        JSON.stringify(item.payload?.command) === wanted,
+    ) ?? null
+  );
 }
 
 export function updateQueueStatus(

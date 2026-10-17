@@ -382,3 +382,33 @@ mesmo em arquivos diferentes; mantenha componentes honestos no plano, porque ele
 segundo filtro. Integre com o comando de regressão do plano. Rode `pwn verify run-all`
 uma vez, depois do último lote: verificar no worktree ou entre lotes só gera recibos que
 a próxima integração invalida.
+
+## 11. Operador-decisor: coerência, não verdade
+
+**Afirmação.** Com decisor configurado (`pwn decider`), aprovação de critérios, fila L4 (com
+teto L4), tasks retidas no lote e elevação de `--risk auto` deixam de esperar o operador. O
+modelo responde só perguntas tipadas (sim/não com probabilidade, escolha fechada, nível de
+rubrica); a política no código aplica limiares e, na dúvida ou sem decisor disponível, devolve a
+decisão ao operador. Cada decisão é assinada pelo verificador.
+
+**O que não garante.**
+- **Injeção pelo texto do repositório.** O agente escreve o plano, o `behavior` e os testes
+  que o decisor lê. O estado vai rotulado como dados, e a resposta tipada impede saída fora de
+  formato, mas não impede manipulação semântica do conteúdo.
+- **Coerência, não verdade.** Se o requisito inventado pelo agente for coerente com os testes
+  inventados por ele, a aprovação passa. O decisor aprova critérios; a prova de execução
+  continua sendo o recibo de `pwn verify run`, que ele não substitui.
+- **Mesmo usuário do sistema.** A configuração fica fora do repositório, mas o agente roda como
+  o operador: pode, em tese, chamar `pwn decider set`, exportar a variável da chave ou apontar
+  `--decider-endpoint` para outro servidor (vale o §2b). O registro guarda o modelo que
+  respondeu e a assinatura do verificador, não o endpoint nem quem configurou o decisor.
+- **Limiares não calibrados.** Os números das políticas (`src/core/decider/policies/`) são
+  pontos de partida do desenho; calibrar exige comparar decisões do modelo com as do operador
+  em Works reais.
+
+**Evidência.** `src/core/decider/engine.ts` (`governance`, `decide`: sem configuração não há
+chamada; indisponível vira `escalate`); `contract.ts` (`validateResponse`: resposta fora do
+contrato é indisponibilidade); `ledger.ts` (assinatura Ed25519); políticas em `policies/`.
+
+**Em vez disso.** Para decisões que exigem julgamento de produto, rode com `--operator human`
+ou aprove com `--by`. Revise `pwn decider log` periodicamente. Mantenha o teto padrão (L3).

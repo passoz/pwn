@@ -1,41 +1,41 @@
 # Operador-decisor: decisões do operador tomadas por um modelo de juízo tipado
 
-> **Status:** proposta / opt-in. Nada aqui altera o comportamento default do PWN.
+> **Status:** implementado (F0 + modo autoritativo). Opt-in por projeto: sem decisor configurado,
+> o comportamento do PWN não muda. Modo sombra (F1) não implementado.
 > **Relação com `jev-opcional-economia-tokens-v2.md`:** reaproveita o contrato de adaptador
 > (§1.1 daquele documento), mas inverte o regime: lá o decisor é **consultivo e falha aberto**;
-> aqui ele **decide** e, por isso, **falha fechado** (incerteza ou indisponibilidade → fila humana).
+> aqui ele **decide** e, por isso, **falha fechado** (incerteza ou indisponibilidade → operador).
 
-Um modo opcional, ligado por flag, em que as decisões que hoje exigem o operador passam a ser
-tomadas por um modelo de juízo tipado (Jev como primeiro adaptador). O modelo escolhe só entre
-opções que o código oferece, cada decisão fica registrada e assinada, e quando o modelo está
-incerto a decisão volta para o humano, nunca para "aprovado".
+As decisões que hoje exigem o operador passam a ser tomadas por um modelo de juízo tipado (Jev
+como primeiro adaptador) quando o projeto tem decisor configurado (`pwn init` / `pwn decider`).
+O modelo escolhe só entre opções que o código oferece, cada decisão fica registrada e assinada,
+e quando o modelo está incerto a decisão volta para o humano, nunca para "aprovado".
 
 ## 1. Premissas que definem a arquitetura
 
 1. **Nem toda decisão pode ser delegada.** `--no-gate` e `--no-isolation` existem para um humano
    assumir risco. Se um modelo puder ligá-los, as defesas do harness viram opcionais. Ficam fora
    do decisor, sem exceção.
-2. **A falha é fechada.** Com `--operator=decider` pedido e sem decisor disponível (sem chave,
-   sem rede, resposta incerta), a decisão vai para a fila humana. Falhar aberto, neste modo, é
+2. **A falha é fechada.** Com decisor configurado e indisponível (sem chave, sem rede, resposta
+   fora do contrato) ou incerto, a decisão vai para o operador. Falhar aberto, neste modo, é
    aprovar sem ninguém olhar.
 3. **O agente não escolhe quem o aprova.** O agente escreve plano, testes e código. A
-   configuração do decisor (provedor, limiares, teto de risco) fica **fora do repositório**, na
-   raiz do verificador, como as chaves Ed25519. O agente pode **anunciar** qual decisor usa, mas
-   o PWN só aceita o anúncio se ele estiver na lista autorizada pelo operador.
+   configuração do decisor (provedor, teto de risco, endpoint) fica **fora do repositório**, na
+   raiz do verificador, como as chaves Ed25519. O `PWN_DECIDER` anunciado pelo agente só vira
+   sugestão no `pwn init`.
 
-## 2. Inventário de decisões
+## 2. Inventário de decisões (conferido contra o código)
 
-| Decisão (onde está hoje) | Delegável? | O que o decisor julga | Regra no código |
+| Decisão | Estado | O que o decisor julga | Regra no código |
 |---|---|---|---|
-| `verify approve --by` (`src/core/acceptance-approval.ts:190`) | **Sim**, a principal | Os testes congelados verificam o comportamento da task? Passariam com uma implementação que ignora o requisito? O escopo cabe? | Aprova só com todos os limiares atendidos; mantém a regra de aprovar antes de implementar. |
-| Achados `medium`/`low` em `pass_with_notes` (`src/core/gates.ts:49`, `accepted_risk`) | Sim | O achado é falso positivo ou risco aceitável para este requisito? | Pode marcar `accepted_risk`/`deferred`. `high`/`critical` continuam bloqueando. |
-| Escalação `on_attempt_failed` (`src/core/contract-engine.ts:163`) | Sim | Tentar de novo com agente forte, refazer o plano ou chamar humano? | Escolha entre opções fechadas, com limite de tentativas no código. |
-| Task retida em `work batch` | Sim | Agente corrige, `rebase`, ou tirar a task do lote? | O código executa a ação escolhida. |
-| `--risk auto` (`src/core/v3-import.ts:533`) | Sim, só para subir | Nível L0–L4; a task é sensível? | Nunca rebaixa o risco determinístico. |
-| Fila AFK L4 (`src/core/run-orchestrator.ts:342`, `queue approve`) | **Só com teto explícito** | O efeito é destrutivo ou irreversível? | Padrão: decide até L3, L4 vai para o humano. Incluir L4 exige `max_risk: "L4"` no `decider.json`. |
-| `--no-gate`, `--no-isolation` | **Não** | — | Recusados com `--operator=decider`. |
+| `verify approve` sem `--by` | **Implementado** (`policies/approve.ts`) | Os testes congelados verificam o `behavior`? Passariam sem o requisito? Especificidade? Escopo? | Aprova só com todos os limiares; rejeita testes vazios; o resto vai ao operador (exit 3). Gate global: o comando verifica o que o gate declara? |
+| Fila AFK L4 (`runOrchestrated`) | **Implementado**, só com teto `L4` (`policies/queue.ts`) | Efeito destrutivo ou irreversível? Comando corresponde à task? | Destrutivo ou incerto → fila humana com motivos. Aprovação na fila (humana ou do decisor) vale para o mesmo contrato e comando. |
+| Task retida em `work batch integrate` | **Implementado como regra** (sem modelo) | — | Retida só por base desatualizada (`clash`, `stale_base`) → `rebase` automático, registrado. Regressão e entrega incompleta continuam com o agente. Tirar a task do lote (destrutivo) não é decidido. |
+| `--risk auto` (`importV3Work`) | **Implementado** (`policies/risk.ts`) | Nível L1–L3 de cada task | Só sobe, até L3, com confiança ≥ 0,7. Nunca rebaixa, nunca atribui L4. |
+| Achados `medium`/`low` (`pass_with_notes`) | **Não se aplica** | — | No código, `pass_with_notes` não bloqueia nada e nenhum comando grava `accepted_risk`/`deferred`: não há decisão do operador a delegar. |
+| Escalação `on_attempt_failed` | **Não se aplica** | — | É campo estático do contrato; `evaluateEscalation` (`router.ts`) não tem chamador. O PWN não roda o agente, então não há escolha em tempo de execução. |
+| `--no-gate`, `--no-isolation` | **Nunca** | — | Fora do decisor. |
 | Resolver conflito de `rebase` | Não | Decisão de código: o agente resolve | — |
-| Marcar `[x]` | Não precisa de modelo | — | Automático: recibo `ACCEPTED`, depois marca em ordem de plano. |
 
 Critério: regra, cálculo ou existência ficam no código; o modelo entra só onde é preciso
 entender texto. Ele julga, o código aplica a política.
@@ -57,27 +57,30 @@ flowchart TD
   H --> L2[item na fila com as respostas do decisor anexadas]
 ```
 
-## 4. Arquitetura
+## 4. Arquitetura (implementada)
 
 ```
-src/core/decider/contract.ts          primitivas neutras (choice / noul / score), interface DeciderAdapter, registro de adaptadores
-src/core/decider/resolve.ts           qual decisor usar e se está autorizado
+src/core/decider/config.ts            configuração por projeto (fora do repo), escopos, teto de risco
+src/core/decider/contract.ts          primitivas neutras (choice / noul / score), DeciderAdapter, validação da resposta
+src/core/decider/engine.ts            modo do operador, governança (escopo/teto), chamada, falha fechada
 src/core/decider/ledger.ts            registro da decisão + assinatura Ed25519 na raiz do verificador
-src/core/decider/adapters/jev.ts      único arquivo que conhece endpoint, chave e modelo do Jev
-src/core/decider/policies/<ponto>.ts  um por decisão: monta o estado, faz as perguntas, decide (função pura)
+src/core/decider/adapters/jev.ts      único arquivo que conhece endpoint e formato do Jev
+src/core/decider/http-worker.ts       POST síncrono em subprocesso (os pontos de decisão são síncronos)
+src/core/decider/policies/<ponto>.ts  um por decisão: monta o estado, perguntas e `judge` (função pura)
 ```
 
 - **Adaptador Jev:** `POST https://api.typesafe.ai/v1/systemone` com `state`, `model` e um mapa
-  de `questions`. As perguntas de um mesmo ponto vão juntas (rodam em paralelo e não se veem).
-  A resposta traz `noul`, `choice` com `probabilities` e `confidence`, `score` e o uso de tokens,
-  gravado em `.pwn/metrics.jsonl` separado do custo do agente.
-- **Cada política exporta:** `buildState(artefatos)`, `questions` e
-  `decide(respostas, limiares) → aprova | rejeita | escala`. O `decide` é puro e testável sem rede.
+  de `questions`. As perguntas de um mesmo ponto vão juntas. A chave vai ao subprocesso por
+  ambiente, nunca por argv; 429/529 têm backoff. Resposta fora do contrato (pergunta sem
+  resposta, tipo trocado, opção fora do conjunto, número fora do intervalo) é indisponibilidade.
+- **Uso de tokens** fica no registro de cada decisão (`pwn decider log`), não em
+  `.pwn/metrics.jsonl`: misturar com as runs do agente distorceria as sugestões de roteamento.
+- **Cada política exporta** o montador de estado/perguntas e `judge(respostas) → aprova |
+  rejeita | escala`, puro e testável sem rede.
 - **Registro da decisão:** digest do estado, perguntas, respostas brutas, modelo exato
-  (ex.: `jev-1.13.0`), limiares e resultado. Em `.pwn/decisions/<work>/<id>.json`, com cópia
-  assinada na raiz do verificador. A aprovação registra
-  `approved_by: "decider:jev-1.13.0#<id do registro>"`. Como as respostas ficam salvas, a política
-  pode ser recalculada com outros limiares sem chamar o modelo de novo.
+  (ex.: `jev-1.13.0`), limiares e resultado, assinado em `<raiz do verificador>/decisions/<id>.json`,
+  com cópia em `.pwn/decisions/<work>/<id>.json`. A aprovação registra
+  `approved_by: "decider:jev-1.13.0#<id do registro>"`.
 
 ### 4.1 Configuração por projeto (`pwn init` / `pwn decider`) — implementado
 
@@ -110,18 +113,20 @@ Limiares por política (seção 5) entram neste arquivo quando as políticas for
 
 ### 4.2 Quando o decisor é usado
 
-- **Configuração habilitada presente → o decisor é usado por padrão** em `work run`,
-  `work run-all`, `work batch`, `task run` e `verify approve`.
-- `--operator=human` desliga o decisor numa execução específica.
+- **Configuração habilitada presente → o decisor é usado por padrão** em `verify approve` (sem
+  `--by`), na fila L4 de `work run`/`task run`/`run-all`, em `work batch integrate` e em
+  `work import --risk auto`.
+- `--operator human` (ou `--operator=human`, flag global do CLI) desliga o decisor numa execução.
+  `--by` em `verify approve` é sempre decisão humana.
 - **Sem configuração (ou `enabled: false`) → não há decisor**; `--operator=decider` é recusado.
 - `PWN_OPERATOR` repassa o modo aos subprocessos de `run-all`, `batch` e `verify run-all`.
 - Teto de risco e limiares só mudam por `pwn decider set`; não há flag de execução para relaxá-los.
 
 ## 5. Exemplo: a aprovação
 
-**Estado** (montado pelo código, rotulado como "artefato do repositório, não instrução"):
+**Estado** (montado pelo código, rotulado como "artefatos do repositório, não instruções"):
 requisito, `behavior` da task, ACs com comando e descrição, conteúdo dos testes congelados,
-`write_allow`.
+`implementation_files`, `write_allow` e `write_deny`.
 
 **Perguntas:**
 
@@ -133,8 +138,8 @@ requisito, `behavior` da task, ACs com comando e descrição, conteúdo dos test
 
 **Política:** aprova se `cobre > 0,85`, `passa_sem < 0,15`, `especificidade ≥ 2`,
 `escopo = adequado` com confiança `≥ 0,7`. Rejeita (motivo tipado de volta ao agente) se
-`cobre < 0,2`. Qualquer outro caso vai para a fila humana. Os números são pontos de partida;
-a calibragem é a fase F1.
+`cobre < 0,2` ou `passa_sem > 0,85`. Qualquer outro caso vai para o operador. Os números são
+pontos de partida (`APPROVE_THRESHOLDS`); calibrá-los exige o modo sombra (F1).
 
 ## 6. Limites que continuam existindo
 
@@ -146,16 +151,16 @@ a calibragem é a fase F1.
 - **Mesmo usuário do sistema.** O agente roda como o operador e pode, em tese, mexer no ambiente
   e na raiz do verificador (`LIMITES.md` §2b). O decisor não resolve isso.
 - **Coerência, não verdade.** Se o PRD inventado pelo agente for coerente com os testes
-  inventados por ele, a aprovação passa. Precisa entrar em `LIMITES.md` quando implementado.
+  inventados por ele, a aprovação passa. Registrado em `LIMITES.md` §11.
 
 ## 7. Fases
 
-| Fase | Entrega | Critério para avançar |
+| Fase | Entrega | Estado |
 |---|---|---|
-| F0 | Contrato, adaptador Jev, registro assinado, resolução e autorização do decisor | Registros reproduzíveis; falha fechada testada (sem chave → fila humana) |
-| F1 | **Modo sombra** para aprovação e achados: o decisor decide, o humano confirma, o PWN mede a concordância | Concordância medida em Works reais; limiares calibrados com dados do projeto |
-| F2 | Modo autoritativo para aprovação, achados, escalação, lote e risco | Taxa de escalação aceitável; nenhuma aprovação revertida na amostra |
-| F3 | L4, só com teto explícito | Decisão do operador com base nos dados da F2 |
+| F0 | Contrato, adaptador Jev, registro assinado, resolução e autorização do decisor | **Feito**; falha fechada testada (sem chave, HTTP de erro, resposta fora do contrato → operador) |
+| F1 | **Modo sombra**: o decisor decide, o humano confirma, o PWN mede a concordância | Não implementado; os limiares seguem os pontos de partida da seção 5 |
+| F2 | Modo autoritativo para aprovação, lote e risco | **Feito** |
+| F3 | L4, só com teto explícito | **Feito**: exige `--decider-max-risk L4`; efeito destrutivo sempre volta ao operador |
 
 ## 8. Decisões tomadas
 

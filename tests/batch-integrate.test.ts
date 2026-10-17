@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -318,6 +318,31 @@ describe('pwn work batch', () => {
       ]);
       expect(stageOf(fx, '1.1')).toMatchObject({ stage: 'VERIFIED', stale: false });
       expect(git(fx.root, 'worktree', 'list').trim().split('\n')).toHaveLength(1);
+    } finally {
+      rmSync(fx.root, { recursive: true, force: true });
+      rmSync(fx.verifierRoot, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test('com decisor no projeto, task retida só por base desatualizada é refeita automaticamente (regra registrada)', () => {
+    const fx = fixture();
+    try {
+      expectOk(pwn(fx, fx.root, 'decider', 'set', '--decider', 'jev:jev-latest'), 'decider set');
+      expectOk(pwn(fx, fx.root, 'work', 'batch', 'prepare', '--work', '0001'), 'prepare');
+      const batch = readBatch(fx.root)!;
+      deliver(fx, batch.tasks[0].worktree, SPECS[0]);
+      deliver(fx, batch.tasks[1].worktree, SPECS[1]);
+      writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 5;\n');
+      git(fx.root, 'commit', '-qam', 'mudança concorrente em a.js');
+      writeFileSync(path.join(fx.root, '.pwn', 'batch.json'), `${JSON.stringify({ ...batch, head: git(fx.root, 'rev-parse', 'HEAD').trim() }, null, 2)}\n`);
+
+      const integrated = pwn(fx, fx.root, 'work', 'batch', 'integrate');
+      expect(integrated.status).toBe(1);
+      expect(integrated.stdout).toMatch(/✓ 1\.2 → commit/);
+      expect(integrated.stdout).toMatch(/\[DECISOR\] APROVADO \(rebase\) — rule[\s\S]*Conflitos em 1 arquivo\(s\)[\s\S]*src\/a\.js/);
+      expect(readBatch(fx.root)!.tasks[0].worktree).not.toBe(batch.tasks[0].worktree);
+      const records = readdirSync(path.join(fx.verifierRoot, 'decisions')).map((file) => JSON.parse(readFileSync(path.join(fx.verifierRoot, 'decisions', file), 'utf8')));
+      expect(records).toEqual([expect.objectContaining({ point: 'batch', task_id: '1.1', decider: 'rule', action: 'rebase' })]);
     } finally {
       rmSync(fx.root, { recursive: true, force: true });
       rmSync(fx.verifierRoot, { recursive: true, force: true });

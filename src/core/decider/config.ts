@@ -24,7 +24,12 @@ export const DEFAULT_MAX_RISK: RiskCeiling = "L3";
 /** Anúncio do agente hospedeiro: vira a sugestão padrão no `pwn init`, nunca autorização. */
 export const HOST_DECIDER_ENV = "PWN_DECIDER";
 
-export const DECIDER_SCOPES = ["approve", "findings", "escalation", "batch", "risk"] as const;
+/**
+ * Pontos de decisão do operador que o decisor pode assumir (ver `engine.ts`):
+ * aprovação dos critérios, fila L4, tasks retidas no lote e elevação de `--risk auto`.
+ */
+export const DECIDER_SCOPES = ["approve", "queue", "batch", "risk"] as const;
+export type DecisionPoint = (typeof DECIDER_SCOPES)[number];
 
 export interface EnabledDeciderConfig {
   version: 1;
@@ -34,7 +39,9 @@ export interface EnabledDeciderConfig {
   decider: string;
   key_env: string;
   max_risk: RiskCeiling;
-  scope: string[];
+  scope: DecisionPoint[];
+  /** Endpoint alternativo do provedor (ex.: proxy próprio); `null` = endpoint oficial do adaptador. */
+  endpoint: string | null;
   configured_at: string;
 }
 
@@ -51,10 +58,18 @@ export interface DeciderInput {
   decider: string;
   keyEnv: string;
   maxRisk: string;
+  endpoint?: string | null;
+}
+
+export interface ValidDeciderInput {
+  decider: string;
+  keyEnv: string;
+  maxRisk: RiskCeiling;
+  endpoint: string | null;
 }
 
 /** Valida os valores informados pelo operador; lança com mensagem acionável. */
-export function validateDeciderInput(input: DeciderInput): { decider: string; keyEnv: string; maxRisk: RiskCeiling } {
+export function validateDeciderInput(input: DeciderInput): ValidDeciderInput {
   const decider = input.decider.trim();
   const separator = decider.indexOf(":");
   const provider = separator === -1 ? "" : decider.slice(0, separator);
@@ -69,7 +84,9 @@ export function validateDeciderInput(input: DeciderInput): { decider: string; ke
   if (!(RISK_LEVELS as readonly string[]).includes(maxRisk)) {
     throw new Error(`teto de risco inválido: '${input.maxRisk}' (use ${RISK_LEVELS.join(", ")})`);
   }
-  return { decider, keyEnv, maxRisk: maxRisk as RiskCeiling };
+  const endpoint = input.endpoint?.trim() || null;
+  if (endpoint && !/^https?:\/\/[^\s]+$/.test(endpoint)) throw new Error(`endpoint do decisor inválido: '${endpoint}' (use http(s)://…)`);
+  return { decider, keyEnv, maxRisk: maxRisk as RiskCeiling, endpoint };
 }
 
 /** Raiz canônica do projeto: a mesma configuração vale de qualquer subdiretório ou symlink. */
@@ -113,6 +130,7 @@ export function writeDeciderConfig(
           key_env: valid.keyEnv,
           max_risk: valid.maxRisk,
           scope: [...DECIDER_SCOPES],
+          endpoint: valid.endpoint,
           configured_at: configuredAt,
         };
       })()

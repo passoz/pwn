@@ -95,11 +95,17 @@ export interface BatchManifest {
   tasks: BatchTask[];
 }
 
+/**
+ * Por que a task ficou retida. `clash` e `stale_base` se resolvem refazendo a task sobre
+ * o HEAD integrado (`rebase`); os demais exigem o agente (ou o operador).
+ */
+export type HoldKind = 'delivery' | 'clash' | 'stale_base' | 'regression' | 'commit' | 'interrupted';
+
 export interface IntegrationResult {
   batchId: string;
   workId: string;
   integrated: Array<{ id: string; commit: string; files: string[] }>;
-  failed: Array<{ id: string; reasons: string[] }>;
+  failed: Array<{ id: string; kind: HoldKind; reasons: string[] }>;
   warnings: string[];
   remaining: string[];
 }
@@ -580,7 +586,7 @@ export function integrateBatch(options: { root: string; workId?: string | null; 
     for (const task of manifest.tasks) {
       const inspected = inspectDelivery(root, manifest, task, warnings);
       if (inspected.delivery) deliveries.push(inspected.delivery);
-      else failed.push({ id: task.id, reasons: inspected.reasons });
+      else failed.push({ id: task.id, kind: 'delivery', reasons: inspected.reasons });
     }
 
     // Escopos disjuntos garantem arquivos disjuntos; a checagem real protege contra
@@ -611,37 +617,37 @@ export function integrateBatch(options: { root: string; workId?: string | null; 
         const { task } = delivery;
         const clash = clashes.get(task.id);
         if (clash) {
-          failed.push({ id: task.id, reasons: clash });
+          failed.push({ id: task.id, kind: 'clash', reasons: clash });
           continue;
         }
         if (interrupted) {
-          failed.push({ id: task.id, reasons: [`não aplicada: integração interrompida em ${interrupted}`] });
+          failed.push({ id: task.id, kind: 'interrupted', reasons: [`não aplicada: integração interrompida em ${interrupted}`] });
           continue;
         }
         if (gateTree && regression) {
           const staged = runGit(gateTree.worktreePath, APPLY_ARGS, delivery.patch);
           if (staged.status !== 0) {
-            failed.push({ id: task.id, reasons: [`o diff não aplica sobre o HEAD integrado: ${staged.stderr}`, `refaça a task sobre o HEAD atual: pwn work batch rebase ${task.id}`] });
+            failed.push({ id: task.id, kind: 'stale_base', reasons: [`o diff não aplica sobre o HEAD integrado: ${staged.stderr}`, `refaça a task sobre o HEAD atual: pwn work batch rebase ${task.id}`] });
             continue;
           }
           const check = runRegression(gateTree.worktreePath, regression);
           if (!check.ok) {
             runGit(gateTree.worktreePath, REVERT_ARGS, delivery.patch);
-            failed.push({ id: task.id, reasons: [`regressão falhou com a entrega aplicada sobre o HEAD integrado (\`${displayCommand(regression.command)}\`); a árvore principal não foi tocada:`, ...check.tail.split('\n').map((line) => `  | ${line}`)] });
+            failed.push({ id: task.id, kind: 'regression', reasons: [`regressão falhou com a entrega aplicada sobre o HEAD integrado (\`${displayCommand(regression.command)}\`); a árvore principal não foi tocada:`, ...check.tail.split('\n').map((line) => `  | ${line}`)] });
             continue;
           }
         }
         const applied = runGit(root, APPLY_ARGS, delivery.patch);
         if (applied.status !== 0) {
           if (gateTree) runGit(gateTree.worktreePath, REVERT_ARGS, delivery.patch);
-          failed.push({ id: task.id, reasons: [`o diff não aplica sobre o HEAD: ${applied.stderr}`, `refaça a task sobre o HEAD atual: pwn work batch rebase ${task.id}`] });
+          failed.push({ id: task.id, kind: 'stale_base', reasons: [`o diff não aplica sobre o HEAD: ${applied.stderr}`, `refaça a task sobre o HEAD atual: pwn work batch rebase ${task.id}`] });
           continue;
         }
         const committed = runGit(root, ['commit', '-q', '-m', `pwn batch ${manifest.work_id}/${task.id}: ${task.title}`, '-m', `Lote ${manifest.batch_id}; base ${baseOf(manifest, task)}.`]);
         if (committed.status !== 0) {
           runGit(root, REVERT_ARGS, delivery.patch);
           if (gateTree) runGit(gateTree.worktreePath, REVERT_ARGS, delivery.patch);
-          failed.push({ id: task.id, reasons: [`git commit falhou: ${committed.stderr}`] });
+          failed.push({ id: task.id, kind: 'commit', reasons: [`git commit falhou: ${committed.stderr}`] });
           interrupted = task.id;
           continue;
         }

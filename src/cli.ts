@@ -6,6 +6,7 @@ import { handleTargetCommand } from './commands/target.js';
 import { handleMetricsCommand } from './commands/metrics.js';
 import { handleVerifyCommand } from './commands/verify.js';
 import { deciderCommand, initCommand } from './commands/init.js';
+import { OPERATOR_ENV } from './core/decider/engine.js';
 import { assertLawsPinned } from './core/validator.js';
 
 const VERSION = '0.1.0';
@@ -20,7 +21,7 @@ USO:
 COMANDOS DISPONÍVEIS:
   init                Inicializa o PWN no projeto; pergunta pela configuração do decisor
                       (--decider <provedor:modelo> | --no-decider para não perguntar)
-  decider <ação>      Mostra, cria/altera ou remove a configuração do decisor (show, set, remove)
+  decider <ação>      Configuração e registro do decisor do projeto (show, set, remove, log)
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
                       (init, import, scaffold, gate, specify, contract, plan, run, run-all, batch, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
@@ -41,6 +42,8 @@ COMANDOS DISPONÍVEIS:
 OPÇÕES:
   --help, -h          Exibe esta mensagem de ajuda
   --version, -v       Exibe a versão do pwn
+  --operator <modo>   human: decisões do operador ficam com você nesta execução;
+                      decider: exige o decisor do projeto (padrão: decisor se configurado)
 
 EXEMPLOS:
   pwn self-check
@@ -55,6 +58,7 @@ EXEMPLOS:
   pwn task capsule 1.1 0001
   pwn verify init
   pwn verify approve --work 0001 --task 1.1 --by operador
+  pwn verify approve --work 0001 --task 1.1          (o decisor do projeto decide)
   pwn verify run --work 0001 --task 1.1
   pwn verify run-all --work 0001 --jobs 4
 `);
@@ -77,6 +81,20 @@ export function main(): void {
   if (ownArgs.includes('--version') || ownArgs.includes('-v')) {
     console.log(`pwn v${VERSION}`);
     process.exit(0);
+  }
+
+  // `--operator human|decider` vale para qualquer comando e para os subprocessos que ele
+  // dispara (run-all, batch, verify run-all): vira PWN_OPERATOR no ambiente.
+  const operatorAt = ownArgs.findIndex((arg) => arg === '--operator' || arg.startsWith('--operator='));
+  if (operatorAt !== -1) {
+    const inline = ownArgs[operatorAt].startsWith('--operator=');
+    const mode = inline ? ownArgs[operatorAt].slice('--operator='.length) : ownArgs[operatorAt + 1];
+    if (mode !== 'human' && mode !== 'decider') {
+      console.error(`--operator inválido: '${mode ?? ''}' (use human ou decider)`);
+      process.exit(1);
+    }
+    process.env[OPERATOR_ENV] = mode;
+    args.splice(operatorAt, inline ? 1 : 2);
   }
 
   const command = args[0];

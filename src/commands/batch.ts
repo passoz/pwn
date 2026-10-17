@@ -7,7 +7,11 @@ import {
   readBatch,
   rebaseTask,
   type Deferral,
+  type HoldKind,
+  type IntegrationResult,
+  type RebaseResult,
 } from '../core/batch.js';
+import { describeDecision, governance, recordRuleDecision } from '../core/decider/engine.js';
 import { defaultConcurrency } from '../core/process-pool.js';
 import { getLatestWorkId } from '../core/work-artifacts.js';
 
@@ -49,6 +53,56 @@ function parseJobs(raw: string | null): number {
 
 function finalStep(workId: string): string {
   return `todas as tasks do Work ${workId} estão integradas: rode 'pwn verify run-all --work ${workId}' (uma verificação, na árvore final) e marque [x] em ordem de plano`;
+}
+
+function printRebase(result: RebaseResult): void {
+  console.log(`=== [pwn work batch rebase] ${result.taskId} refeita sobre ${result.base.slice(0, 12)} ===`);
+  console.log(`  worktree: ${result.worktree}`);
+  if (result.conflicts.length) {
+    console.log(`\nConflitos em ${result.conflicts.length} arquivo(s) — resolva no worktree (o harness não escolhe a resolução):`);
+    for (const file of result.conflicts) console.log(`  ${file}`);
+    console.log('Edite os marcadores, depois: git add <arquivos>');
+  } else {
+    console.log('\nEntrega reaplicada sem conflitos.');
+  }
+  const valid = result.evidence.stage === 'VERIFIED' && !result.evidence.stale;
+  if (valid && !result.conflicts.length) {
+    console.log(`Evidência local preservada (${result.evidence.stage}). Rode: pwn work batch integrate`);
+  } else {
+    console.log(`\nEvidência local caducou (${result.evidence.stage}${result.evidence.stale ? ', STALE' : ''}): um arquivo declarado mudou na mescla.`);
+    console.log(`Refaça no worktree: audit baseline → red → green → verify. A entrega original está em ${result.patchFile}.`);
+  }
+}
+
+/** Retenções que `rebase` resolve: a entrega está certa, só a base ficou para trás. */
+const REBASABLE: Partial<Record<HoldKind, true>> = { clash: true, stale_base: true };
+
+/**
+ * Com decisor no projeto, o `rebase` que o operador rodaria à mão vira regra: task
+ * retida só por base desatualizada é refeita sobre o HEAD integrado. Conflito de 3-way
+ * continua com o agente; regressão e entrega incompleta continuam retidas.
+ */
+function autoRebase(root: string, result: IntegrationResult): void {
+  const rebasable = result.failed.filter((entry) => REBASABLE[entry.kind]);
+  if (!rebasable.length || !result.integrated.length || !governance(root, 'batch').config) return;
+  console.log('\n[DECISOR] tasks retidas só por base desatualizada: refazendo sobre o HEAD integrado.');
+  for (const entry of rebasable) {
+    try {
+      const rebased = rebaseTask({ root, taskId: entry.id });
+      const record = recordRuleDecision({
+        rootDir: root,
+        workId: result.workId,
+        taskId: entry.id,
+        point: 'batch',
+        action: 'rebase',
+        reasons: [`retida por ${entry.kind}: ${entry.reasons[0]}`, rebased.conflicts.length ? `conflitos para o agente: ${rebased.conflicts.join(', ')}` : 'reaplicada sem conflitos'],
+      });
+      for (const line of describeDecision(record)) console.log(line);
+      printRebase(rebased);
+    } catch (error) {
+      console.error(`✗ rebase automático de ${entry.id} falhou: ${(error as Error).message}`);
+    }
+  }
 }
 
 export function handleBatchCommand(action: string, options: BatchCommandOptions): number {
@@ -116,6 +170,7 @@ export function handleBatchCommand(action: string, options: BatchCommandOptions)
           for (const reason of entry.reasons) console.error(`    ${reason}`);
         }
         for (const warning of result.warnings) console.warn(`⚠  ${warning}`);
+        autoRebase(root, result);
         if (result.remaining.length) {
           console.error(`\nContinuam no lote: ${result.remaining.join(', ')} — corrija nos worktrees e rode integrate de novo, ou descarte com 'pwn work batch abort'.`);
         } else {
@@ -130,22 +185,7 @@ export function handleBatchCommand(action: string, options: BatchCommandOptions)
       case 'rebase': {
         if (!options.taskArg) throw new Error("informe a task: pwn work batch rebase <task>");
         const result = rebaseTask({ root, taskId: options.taskArg });
-        console.log(`=== [pwn work batch rebase] ${result.taskId} refeita sobre ${result.base.slice(0, 12)} ===`);
-        console.log(`  worktree: ${result.worktree}`);
-        if (result.conflicts.length) {
-          console.log(`\nConflitos em ${result.conflicts.length} arquivo(s) — resolva no worktree (o harness não escolhe a resolução):`);
-          for (const file of result.conflicts) console.log(`  ${file}`);
-          console.log('Edite os marcadores, depois: git add <arquivos>');
-        } else {
-          console.log('\nEntrega reaplicada sem conflitos.');
-        }
-        const valid = result.evidence.stage === 'VERIFIED' && !result.evidence.stale;
-        if (valid && !result.conflicts.length) {
-          console.log(`Evidência local preservada (${result.evidence.stage}). Rode: pwn work batch integrate`);
-        } else {
-          console.log(`\nEvidência local caducou (${result.evidence.stage}${result.evidence.stale ? ', STALE' : ''}): um arquivo declarado mudou na mescla.`);
-          console.log(`Refaça no worktree: audit baseline → red → green → verify. A entrega original está em ${result.patchFile}.`);
-        }
+        printRebase(result);
         return result.conflicts.length ? 1 : 0;
       }
 

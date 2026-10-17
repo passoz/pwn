@@ -333,6 +333,9 @@ Quando o PWN é executado em modo não supervisionado (AFK - *Away From Keyboard
 - **Diretório da Fila:** `queue/review/<run-id>.json`
 - **Sinal de suspensão:** a run sai com **exit code `3`** (não `0`), para que loops AFK não tratem
   "não executou, aguarda humano" como sucesso. O manifest do Work **não** é sincronizado nesse caso.
+- **Decisor:** com `max_risk: L4` no decisor do projeto, o modelo pode aprovar a execução L4; se
+  julgar efeito destrutivo possível, ou estiver incerto, a task vai para a fila como sempre, com
+  os motivos anexados. Com o teto padrão (L3), L4 continua só com o operador.
 
 ### Interagindo com a Fila via CLI:
 
@@ -340,7 +343,7 @@ Quando o PWN é executado em modo não supervisionado (AFK - *Away From Keyboard
    ```bash
    bun bin/pwn.js queue list
    ```
-2. **Aprovar uma tarefa suspensa:**
+2. **Aprovar uma tarefa suspensa** (depois, rode de novo o mesmo comando; a aprovação vale só para ele e para o contrato revisado):
    ```bash
    bun bin/pwn.js queue approve RUN-001
    ```
@@ -416,11 +419,23 @@ Guarda aprendizados e convenções descobertas durante execuções locais em `.p
 
 ## 13. Referência de Comandos do CLI
 
-### `pwn init [--decider <provedor:modelo> [--decider-key-env VAR] [--decider-max-risk L0..L4] | --no-decider]`
+### `pwn init [--decider <provedor:modelo> [--decider-key-env VAR] [--decider-max-risk L0..L4] [--decider-endpoint URL] | --no-decider]`
 Inicializa o PWN no projeto (precisa de um repositório Git) e **sempre pergunta** se o projeto usa um modelo decisor no lugar do operador: modelo, variável de ambiente com a chave da API e teto de risco. Se o agente hospedeiro exportar `PWN_DECIDER`, o valor vira a sugestão padrão. Sem terminal, use as flags; sem elas, o projeto é registrado sem decisor (ou a configuração existente é mantida) e o comando não trava. A configuração fica fora do repositório, em `<raiz do verificador>/deciders/` (modo `0600`); a chave nunca é gravada. Desenho completo em [future/operador-decisor.md](future/operador-decisor.md).
 
-### `pwn decider <show|set|remove>`
-Altera a configuração do decisor depois do init. `show` mostra a atual; `set [--decider …] [--decider-key-env …] [--decider-max-risk …]` cria uma configuração ou altera só os campos informados; `remove` apaga a configuração, e o projeto passa a não usar decisor.
+### `pwn decider <show|set|remove|log>`
+Altera a configuração do decisor depois do init. `show` mostra a atual; `set [--decider …] [--decider-key-env …] [--decider-max-risk …] [--decider-endpoint URL|default]` cria uma configuração ou altera só os campos informados; `remove` apaga a configuração, e o projeto passa a não usar decisor; `log [--work NNNN]` lista as decisões tomadas, com modelo, tokens, motivos e assinatura conferida.
+
+### Operador-decisor
+Com decisor configurado, as decisões do operador passam ao modelo, por padrão:
+
+| Ponto | O modelo julga | O código faz |
+|---|---|---|
+| `verify approve` sem `--by` | testes congelados × `behavior`, especificidade, escopo | aprova, rejeita ou devolve ao operador (exit `3`) |
+| Fila L4 (`work run`, `task run`) | efeito destrutivo; comando × task | só com teto `L4`; destrutivo volta para a fila humana |
+| Task retida no lote | — (regra) | `rebase` automático quando só a base ficou para trás |
+| `work import --risk auto` | sensibilidade de cada task | só sobe o risco, até L3 |
+
+Sem decisor configurado (ou `enabled: false`), tudo funciona como sempre e nenhum modelo é chamado. `--operator human` (ou `PWN_OPERATOR=human`) devolve as decisões ao operador numa execução; `--operator decider` exige o decisor e falha se ele não existir. A flag vale para os subprocessos (`run-all`, `batch`, `verify run-all`). **Falha fechada:** sem chave, sem rede, HTTP de erro ou resposta fora do formato, a decisão volta para o operador. Cada decisão é assinada com a chave Ed25519 do verificador em `<raiz do verificador>/decisions/`, com cópia em `.pwn/decisions/<work>/`. `--no-gate`, `--no-isolation` e conflitos de `rebase` nunca são decididos pelo modelo.
 
 ### `pwn validate [--work <work-id>]`
 Valida os documentos normativos do projeto contra os JSON Schemas formais (ajv).
@@ -466,7 +481,9 @@ arquivos, RED e ACs):
 
 **L4 nunca é atribuído automaticamente** — ele suspende a execução para revisão humana, o que
 precisa ser decisão deliberada do operador. O comando imprime o mapa `task→risco` e
-`task→capability` para revisão.
+`task→capability` para revisão. Com decisor no projeto, o modelo pode **subir** o risco
+heurístico de uma task (até L3, com confiança ≥ 0,7), nunca rebaixar; cada elevação aparece
+no mapa e fica no registro do decisor.
 
 ### `pwn work contract [--work <work-id>]`
 Valida os **contratos V4 congelados** do Work: carrega `plan.json`, resolve o `contract_id` de cada
@@ -530,7 +547,7 @@ Lotes paralelos de tasks de um Work (fluxo completo na seção 8).
 - **`plan`** mostra o lote ativo ou o próximo lote, com o motivo de cada task adiada.
 - **`prepare`** cria um worktree por task. Com `--tasks`, cada task pedida precisa estar pronta e ser compatível com as outras; senão, nada é criado.
 - **`integrate [-- <regressão do plano>] [--timeout-seconds S]`** aplica as entregas aprovadas, um commit por task. Com o comando após `--` (precisa ser um declarado no plano), cada entrega é testada num worktree temporário sobre o HEAD já integrado antes de entrar; a que quebra a suíte fica retida e a árvore principal não é tocada. Exit `1` se alguma continuar no lote.
-- **`rebase <task>`** refaz uma task retida sobre o HEAD atual (`git apply --3way` num worktree novo). Conflitos ficam no worktree com marcadores; o agente resolve e roda `git add`. Reavalia a evidência local e informa se o audit precisa ser refeito. Exit `1` se houver conflito.
+- **`rebase <task>`** refaz uma task retida sobre o HEAD atual (`git apply --3way` num worktree novo). Conflitos ficam no worktree com marcadores; o agente resolve e roda `git add`. Reavalia a evidência local e informa se o audit precisa ser refeito. Exit `1` se houver conflito. Com decisor no projeto, `integrate` já roda o `rebase` das tasks retidas só por base desatualizada (arquivo alterado por task anterior do lote, ou diff que não aplica mais), registrando a decisão como regra; regressão quebrada e entrega incompleta continuam retidas para o agente.
 - **`abort`** remove os worktrees e o manifesto, e o trabalho não integrado se perde.
 
 ### `pwn work audit <ação> [--work <work-id>] [--task <task-id>] [--name <nome>] [--expect <texto>] -- <comando>...`
@@ -588,7 +605,7 @@ bun bin/pwn.js work status --coverage --work 0001
 **Aceitação independente.** É o **único** caminho para concluir uma task ou um gate global. O verificador vive fora do repositório (raiz protegida `0700`: `~/.config/pwn/verifier` ou `PWN_VERIFIER_HOME`), com par de chaves **Ed25519**, runtime aprovado e `bwrap` detectados no host. O agente avaliado nunca alcança a chave privada.
 
 - **`init`** — cria a raiz protegida quando ausente (`config.json`, `keys/verifier-private.pem`, `keys/verifier-public.pem`, `approvals/`, `receipts/`). Detecta o runtime (`process.execPath`) e o `bwrap`; se `bwrap` não existir, a aceitação fica bloqueada. Imprime a impressão digital da chave pública.
-- **`approve --by <responsável> [--task T | --global G-n]`** — o **operador** aprova um pacote **imutável**: os checks do plano (comando exatamente como declarado) e uma **cópia do conteúdo** dos testes de aceitação congelados, gravada na raiz protegida. Exige `frozen_tests` no contrato e confere que o `sha256` do arquivo bate com o congelado. Recusa se a raiz do verificador estiver **dentro** do repositório avaliado.
+- **`approve [--by <responsável>] [--task T | --global G-n]`** — aprova um pacote **imutável**: os checks do plano (comando exatamente como declarado) e uma **cópia do conteúdo** dos testes de aceitação congelados, gravada na raiz protegida. Exige `frozen_tests` no contrato e confere que o `sha256` do arquivo bate com o congelado. Recusa se a raiz do verificador estiver **dentro** do repositório avaliado. Com `--by`, quem aprova é o operador. **Sem `--by`**, o decisor do projeto (`pwn decider`) julga se os testes congelados verificam o `behavior` da task, se passariam sem o requisito, a especificidade das asserções e o escopo; aprova só com todos os limiares atendidos (`approved_by: decider:<modelo>#<registro>`), rejeita testes que não verificam nada (exit `1`) e devolve o resto ao operador (exit `3`). Sem decisor configurado, `--by` continua obrigatório.
 - **`run --task T` / `run --global G-n`** — executa a aceitação: captura o **snapshot determinístico** da árvore, materializa uma **cópia isolada**, **restaura** o teste aprovado por cima dela, roda cada check em `bwrap` com mounts mínimos (`HOME=/nonexistent`, sem rede, ambiente reduzido, sem a chave), confere a **causalidade** de cada `AC-*` (o baseline revertido precisa falhar) e emite o **recibo assinado Ed25519**. Exit `0` (recibo `pass`), `1` (recibo `fail`, incluindo check `blocked` por timeout) ou `2` (bloqueado: sem `bwrap`/runtime/chave ou sem aprovação).
 - **`run-all [--jobs N] [--timeout-seconds S]`** — um subprocesso `verify run` por aprovação vigente do Work (tasks e gates globais). Exit `0` se todas forem aceitas, `1` se alguma falhar, `2` se alguma estiver bloqueada ou se o Work não tiver aprovação. É o passo único depois do último lote de `pwn work batch`.
 - **`status --task T`** — informa `ACCEPTED`/`NOT ACCEPTED` para a árvore atual, conferindo assinatura, aprovação vigente, snapshot e digest de dependências.
@@ -615,7 +632,7 @@ bun bin/pwn.js self-check --mutate
 Exibe a cápsula de contexto formatada com cenários, limites de escrita, orçamento e comandos de validação da tarefa. Na seção de validação, junto da allowlist do contrato, imprime o bloco do **plano** — o **RED**, cada check exigido (`AC-*`, `VISUAL`/`DOCUMENTATION` quando exigidos, `REGRESSION`) com os comandos autorizados e os gates globais — para que o agente conheça de antemão os comandos que o audit vai exigir. Se `work-id` for omitido, utiliza **automaticamente o último Work ID ativo**.
 
 ### `pwn queue [list|approve|reject] [run-id]`
-Gerencia a fila de revisão humana assíncrona.
+Gerencia a fila de revisão humana assíncrona. `approve` destrava a task L4 para o **mesmo comando** e o **mesmo contrato**: rode de novo o comando que foi suspenso. Alterar o contrato (ou o comando) exige nova aprovação.
 
 ### `pwn target [list|materialize] [--target <name>]`
 Exibe a matriz de capacidades dos runtimes ou materializa artefatos no diretório target.
