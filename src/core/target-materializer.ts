@@ -152,6 +152,10 @@ export function renderAcceptanceProtocol(): string {
     '6. Peça a aceitação ao operador: `pwn verify run --work <W> --task <T>` (o verificador executa os testes APROVADOS no isolamento).',
     '7. Ao fim do Work, para cada gate global: `pwn verify run --work <W> --global G-<n>`.',
     '',
+    'Aprovação e decisor (vale igual em Pi, OpenCode e omp):',
+    '- A aprovação dos critérios (`pwn verify approve`) e as filas (`pwn queue`) são do operador, ou do decisor configurado no projeto. Nunca aprove por conta própria: não use `--by`, `--operator`, `pwn decider` nem `pwn queue approve`.',
+    '- Saída `[DECISOR] REJEITADO` (exit 1): corrija os testes congelados ou o plano e peça de novo. Saída `PARA O OPERADOR` ou exit 3: pare e reporte; não tente contornar, o operador decide.',
+    '',
     'Proibido: editar plano, contrato ou testes de aceitação congelados para a task passar; trocar os comandos do plano;',
     'alterar testes depois do RED; implementar fora do que os ACs exigem e chamar de pronto.',
   ].join('\n');
