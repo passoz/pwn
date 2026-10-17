@@ -416,6 +416,12 @@ Guarda aprendizados e convenções descobertas durante execuções locais em `.p
 
 ## 13. Referência de Comandos do CLI
 
+### `pwn init [--decider <provedor:modelo> [--decider-key-env VAR] [--decider-max-risk L0..L4] | --no-decider]`
+Inicializa o PWN no projeto (precisa de um repositório Git) e **sempre pergunta** se o projeto usa um modelo decisor no lugar do operador: modelo, variável de ambiente com a chave da API e teto de risco. Se o agente hospedeiro exportar `PWN_DECIDER`, o valor vira a sugestão padrão. Sem terminal, use as flags; sem elas, o projeto é registrado sem decisor (ou a configuração existente é mantida) e o comando não trava. A configuração fica fora do repositório, em `<raiz do verificador>/deciders/` (modo `0600`); a chave nunca é gravada. Desenho completo em [future/operador-decisor.md](future/operador-decisor.md).
+
+### `pwn decider <show|set|remove>`
+Altera a configuração do decisor depois do init. `show` mostra a atual; `set [--decider …] [--decider-key-env …] [--decider-max-risk …]` cria uma configuração ou altera só os campos informados; `remove` apaga a configuração, e o projeto passa a não usar decisor.
+
 ### `pwn validate [--work <work-id>]`
 Valida os documentos normativos do projeto contra os JSON Schemas formais (ajv).
 Com `--work NNNN`, valida apenas aquele Work; sem argumento, valida todos os Works presentes em

@@ -5,6 +5,7 @@ import { handleQueueCommand } from './commands/queue.js';
 import { handleTargetCommand } from './commands/target.js';
 import { handleMetricsCommand } from './commands/metrics.js';
 import { handleVerifyCommand } from './commands/verify.js';
+import { deciderCommand, initCommand } from './commands/init.js';
 import { assertLawsPinned } from './core/validator.js';
 
 const VERSION = '0.1.0';
@@ -17,6 +18,9 @@ USO:
   pwn <comando> <subcomando> [opções]
 
 COMANDOS DISPONÍVEIS:
+  init                Inicializa o PWN no projeto; pergunta pela configuração do decisor
+                      (--decider <provedor:modelo> | --no-decider para não perguntar)
+  decider <ação>      Mostra, cria/altera ou remove a configuração do decisor (show, set, remove)
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
                       (init, import, scaffold, gate, specify, contract, plan, run, run-all, batch, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
@@ -111,6 +115,19 @@ export function main(): void {
     case 'verify':
       handleVerifyCommand(subcommand, commandArgs);
       break;
+
+    case 'init':
+      initCommand(args.slice(1)).then(
+        (code) => process.exit(code),
+        (err: unknown) => {
+          console.error(`✗ pwn init falhou: ${(err as Error).message}`);
+          process.exit(1);
+        },
+      );
+      break;
+
+    case 'decider':
+      process.exit(deciderCommand(subcommand, commandArgs));
 
     default:
       console.error(`Comando desconhecido: '${command}'`);
