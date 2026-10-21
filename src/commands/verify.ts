@@ -22,6 +22,7 @@ import {
   verifierRoot,
 } from "../core/verifier-home.js";
 import { getLatestWorkId } from "../core/work-artifacts.js";
+import { readReconciliation } from "../core/reconcile.js";
 import { decide, decisionReference, describeDecision } from "../core/decider/engine.js";
 import { globalApprovalPolicy, globalApprovalRequest, taskApprovalPolicy, taskApprovalRequest } from "../core/decider/policies/approve.js";
 import { EXIT_SUSPENDED } from "../core/run-orchestrator.js";
@@ -227,15 +228,21 @@ function handleVerifySync(subcommand: string, args: string[]): void {
           }
           approvedBy = decisionReference(record);
         }
+        // Work nascido de `pwn work reconcile`: a implementação é revertida ao commit anterior à mudança.
+        const reconciliation = global ? null : readReconciliation(rootDir, workId);
         const approval = createApproval({
           rootDir,
           workId,
           taskId: taskId ?? GLOBAL_TASK_ID,
           approvedBy,
           global,
+          baselineCommit: reconciliation?.base_commit,
         });
         console.log(`=== [pwn verify approve] Critérios aprovados ===`);
         console.log(describeApproval(approval));
+        if (reconciliation) {
+          console.log(`\nWork conciliado: baseline = ${approval.baseline_commit.slice(0, 12)} (commit anterior à mudança feita fora do pwn).`);
+        }
         console.log(`\nA avaliação executará EXATAMENTE isso. O agente não pode alterar o pacote.`);
         process.exit(0);
       }

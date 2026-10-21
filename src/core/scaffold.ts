@@ -13,6 +13,26 @@ import { renderTasksMarkdown, tasksMarkdownPath, type Plan } from './plan-render
 // scripts, the generated plan.json/prd.json pass `pwn validate`, the 5 gates
 // and `pwn work contract`, so `pwn work run` can execute it immediately.
 
+/** Task explícita do scaffold: arquivos concretos e (opcionalmente) escopo exato de escrita. */
+export interface ScaffoldTaskSpec {
+  title: string;
+  implementationFiles: string[];
+  testFiles: string[];
+  behavior?: string;
+  /** Sem isso, o contrato usa a allowlist genérica do scaffold (`src/**`, `tests/**`). */
+  writeAllow?: string[];
+  writeDeny?: string[];
+}
+
+/** Texto do Work quando a origem não é um greenfield (ex.: conciliação de mudanças feitas fora do pwn). */
+export interface ScaffoldNarrative {
+  problem: string;
+  solution: string;
+  objective: string;
+  scenario: 'greenfield' | 'brownfield';
+  author: string;
+}
+
 export interface ScaffoldOptions {
   rootDir: string;
   title: string;
@@ -21,6 +41,10 @@ export interface ScaffoldOptions {
   sourcePath?: string;
   risk?: RiskLevel;
   force?: boolean;
+  /** Substitui o texto padrão de discovery/PRD. */
+  narrative?: ScaffoldNarrative;
+  /** Tasks explícitas; sem elas o scaffold gera uma única task esqueleto. */
+  tasks?: ScaffoldTaskSpec[];
 }
 
 export interface ScaffoldResult {
@@ -84,10 +108,16 @@ function writeJson(
  * Build the frozen V4 contract for a freshly scaffolded task.
  * Acceptance commands drive the runtime shell allowlist (fail-closed).
  */
-export function scaffoldContract(workId: string, taskId: string, title: string, risk: RiskLevel): TaskContractV4 {
+export function scaffoldContract(
+  workId: string,
+  taskId: string,
+  title: string,
+  risk: RiskLevel,
+  scope?: { writeAllow: string[]; writeDeny: string[] },
+): TaskContractV4 {
   const contract = createDefaultContractV4(taskId, workId, title, risk, {
-    writeAllow: ['src/**', 'tests/**'],
-    writeDeny: ['.git/**', 'package.json', '.env*'],
+    writeAllow: scope?.writeAllow ?? ['src/**', 'tests/**'],
+    writeDeny: scope?.writeDeny ?? ['.git/**', 'package.json', '.env*'],
   });
   contract.validation_strategy = 'tdd-strict';
   contract.acceptance_contract.commands = [DEFAULT_ACCEPTANCE, DEFAULT_TYPE_CHECK];
@@ -125,8 +155,10 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
     writeFile(rootDir, snapshot, fs.readFileSync(absolute, 'utf8'), generated, skipped, true);
     legacyReference = 'legacy-spec.md';
   }
-  const problem = `O projeto precisa de "${title}" implementado com comportamento verificável e escopo de escrita limitado por contrato.`;
-  const solution = `Executar "${title}" em TDD estrito sob sandbox Git worktree, com diff guard e orçamento congelados no contrato V4.`;
+  const problem = options.narrative?.problem
+    ?? `O projeto precisa de "${title}" implementado com comportamento verificável e escopo de escrita limitado por contrato.`;
+  const solution = options.narrative?.solution
+    ?? `Executar "${title}" em TDD estrito sob sandbox Git worktree, com diff guard e orçamento congelados no contrato V4.`;
 
   writeJson(rootDir, path.join(paths.workDir, 'discovery.json'), {
     work_id: workId,
@@ -134,7 +166,7 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
     grilling_depth: 'medium',
     problem,
     actors: ['ACT-001'],
-    objectives: [`Entregar "${title}" com critérios de aceite observáveis`],
+    objectives: [options.narrative?.objective ?? `Entregar "${title}" com critérios de aceite observáveis`],
     constraints: [
       'Manter a suíte de testes existente verde (sem regressões)',
       'Permanecer dentro da write_allow do contrato V4',
@@ -160,10 +192,10 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
   writeJson(rootDir, path.join(paths.workDir, 'prd.json'), {
     $schema: '../../../schemas/prd.schema.json',
     id: `PRD-${workId}`,
-    meta: { version: '1.0', created_at: now, author: 'pwn-scaffold' },
+    meta: { version: '1.0', created_at: now, author: options.narrative?.author ?? 'pwn-scaffold' },
     title: `PRD — ${title}`.slice(0, 100),
     status: 'draft',
-    scenario: legacyReference ? 'brownfield' : 'greenfield',
+    scenario: options.narrative?.scenario ?? (legacyReference ? 'brownfield' : 'greenfield'),
     problem: { statement: problem.length >= 20 ? problem : `${problem} (escopo mínimo)` },
     solution: { statement: solution.length >= 20 ? solution : `${solution} (escopo mínimo)` },
     decisions: [
@@ -171,7 +203,7 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
         id: 'DEC-001',
         statement: `Adotar contrato V4 congelado (risco ${risk}) como fronteira de execução do Work ${workId}.`,
         status: 'accepted',
-        made_by: 'pwn-scaffold',
+        made_by: options.narrative?.author ?? 'pwn-scaffold',
       },
     ],
     requirements: [
@@ -203,9 +235,15 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
   }, generated, skipped, overwrite);
 
   const slug = titleSlug(title);
-  const implementationFile = `src/${slug}.ts`;
-  const testFile = `tests/${slug}.test.ts`;
-  const focusedAcceptance = `${DEFAULT_ACCEPTANCE} ${testFile}`;
+  const specs: ScaffoldTaskSpec[] = options.tasks ?? [{
+    title,
+    implementationFiles: [`src/${slug}.ts`],
+    testFiles: [`tests/${slug}.test.ts`],
+  }];
+  if (specs.length === 0) throw new Error('tasks deve declarar ao menos uma task');
+  const taskIdOf = (index: number): string => `1.${index + 1}`;
+  const sequenceOf = (index: number): string => String(index + 1).padStart(3, '0');
+  const focusedAcceptanceOf = (spec: ScaffoldTaskSpec): string => `${DEFAULT_ACCEPTANCE} ${spec.testFiles.join(' ')}`;
 
   const plan: Plan = {
     work_id: workId,
@@ -215,18 +253,19 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
       `\`${DEFAULT_ACCEPTANCE}\` — a suíte completa passa com exit 0.`,
       `\`${DEFAULT_TYPE_CHECK}\` — typecheck estrito passa com exit 0.`,
     ],
-    tasks: [
-      {
-        id: '1.1',
-        title,
+    tasks: specs.map((spec, index) => {
+      const focusedAcceptance = focusedAcceptanceOf(spec);
+      return {
+        id: taskIdOf(index),
+        title: spec.title,
         requirement_id: 'FR-001',
         depends_on: [],
-        behavior: `implementa "${title}" com o resultado observável declarado nos critérios de aceite`,
+        behavior: spec.behavior ?? `implementa "${spec.title}" com o resultado observável declarado nos critérios de aceite`,
         components: ['core'],
-        files: [implementationFile, testFile],
-        implementation_files: [implementationFile],
-        test_files: [testFile],
-        red: { command: focusedAcceptance, description: `a asserção do novo comportamento falha antes da implementação de ${implementationFile}` },
+        files: [...spec.implementationFiles, ...spec.testFiles],
+        implementation_files: spec.implementationFiles,
+        test_files: spec.testFiles,
+        red: { command: focusedAcceptance, description: `a asserção do novo comportamento falha antes da implementação de ${spec.implementationFiles.join(', ')}` },
         implementation_steps: [
           'Escrever o teste que falha (RED) para o comportamento declarado',
           'Implementar o mínimo para o teste passar (GREEN) e refatorar preservando a suíte verde',
@@ -234,33 +273,34 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
         acceptance_criteria: [
           { command: focusedAcceptance, description: 'o comportamento declarado é observado pelo teste focado da task' },
         ],
-        visual: 'N/A',
-        documentation: 'N/A',
+        visual: 'N/A' as const,
+        documentation: 'N/A' as const,
         spec_reference: 'CAP-001',
-        contract_id: 'CTR-001',
+        contract_id: `CTR-${sequenceOf(index)}`,
         complexity: 'standard',
-        status: 'pending',
-      },
-    ],
+        status: 'pending' as const,
+      };
+    }),
   };
 
   writeJson(rootDir, path.join(paths.workDir, 'plan.json'), { $schema: '../../../schemas/plan.schema.json', ...plan }, generated, skipped, overwrite);
-  writeJson(rootDir, path.join(paths.workDir, 'CTR-001.json'), scaffoldContract(workId, '1.1', title, risk), generated, skipped, overwrite);
+  specs.forEach((spec, index) => {
+    const scope = spec.writeAllow ? { writeAllow: spec.writeAllow, writeDeny: spec.writeDeny ?? ['.git/**', 'package.json', '.env*'] } : undefined;
+    writeJson(rootDir, path.join(paths.workDir, `CTR-${sequenceOf(index)}.json`), scaffoldContract(workId, taskIdOf(index), spec.title, risk, scope), generated, skipped, overwrite);
+  });
 
   writeJson(rootDir, path.join(paths.workDir, 'traceability-matrix.json'), {
     work_id: workId,
-    matrix: [
-      {
-        origin: 'DISC-001',
-        requirement_id: 'FR-001',
-        decision_id: 'DEC-001',
-        spec_section: 'CAP-001',
-        task_id: '1.1',
-        contract_id: 'CTR-001',
-        evidence_id: 'EVD-001',
-        status: 'planned',
-      },
-    ],
+    matrix: specs.map((_, index) => ({
+      origin: 'DISC-001',
+      requirement_id: 'FR-001',
+      decision_id: 'DEC-001',
+      spec_section: 'CAP-001',
+      task_id: taskIdOf(index),
+      contract_id: `CTR-${sequenceOf(index)}`,
+      evidence_id: `EVD-${sequenceOf(index)}`,
+      status: 'planned',
+    })),
   }, generated, skipped, overwrite);
 
   // Derived v3 markdown (canonical source stays plan.json).
@@ -268,14 +308,17 @@ export function scaffoldWork(options: ScaffoldOptions): ScaffoldResult {
   writeFile(rootDir, markdownPath, renderTasksMarkdown(plan), generated, skipped, overwrite);
   const relativeMarkdown = path.relative(rootDir, markdownPath);
 
-  const review = [
-    `Renomeie os arquivos esqueleto da task 1.1 (${implementationFile}, ${testFile}) para os nomes reais do módulo e do teste — o audit congela exatamente o que o plano declarar.`,
-    `Revise ${relativeMarkdown}: o RED/AC da task 1.1 apontam para o teste focado dela; a suíte e o typecheck ficam nos gates globais.`,
+  const review: string[] = [];
+  if (!options.tasks) {
+    review.push(`Renomeie os arquivos esqueleto da task 1.1 (${specs[0].implementationFiles[0]}, ${specs[0].testFiles[0]}) para os nomes reais do módulo e do teste — o audit congela exatamente o que o plano declarar.`);
+  }
+  review.push(
+    `Revise ${relativeMarkdown}: o RED/AC de cada task apontam para o teste focado dela; a suíte e o typecheck ficam nos gates globais.`,
     `O risco congelado é ${risk}; ajuste com --risk se a mudança for mais sensível.`,
-  ];
-  if (frozenTestsRequired(risk)) {
+  );
+  if (frozenTestsRequired(risk) && !options.tasks) {
     review.push(
-      `Risco ${risk}: comite o teste de aceitação e rode 'pwn work contract --work ${workId} --task 1.1 --freeze-tests ${testFile}' ANTES da implementação — o gate GATE-PLAN-CONTRACT bloqueia até os testes estarem congelados.`,
+      `Risco ${risk}: comite o teste de aceitação e rode 'pwn work contract --work ${workId} --task 1.1 --freeze-tests ${specs[0].testFiles[0]}' ANTES da implementação — o gate GATE-PLAN-CONTRACT bloqueia até os testes estarem congelados.`,
     );
   }
   return {

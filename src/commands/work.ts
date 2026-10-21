@@ -5,6 +5,7 @@ import { loadPlan, renderTasksMarkdown, planMatchesMarkdown, tasksMarkdownPath }
 import { freezeAcceptanceTests, loadTaskContract } from '../core/task-contract.js';
 import { importV3Work, listV3WorkIds } from '../core/v3-import.js';
 import { scaffoldWork } from '../core/scaffold.js';
+import { reconcileChanges } from '../core/reconcile.js';
 import type { RiskLevel } from '../core/contract-engine.js';
 import { runOrchestrated } from '../core/run-orchestrator.js';
 import { syncWorkManifest } from '../core/manifest-sync.js';
@@ -460,6 +461,71 @@ export function handleWorkCommand(subcommand: string, args: string[]): void {
           console.log('\nRevisão obrigatória antes de implementar:');
           for (const note of result.review) console.log(`  ! ${note}`);
           console.log(`\nPróximos passos:\n  pwn work contract --work ${result.workId}\n  pwn work gate GATE-PLAN-CONTRACT --work ${result.workId}\n  pwn validate --work ${result.workId}\n  pwn task capsule 1.1 ${result.workId}`);
+        } catch (err) {
+          console.error(`✗ ${(err as Error).message}`);
+          process.exit(1);
+        }
+        process.exit(0);
+      }
+      break;
+
+    case 'reconcile':
+      console.log('=== [pwn work reconcile] Conciliando mudanças feitas fora do pwn ===');
+      {
+        const rootDir = path.resolve(flagValue(args, '--dir') ?? process.cwd());
+        const risk = (flagValue(args, '--risk') ?? 'L2') as RiskLevel;
+        const dryRun = args.includes('--dry-run');
+        const list = (name: string): string[] | undefined => flagValue(args, name)?.split(',').map((item) => item.trim()).filter(Boolean);
+
+        const validRisks: RiskLevel[] = ['L0', 'L1', 'L2', 'L3', 'L4'];
+        if (!validRisks.includes(risk)) {
+          console.error(`--risk inválido: ${risk}. Opções: ${validRisks.join(', ')}`);
+          process.exit(1);
+        }
+
+        try {
+          const result = reconcileChanges({
+            rootDir,
+            since: flagValue(args, '--since') ?? undefined,
+            paths: list('--paths'),
+            tests: list('--tests'),
+            title: flagValue(args, '--title') ?? undefined,
+            workId: flagValue(args, '--work') ?? undefined,
+            risk,
+            force: args.includes('--force'),
+            dryRun,
+          });
+          console.log(`Referência: ${result.baseCommit.slice(0, 12)} | HEAD: ${result.headCommit.slice(0, 12)}`);
+          console.log(`Mudanças a conciliar (${result.changes.length}):`);
+          for (const change of result.changes) console.log(`  ${change.status} ${change.kind === 'test' ? 'teste ' : 'código'} ${change.path}`);
+          for (const skip of result.skipped) console.log(`  · ignorado ${skip.path}: ${skip.reason}`);
+          console.log(`Tasks (${result.tasks.length}): ${result.tasks.map((task) => `${task.id} [${task.implementationFiles.length} arquivo(s)]`).join(', ')}`);
+
+          if (result.dryRun) {
+            console.log('\n(--dry-run) nada foi criado. Rode sem --dry-run para criar o Work.');
+            process.exit(0);
+          }
+
+          const workId = result.workId!;
+          console.log(`\n✓ Work ${workId} criado em .pwn/work/${workId}/ (${result.generated.length} artefato(s))`);
+          if (result.frozen.length > 0) console.log(`✓ Testes congelados no contrato: task(s) ${result.frozen.join(', ')}`);
+          for (const pending of result.pendingFreeze) {
+            const task = result.tasks.find((entry) => entry.id === pending.task)!;
+            if (task.testsToWrite) {
+              console.warn(`! task ${task.id}: a mudança não tem teste — escrever depois: ${task.testFiles.join(' ')}`);
+              console.warn(`  O contrato já autoriza esse arquivo. O teste deve FALHAR com ${task.implementationFiles.join(', ')} no commit-base ${result.baseCommit.slice(0, 7)}.`);
+              console.warn(`  Escreva e commite o teste; depois: pwn work contract --work ${workId} --task ${task.id} --freeze-tests ${task.testFiles.join(' ')}`);
+              continue;
+            }
+            console.warn(`! task ${task.id}: testes ainda não congelados — ${pending.reason}`);
+            console.warn(`  Comite os testes e rode: pwn work contract --work ${workId} --task ${task.id} --freeze-tests ${task.testFiles.join(' ')}`);
+          }
+          console.log(`\nA conciliação não conclui nada: sem RED/GREEN observado, a prova é o recibo do verificador.`);
+          console.log(`Próximos passos:`);
+          console.log(`  pwn work gate --all --work ${workId}`);
+          for (const task of result.tasks) {
+            console.log(`  pwn verify approve --work ${workId} --task ${task.id} --by <nome> && pwn verify run --work ${workId} --task ${task.id}`);
+          }
         } catch (err) {
           console.error(`✗ ${(err as Error).message}`);
           process.exit(1);

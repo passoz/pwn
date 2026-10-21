@@ -23,7 +23,7 @@ COMANDOS DISPONÍVEIS:
                       (--decider <provedor:modelo> | --no-decider para não perguntar)
   decider <ação>      Configuração e registro do decisor do projeto (show, set, remove, log)
   work <subcomando>   Gerencia a cadeia de planejamento e execução de Works
-                      (init, import, scaffold, gate, specify, contract, plan, run, run-all, batch, audit, status, sync)
+                      (init, import, scaffold, reconcile, gate, specify, contract, plan, run, run-all, batch, audit, status, sync)
   task <subcomando>   Gerencia tarefas atômicas isoladas
                       (run, capsule)
   target <subcomando> Gerencia runtimes e materialização de targets
@@ -51,6 +51,8 @@ EXEMPLOS:
   pwn validate --work 0001
   pwn work gate --all --work 0001
   pwn work run --dry-run --work 0001 -- bun test
+  pwn work reconcile --dry-run              (lista o que mudou fora do pwn)
+  pwn work reconcile --title "Ajuste X" --tests tests/x.test.ts
   pwn work status --coverage 0001
   pwn work run --work 0001 -- bun test
   pwn work run-all --works 0001,0002 --jobs 2 -- bun test

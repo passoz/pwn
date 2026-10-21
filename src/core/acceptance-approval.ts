@@ -150,6 +150,8 @@ export interface CreateApprovalOptions {
   /** Aprovação de um item de `## Global gates` em vez de uma task. */
   global?: string | null;
   verifierRootDir?: string;
+  /** Commit de referência (revert da implementação); padrão: HEAD. */
+  baselineCommit?: string;
 }
 
 function checksForTask(planText: string, task: PlanTaskDefinition): ApprovedCheck[] {
@@ -201,7 +203,14 @@ export function createApproval(options: CreateApprovalOptions): Approval {
   if (!existsSync(planPath)) throw new Error(`plano não encontrado: ${planPath}`);
   const planText = readFileSync(planPath, "utf8");
 
-  const baselineCommit = git(rootDir, "rev-parse", "HEAD");
+  let baselineCommit = git(rootDir, "rev-parse", "HEAD");
+  if (options.baselineCommit) {
+    // Conciliação pós-fato: o baseline é o commit ANTERIOR à mudança, não o HEAD que já a contém.
+    const requested = git(rootDir, "rev-parse", "--verify", `${options.baselineCommit}^{commit}`);
+    const isAncestor = spawnSync("git", ["merge-base", "--is-ancestor", requested, baselineCommit], { cwd: rootDir });
+    if (isAncestor.status !== 0) throw new Error(`o commit de referência ${options.baselineCommit} não é ancestral do HEAD`);
+    baselineCommit = requested;
+  }
   if (!baselineCommit) throw new Error("não foi possível resolver o commit de referência da aprovação");
 
   let implementationFiles: string[] = [];

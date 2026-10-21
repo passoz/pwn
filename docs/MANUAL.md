@@ -473,6 +473,28 @@ RED/AC **focados nesse teste** — a suíte completa e o typecheck ficam nos **g
 valores seguem sendo um **esqueleto** que o operador deve detalhar; em risco **L3+** o comando lembra
 de congelar o teste antes da implementação. O comando imprime exatamente o que revisar.
 
+### `pwn work reconcile [--since REF] [--paths a,b] [--tests t1,t2] [--title "..."] [--work NNNN] [--risk Lx] [--dry-run] [--force] [--dir PATH]`
+**Pós-conciliação:** você alterou o repositório **sem o pwn** e quer que a governança absorva a mudança depois do fato.
+O comando descobre o que mudou — árvore de trabalho contra o `HEAD` (mudanças não commitadas, tracked + arquivos novos
+não ignorados) ou, com `--since REF`, contra um commit anterior (mudanças já commitadas) — e cria um Work completo
+(mesma cadeia do `scaffold`, PRD `brownfield`): uma task por até 6 arquivos de implementação, cada contrato V4 com
+`write_allow` = **exatamente** os arquivos alterados (+ testes) e `reconciliation.json` com o `base_commit`.
+
+- **Não toca no projeto:** só escreve em `.pwn/work/NNNN/` e `.todo/NNNN-tasks.md`.
+- **Não inventa evidência:** não há RED/GREEN observado, então a conciliação **não conclui nada**. A prova é `pwn verify`:
+  `verify approve` usa o `base_commit` como baseline (e não o `HEAD`, que já contém a mudança) e o AC precisa **falhar com a
+  implementação revertida a esse commit** — um teste que passa sem a mudança é recusado como vácuo.
+- **Testes:** arquivos de teste alterados viram cobertura (`--tests` declara um teste existente que cobre a mudança).
+  **Mudança sem teste é o caso esperado:** cada task declara um arquivo de teste **a escrever depois**
+  (`tests/<nome>.test.ts`, nunca um caminho que já existe), o contrato já o autoriza em `write_allow` e o comando
+  **não cria o arquivo**. Escreva o teste sob o contrato — ele deve **falhar** com a implementação revertida ao
+  `base_commit` —, commite e rode o `pwn work contract --freeze-tests …` que o comando imprime. Até lá o `verify approve`
+  recusa a task (sem teste congelado não há aceitação). Se os testes já estão commitados e limpos, são congelados na hora.
+- **Filtros e segurança:** `--paths` restringe por prefixo (sem glob); `.env*` e caminhos com glob/placeholder são ignorados
+  e listados; `.git`, `.pwn`, `.todo`, `.work`, `.prompts`, `.sources`, `queue`, `.pwn-verifier` e `node_modules` nunca entram.
+- **Idempotente:** um arquivo com o mesmo conteúdo já registrado em outro `reconciliation.json` é pulado; mudou de novo, volta a ser conciliável.
+- `--dry-run` lista mudanças e tasks sem criar nada.
+
 ### `pwn work import [--work NNNN | --all] [--dir PATH] [--gate-chain] [--force] [--risk Lx|auto]`
 Converte Works de um projeto que ainda usa o **layout v3** (`.work/NNNN.json`, `.todo/NNNN-tasks.md`,
 `.prompts/`, `.sources/`, `.specs/system.md`) para o layout canônico `.pwn/work/NNNN/`:

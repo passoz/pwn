@@ -219,6 +219,26 @@ bun bin/pwn.js queue approve <run-id>
 bun bin/pwn.js queue reject <run-id>
 ```
 
+### 7. Pós-conciliação (mudanças feitas sem o PWN)
+
+Alterou o código por conta própria? Peça para o PWN conciliar depois do fato:
+
+```bash
+# Lista o que mudou fora da governança (não commitado; ou --since <commit> para o que já foi commitado)
+bun bin/pwn.js work reconcile --dry-run
+
+# Cria o Work conciliado (contrato com escopo exato dos arquivos). Sem teste na mudança? O Work já declara o teste a escrever depois
+bun bin/pwn.js work reconcile --title "Corrige soma do add"
+
+# Commite, congele o teste (se o comando avisar) e passe pela aceitação independente
+bun bin/pwn.js work gate --all --work 0003
+bun bin/pwn.js verify approve --work 0003 --task 1.1 --by "ana"   # baseline = commit anterior à mudança
+bun bin/pwn.js verify run --work 0003 --task 1.1
+```
+
+A conciliação **não declara nada concluído**: não houve RED/GREEN observado. A task só vira `ACCEPTED` com recibo do `pwn verify`,
+que reverte a implementação ao commit-base e exige que o teste congelado falhe lá.
+
 ---
 
 ## 🛠️ Guia do Desenvolvedor: Contribuindo com o PWN
@@ -295,6 +315,7 @@ bun run check
 |---|---|
 | `pwn work init` | Auto-atribui e cria o próximo Work ID sequencial com templates iniciais |
 | `pwn work scaffold --title "..."` | Cria Work completo com cadeia válida (discovery → requirements → prd → spec → plan + CTR) |
+| `pwn work reconcile [--since REF] [--tests ...] [--dry-run]` | **Pós-conciliação:** cria um Work que absorve mudanças feitas fora do pwn (escopo exato dos arquivos alterados; aceitação só via `pwn verify` contra o commit-base) |
 | `pwn work gate --all [--work NNNN]` | Avalia os 5 gates em uma passada única e agrupa todos os achados |
 | `pwn work gate <GATE> [--work NNNN]` | Avalia um portão específico (`GATE-DISC-REQ`, `GATE-REQ-PRD`, etc.) usando cache |
 | `pwn work gate --clear-cache` | Limpa o cache de vereditos (`.pwn/gate-cache/`) |
