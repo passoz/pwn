@@ -15,6 +15,9 @@ import { approvedFileContent, type Approval, type ApprovedCheck } from "./accept
 import {
   assertProtectedOutsideRepository,
   requireVerifierReady,
+  projectSandbox,
+  type ProjectMount,
+  type ProjectSandbox,
   verifierRoot,
   type VerifierReadiness,
 } from "./verifier-home.js";
@@ -64,8 +67,11 @@ export interface SandboxPolicy {
   user_namespace: true;
   pid_namespace: true;
   mounts_ro: string[];
+  mounts: ProjectMount[];
   home: string;
   env_allowlist: string[];
+  path_prepend: string[];
+  env: Record<string, string>;
 }
 
 const TOOLCHAIN_PATTERNS = [
@@ -118,7 +124,7 @@ export function executableBinds(command: string[]): Array<[string, string]> {
   return binds;
 }
 
-export function sandboxPolicy(runtime: string, commands: string[][] = []): SandboxPolicy {
+export function sandboxPolicy(runtime: string, commands: string[][] = [], project: ProjectSandbox | null = null): SandboxPolicy {
   const mounts = ["/usr", "/bin", "/lib", "/lib64", "/etc", ...runtimeMounts(runtime)];
   const execRoots = commands
     .flatMap((command) => executableBinds(command).map(([source]) => source))
@@ -128,9 +134,12 @@ export function sandboxPolicy(runtime: string, commands: string[][] = []): Sandb
     network: false,
     user_namespace: true,
     pid_namespace: true,
-    mounts_ro: [...new Set([...mounts, ...execRoots])].sort(),
-    home: "/nonexistent",
+    mounts_ro: [...new Set([...mounts, ...execRoots, ...(project?.mounts_ro ?? []), ...(project?.path_prepend ?? [])])].sort(),
+    mounts: project?.mounts ?? [],
+    home: project?.home ?? "/nonexistent",
     env_allowlist: ["PATH", "TMPDIR", "LANG", "LC_ALL", "TERM"],
+    path_prepend: project?.path_prepend ?? [],
+    env: project?.env ?? {},
   };
 }
 
@@ -155,13 +164,19 @@ function spawnInSandbox(
   const args: string[] = [];
   for (const mount of policy.mounts_ro) args.push("--ro-bind", mount, mount);
   for (const [source, destination] of extraRoBinds) args.push("--ro-bind", source, destination);
+  if (policy.home !== "/nonexistent") args.push("--dir", policy.home);
+  for (const mount of policy.mounts) {
+    args.push("--dir", mount.dest);
+    args.push("--ro-bind", mount.source, mount.dest);
+  }
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp");
   args.push("--bind", workDir, workDir, "--chdir", workDir);
   args.push("--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent");
   args.push("--clearenv");
   args.push("--setenv", "HOME", policy.home);
   args.push("--setenv", "TMPDIR", "/tmp");
-  args.push("--setenv", "PATH", "/usr/bin:/bin");
+  args.push("--setenv", "PATH", [...policy.path_prepend, "/usr/bin", "/bin"].join(":"));
+  for (const [name, value] of Object.entries(policy.env)) args.push("--setenv", name, value);
   args.push("--", ...command);
 
   const result = spawnSync(readiness.bwrap, args, {
@@ -222,6 +237,7 @@ export function runVerification(options: RunVerificationOptions): VerificationRu
   const policy = sandboxPolicy(
     readiness.runtime,
     options.approval.checks.map((check) => check.command),
+    projectSandbox(options.rootDir, root),
   );
   const timeoutMs = (options.timeoutSeconds ?? 600) * 1000;
 

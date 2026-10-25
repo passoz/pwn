@@ -20,11 +20,13 @@ import {
   storeReceipt,
   signatureIsValid,
 } from "../src/core/verification-receipt.js";
-import { looksEnvironmental, runVerification, type VerificationRunResult } from "../src/core/verification-runner.js";
+import { looksEnvironmental, runVerification, sandboxPolicy, type VerificationRunResult } from "../src/core/verification-runner.js";
 import {
   approvalsDir,
   assertProtectedOutsideRepository,
+  configFile,
   initializeVerifierHome,
+  projectSandbox,
   receiptDir,
   VerificationUnavailable,
   writeJsonAtomic,
@@ -447,6 +449,113 @@ describe("looksEnvironmental", () => {
   test("não classifica uma falha de asserção como ambiente", () => {
     expect(looksEnvironmental("expect(received).toBe(expected) // Object.is equality")).toBe(false);
     expect(looksEnvironmental("AssertionError: expected 2 to be 3")).toBe(false);
+  });
+});
+
+// ── Configuração de sandbox por projeto ────────────────────────────────────
+
+function verifierWithProject(projectDir: string, entry: unknown): string {
+  const verifierRoot = tmp("pwn-verifier-");
+  initializeVerifierHome(verifierRoot);
+  const config = JSON.parse(readFileSync(configFile(verifierRoot), "utf8"));
+  config.projects = { [projectDir]: entry };
+  writeJsonAtomic(configFile(verifierRoot), config);
+  return verifierRoot;
+}
+
+describe("sandbox por projeto", () => {
+  const sandboxTest = (hasBwrap ? test : test.skip) as typeof test;
+  test("sem configuração do projeto, a política continua a padrão", () => {
+    const projectDir = tmp("pwn-project-");
+    const verifierRoot = tmp("pwn-verifier-");
+    initializeVerifierHome(verifierRoot);
+
+    expect(projectSandbox(projectDir, verifierRoot)).toBeNull();
+    const policy = sandboxPolicy(BUN);
+    expect(policy.home).toBe("/nonexistent");
+    expect(policy.mounts).toEqual([]);
+    expect(policy.path_prepend).toEqual([]);
+  });
+
+  test("HOME, montagens próprias e env do projeto entram na política", () => {
+    const projectDir = tmp("pwn-project-");
+    const cache = tmp("pwn-cache-");
+    const verifierRoot = verifierWithProject(projectDir, {
+      path_prepend: ["/opt/toolchain/bin"],
+      mounts_ro: ["/opt/modules"],
+      mounts: [{ source: cache, dest: "/pwn-home/cache" }],
+      home: "/pwn-home",
+      env: { GOPROXY: "off" },
+    });
+
+    const sandbox = projectSandbox(projectDir, verifierRoot);
+    expect(sandbox).not.toBeNull();
+    expect(sandbox!.home).toBe("/pwn-home");
+    expect(sandbox!.mounts).toEqual([{ source: cache, dest: "/pwn-home/cache" }]);
+
+    const policy = sandboxPolicy(BUN, [], sandbox);
+    expect(policy.home).toBe("/pwn-home");
+    expect(policy.mounts).toEqual([{ source: cache, dest: "/pwn-home/cache" }]);
+    expect(policy.mounts_ro).toContain("/opt/modules");
+    expect(policy.mounts_ro).toContain("/opt/toolchain/bin");
+    expect(policy.path_prepend).toEqual(["/opt/toolchain/bin"]);
+    expect(policy.env).toEqual({ GOPROXY: "off" });
+  });
+
+  test("entrada malformada falha fechada", () => {
+    const projectDir = tmp("pwn-project-");
+    const invalid: unknown[] = [
+      { mounts: [{ source: "relativo", dest: "/pwn-home/cache" }] },
+      { mounts: [{ source: "/opt/cache", dest: "/tmp" }] },
+      { mounts: [{ source: "/opt/cache", dest: "/pwn-home/cache" }, { source: "/opt/other", dest: "/pwn-home/cache" }] },
+      { home: "relativo" },
+      { home: `${projectDir}/dentro` },
+      { env: { HOME: "/tmp" } },
+      { path_prepend: ["relativo"] },
+    ];
+    for (const entry of invalid) {
+      const verifierRoot = verifierWithProject(projectDir, entry);
+      expect(() => projectSandbox(projectDir, verifierRoot), JSON.stringify(entry)).toThrow(VerificationUnavailable);
+    }
+  });
+
+  sandboxTest(`mata o cache do projeto dentro do HOME do sandbox${BWRAP_HINT}`, () => {
+    const cache = tmp("pwn-cache-");
+    write(cache, "marker.txt", "cache-ok\n");
+    const acceptance = [
+      'import { expect, test } from "bun:test";',
+      'import { readFileSync } from "node:fs";',
+      'import { value } from "../src/lib.ts";',
+      'test("value", () => {',
+      '  expect(value()).toBe("NEW");',
+      '  expect(readFileSync(`${process.env.HOME}/cache/marker.txt`, "utf8").trim()).toBe("cache-ok");',
+      '  expect(process.env.PROJECT_MARKER).toBe("ok");',
+      "});",
+      "",
+    ].join("\n");
+    const fixture = buildFixture({
+      acceptanceTest: acceptance,
+      candidateImplementation: NEW_IMPLEMENTATION,
+      baselineImplementation: OLD_IMPLEMENTATION,
+    });
+    const config = JSON.parse(readFileSync(configFile(fixture.verifierRoot), "utf8"));
+    config.projects = {
+      [fixture.rootDir]: {
+        home: "/pwn-home",
+        mounts: [{ source: cache, dest: "/pwn-home/cache" }],
+        env: { PROJECT_MARKER: "ok" },
+      },
+    };
+    writeJsonAtomic(configFile(fixture.verifierRoot), config);
+
+    const approval = approve(fixture);
+    const result = runFixture(fixture, approval);
+    const ac = findCheck(result, "AC-1");
+
+    expect(result.sandbox_policy.home).toBe("/pwn-home");
+    expect(result.sandbox_policy.mounts).toEqual([{ source: cache, dest: "/pwn-home/cache" }]);
+    expect(ac.outcome, `${ac.reason ?? ""}\n${ac.output_tail}`).toBe("pass");
+    expect(ac.baseline?.exit_code).not.toBe(0);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   statSync,
   writeFileSync,
@@ -45,6 +46,124 @@ export interface VerifierConfig {
   runtime: { bun: string };
   /** Isolamento exigido: sem ele não existe aceitação independente. */
   isolation: { mode: "bwrap"; bwrap: string | null; network: false };
+  /** Ajustes de sandbox por raiz de projeto, escritos pelo operador. Ausente = política padrão. */
+  projects?: Record<string, ProjectSandbox>;
+}
+
+/** Montagem somente leitura com destino diferente da origem (ex.: cache em $HOME do sandbox). */
+export interface ProjectMount {
+  source: string;
+  dest: string;
+}
+
+/** Ajustes de sandbox de um projeto. Vêm da raiz protegida: o repositório avaliado não os controla. */
+export interface ProjectSandbox {
+  /** Diretórios absolutos prefixados ao PATH do sandbox; montados somente leitura. */
+  path_prepend?: string[];
+  /** Diretórios absolutos extras montados somente leitura (ex.: cache de módulos). */
+  mounts_ro?: string[];
+  /** Montagens somente leitura com destino próprio, para caches que dependem de um caminho fixo. */
+  mounts?: ProjectMount[];
+  /** HOME do sandbox. Ausente = `/nonexistent`. Nunca pode ficar dentro do repositório. */
+  home?: string;
+  /** Variáveis fixas do ambiente do sandbox. HOME, PATH e TMPDIR são reservadas. */
+  env?: Record<string, string>;
+}
+
+const RESERVED_SANDBOX_ENV: Record<string, true> = { HOME: true, PATH: true, TMPDIR: true };
+const RESERVED_MOUNT_DEST: Record<string, true> = { "/": true, "/tmp": true, "/proc": true, "/dev": true };
+
+/** Caminho absoluto e normalizado; `null` quando o valor não é um caminho utilizável. */
+function cleanAbsolute(value: unknown): string | null {
+  if (typeof value !== "string" || !path.isAbsolute(value)) return null;
+  const normalized = path.normalize(value);
+  return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
+}
+
+function inside(parent: string, child: string): boolean {
+  return child === parent || child.startsWith(`${parent}/`);
+}
+
+/**
+ * Política de sandbox do projeto em `projectDir`. Falha fechada: entrada malformada
+ * aborta a verificação; nunca cai silenciosamente no padrão.
+ */
+export function projectSandbox(projectDir: string, root: string = verifierRoot()): ProjectSandbox | null {
+  const config = readConfig(root);
+  if (!config?.projects) return null;
+  const target = realpathSync(projectDir);
+  const match = Object.keys(config.projects).find((key) => {
+    try {
+      return realpathSync(key) === target;
+    } catch {
+      return false;
+    }
+  });
+  if (match === undefined) return null;
+  const where = `projects["${match}"]`;
+  const entry: unknown = config.projects[match];
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new VerificationUnavailable(`${where} inválido`, "esperado objeto");
+  }
+  const absolutePaths = (value: unknown, field: string): string[] => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+      throw new VerificationUnavailable(`${where}.${field} inválido`, "esperado array de caminhos absolutos");
+    }
+    return value.map((item, index) => {
+      const cleaned = cleanAbsolute(item);
+      if (!cleaned) {
+        throw new VerificationUnavailable(`${where}.${field}[${index}] inválido`, "esperado caminho absoluto");
+      }
+      return cleaned;
+    });
+  };
+  const mounts: ProjectMount[] = [];
+  const rawMounts: unknown = (entry as ProjectSandbox).mounts ?? [];
+  if (!Array.isArray(rawMounts)) {
+    throw new VerificationUnavailable(`${where}.mounts inválido`, "esperado array de {source, dest}");
+  }
+  const destinations = new Set<string>();
+  rawMounts.forEach((item, index) => {
+    const mount = item as ProjectMount;
+    const source = cleanAbsolute(mount?.source);
+    const dest = cleanAbsolute(mount?.dest);
+    if (!source || !dest) {
+      throw new VerificationUnavailable(`${where}.mounts[${index}] inválido`, "esperado {source, dest} com caminhos absolutos");
+    }
+    if (RESERVED_MOUNT_DEST[dest] === true) {
+      throw new VerificationUnavailable(`${where}.mounts[${index}].dest reservado`, `${dest} é reservado pelo sandbox`);
+    }
+    if (destinations.has(dest)) {
+      throw new VerificationUnavailable(`${where}.mounts[${index}].dest duplicado`, `${dest} já é destino de outra montagem`);
+    }
+    destinations.add(dest);
+    mounts.push({ source, dest });
+  });
+  let home: string | undefined;
+  if ((entry as ProjectSandbox).home !== undefined) {
+    const cleaned = cleanAbsolute((entry as ProjectSandbox).home);
+    if (!cleaned || cleaned === "/nonexistent" || inside(target, cleaned)) {
+      throw new VerificationUnavailable(`${where}.home inválido`, "esperado caminho absoluto fora do repositório");
+    }
+    home = cleaned;
+  }
+  const env: unknown = (entry as ProjectSandbox).env ?? {};
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new VerificationUnavailable(`${where}.env inválido`, "esperado objeto de variáveis");
+  }
+  for (const [name, value] of Object.entries(env)) {
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name) || RESERVED_SANDBOX_ENV[name] === true || typeof value !== "string" || value.includes("\n")) {
+      throw new VerificationUnavailable(`${where}.env.${name} inválido`, "nome ou valor não permitido");
+    }
+  }
+  return {
+    path_prepend: absolutePaths((entry as ProjectSandbox).path_prepend, "path_prepend"),
+    mounts_ro: absolutePaths((entry as ProjectSandbox).mounts_ro, "mounts_ro"),
+    mounts,
+    ...(home ? { home } : {}),
+    env: env as Record<string, string>,
+  };
 }
 
 export function verifierRoot(): string {
