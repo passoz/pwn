@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { renderTasksMarkdown, type Plan } from "../src/core/plan-renderer.js";
+import { bwrapUsable } from "./bwrap.js";
 import {
   approvalPath,
   approvedFileContent,
@@ -36,8 +37,7 @@ import {
 const BUN = process.execPath;
 
 /** bwrap é pré-requisito da aceitação independente; sem ele os testes de execução são pulados. */
-const hasBwrap =
-  spawnSync("sh", ["-c", "command -v bwrap"], { encoding: "utf8" }).status === 0;
+const hasBwrap = bwrapUsable();
 
 const scratch: string[] = [];
 function tmp(prefix: string): string {

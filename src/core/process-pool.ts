@@ -48,6 +48,9 @@ function runOne(job: PoolJob, timeoutMs?: number): Promise<PoolResult> {
       cwd: job.cwd,
       env: job.env ? { ...process.env, ...job.env } : process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Grupo próprio: matar só o shell deixaria os netos (sleep, go test) vivos
+      // segurando os pipes, e o pool esperaria o processo original terminar.
+      detached: process.platform !== 'win32',
     });
     child.stdout.setEncoding('utf8').on('data', (d: string) => (stdout += d));
     child.stderr.setEncoding('utf8').on('data', (d: string) => (stderr += d));
@@ -56,7 +59,17 @@ function runOne(job: PoolJob, timeoutMs?: number): Promise<PoolResult> {
     if (timeoutMs && timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGKILL');
+        const pid = child.pid;
+        if (process.platform !== 'win32' && pid !== undefined) {
+          try {
+            process.kill(-pid, 'SIGKILL');
+          } catch {
+            child.kill('SIGKILL');
+          }
+        } else {
+          child.kill('SIGKILL');
+        }
+        finish(137);
       }, timeoutMs);
     }
   }

@@ -19,6 +19,7 @@ import { PolicyEngine } from '../src/core/policy-engine.js';
 import { ToolAPI } from '../src/core/tool-api.js';
 import { SandboxError, createGitWorktreeSandbox } from '../src/core/sandbox.js';
 import { checkDiffAgainstContract } from '../src/core/contract-guard.js';
+import { bwrapUsable } from './bwrap.js';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -412,7 +413,9 @@ except:
   } finally { cleanup(dir); }
 });
 
-test('§5.1 SUBPROCESSO: bwrap bloqueia escrita fora do sandbox no nível de kernel', () => {
+const bwrapTest = (bwrapUsable() ? test : test.skip) as typeof test;
+
+bwrapTest('§5.1 SUBPROCESSO: bwrap bloqueia escrita fora do sandbox no nível de kernel', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'pwn-sec-bwrap-'));
   try {
     const contract = createDefaultContractV4('T-SEC', '0001', 'Subprocess Bwrap', 'L1', {
