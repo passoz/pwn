@@ -1,0 +1,112 @@
+{
+  "audit_checks": {
+    "AC-1": {
+      "command": [
+        "bun",
+        "test",
+        "tests/parity/acceptance-sandbox.test.ts"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.5-ac-1.log",
+      "log_sha256": "a299fcd73e4e2ae26e7f0ef3f747c106a155a3ade9e6700a57b5196472f687e5",
+      "recorded_at": "2026-10-29T02:37:14.692Z",
+      "green_sha256": "057efca51d0ee413f55b3aedc64dec14f600cf85fb4c859a94c8904a5ee01066",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    }
+  },
+  "baseline_commit": "f63e55f60b5c806bd19bb6c84102890433f0fa30",
+  "baseline_implementation": {
+    "src/core/verification-runner.ts": {
+      "exists": true,
+      "sha256": "ad806ce7e73eef18902825316d3f8878c46f0f9ac56ee272f776d2bd6e16518b"
+    },
+    "scripts/parity/sandbox-proof.ts": {
+      "exists": true,
+      "sha256": "b8ef9ed3e1a69020c6eb492c4b6ffcc907ebd4287d337f65f80eab146a7b748b"
+    },
+    "testdata/parity/sandbox.json": {
+      "exists": true,
+      "sha256": "e37fbcbe7db577dea7204b11534be8dab6505a2c328795c196410819c409c64f"
+    }
+  },
+  "baseline_tests": {
+    "tests/parity/sandbox.test.ts": {
+      "exists": false,
+      "sha256": null
+    },
+    "tests/parity/acceptance-sandbox.test.ts": {
+      "exists": true,
+      "sha256": "5d37c2a5ad696b06bf307b3f5e621b2391dcd5db0bda34058b8cb27094d5a37f"
+    }
+  },
+  "contract": {
+    "id": "CTR-005",
+    "sha256": "69060761630f38e9af45cb6f2acc84af3ca3aaa69422efd2b3ca328d42eb73cb"
+  },
+  "created_at": "2026-10-29T02:36:59.424Z",
+  "frozen_tests": [
+    {
+      "path": "tests/parity/acceptance-sandbox.test.ts",
+      "sha256": "5d37c2a5ad696b06bf307b3f5e621b2391dcd5db0bda34058b8cb27094d5a37f"
+    }
+  ],
+  "green_expect": null,
+  "green_implementation": {
+    "src/core/verification-runner.ts": {
+      "exists": true,
+      "sha256": "64c7b07113575b180252a47aa3cdf7e3bddc4c0da21bd377e916adc60d060afd"
+    },
+    "scripts/parity/sandbox-proof.ts": {
+      "exists": true,
+      "sha256": "2e80e0419ad9e1bcbc679a4c1e3f05a12a10c6c62118dda6c5a75d921d9674db"
+    },
+    "testdata/parity/sandbox.json": {
+      "exists": true,
+      "sha256": "3dffac631b777fc4d191835400ae4e27bef50f4ab48b4b276a1c8f1a66ab33a0"
+    }
+  },
+  "green_tests": {
+    "tests/parity/sandbox.test.ts": {
+      "exists": true,
+      "sha256": "5debc08597bdb73697919f18ccc6d945e17e61e72ea3f3514a6e43a4546820ad"
+    },
+    "tests/parity/acceptance-sandbox.test.ts": {
+      "exists": true,
+      "sha256": "5d37c2a5ad696b06bf307b3f5e621b2391dcd5db0bda34058b8cb27094d5a37f"
+    }
+  },
+  "implementation_files": [
+    "src/core/verification-runner.ts",
+    "scripts/parity/sandbox-proof.ts",
+    "testdata/parity/sandbox.json"
+  ],
+  "plan_path": ".todo/0002-tasks.md",
+  "red_command": [
+    "bun",
+    "test",
+    "tests/parity/sandbox.test.ts"
+  ],
+  "red_expect": "SANDBOX-PROOF-FAILED",
+  "red_tests": {
+    "tests/parity/sandbox.test.ts": {
+      "exists": true,
+      "sha256": "5debc08597bdb73697919f18ccc6d945e17e61e72ea3f3514a6e43a4546820ad"
+    },
+    "tests/parity/acceptance-sandbox.test.ts": {
+      "exists": true,
+      "sha256": "5d37c2a5ad696b06bf307b3f5e621b2391dcd5db0bda34058b8cb27094d5a37f"
+    }
+  },
+  "state_version": 2,
+  "task": "1.5",
+  "task_definition_sha256": "1b2fc9aff06b7cb3e7dc0fe3ab1da157770d5c7334dc8e3a51866a0f9b3ab197",
+  "test_files": [
+    "tests/parity/sandbox.test.ts",
+    "tests/parity/acceptance-sandbox.test.ts"
+  ]
+}

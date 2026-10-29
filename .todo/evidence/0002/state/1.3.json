@@ -1,0 +1,112 @@
+{
+  "audit_checks": {
+    "AC-1": {
+      "command": [
+        "bun",
+        "test",
+        "tests/parity/acceptance-golden.test.ts"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.3-ac-1.log",
+      "log_sha256": "432892d225275bd6c83d252fde30ae244eac826fea976abb53cfff57e28ba217",
+      "recorded_at": "2026-10-29T02:32:24.249Z",
+      "green_sha256": "71f9d5abb4a7d75b70f88074e01e357dca2abfad04ab5cccf660c888fc9d0197",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    },
+    "AC-2": {
+      "command": [
+        "bun",
+        "scripts/parity/golden.ts",
+        "--check"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.3-ac-2.log",
+      "log_sha256": "e6758fd9ca042a07d12c647e76529123a848f996724d9e23ee35e71a29b3b092",
+      "recorded_at": "2026-10-29T02:32:24.313Z",
+      "green_sha256": "71f9d5abb4a7d75b70f88074e01e357dca2abfad04ab5cccf660c888fc9d0197",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    }
+  },
+  "baseline_commit": "32cb6143149567c14a3a6a4497e39b13df023bfa",
+  "baseline_implementation": {
+    "scripts/parity/golden.ts": {
+      "exists": true,
+      "sha256": "c97f161e0a9f8f30a0db261b737c9408cbf962b11488dac29eeb27bc09222de0"
+    }
+  },
+  "baseline_tests": {
+    "tests/parity/golden.test.ts": {
+      "exists": false,
+      "sha256": null
+    },
+    "tests/parity/acceptance-golden.test.ts": {
+      "exists": true,
+      "sha256": "5359f9eb00728a6dc7a789e4ec8375fbfdfb39fb280276cf87ccec6938533847"
+    }
+  },
+  "contract": {
+    "id": "CTR-003",
+    "sha256": "b9e2ee301b48c9f02c9fea0bae10aa1e7d2e9f5cbf12e6c5a39e43f0f49f5519"
+  },
+  "created_at": "2026-10-29T02:32:11.546Z",
+  "frozen_tests": [
+    {
+      "path": "tests/parity/acceptance-golden.test.ts",
+      "sha256": "5359f9eb00728a6dc7a789e4ec8375fbfdfb39fb280276cf87ccec6938533847"
+    }
+  ],
+  "green_expect": null,
+  "green_implementation": {
+    "scripts/parity/golden.ts": {
+      "exists": true,
+      "sha256": "ecec6fda55bc60749075391e5c8fbff380a31ad0476b057652c633a1d5c36188"
+    }
+  },
+  "green_tests": {
+    "tests/parity/golden.test.ts": {
+      "exists": true,
+      "sha256": "55882cf63cd12e5ac5cd74d5b22d8745ec3941de1063438900efb91ad068dd8d"
+    },
+    "tests/parity/acceptance-golden.test.ts": {
+      "exists": true,
+      "sha256": "5359f9eb00728a6dc7a789e4ec8375fbfdfb39fb280276cf87ccec6938533847"
+    }
+  },
+  "implementation_files": [
+    "scripts/parity/golden.ts"
+  ],
+  "plan_path": ".todo/0002-tasks.md",
+  "red_command": [
+    "bun",
+    "test",
+    "tests/parity/golden.test.ts"
+  ],
+  "red_expect": "GOLDEN-CHECK-FAILED",
+  "red_tests": {
+    "tests/parity/golden.test.ts": {
+      "exists": true,
+      "sha256": "55882cf63cd12e5ac5cd74d5b22d8745ec3941de1063438900efb91ad068dd8d"
+    },
+    "tests/parity/acceptance-golden.test.ts": {
+      "exists": true,
+      "sha256": "5359f9eb00728a6dc7a789e4ec8375fbfdfb39fb280276cf87ccec6938533847"
+    }
+  },
+  "state_version": 2,
+  "task": "1.3",
+  "task_definition_sha256": "4ada4eb1a6acc6c41c207fa6a3ce2e38c48c36de16035a74ea48b8afa6a959cf",
+  "test_files": [
+    "tests/parity/golden.test.ts",
+    "tests/parity/acceptance-golden.test.ts"
+  ]
+}

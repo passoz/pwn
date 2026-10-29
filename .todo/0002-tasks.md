@@ -11,10 +11,10 @@
 | `governance` | Decisão normativa DEC-030 e rastreabilidade |
 
 ## Global gates
-- [ ] `bun test tests/parity` — a suíte de paridade passa com exit 0.
-- [ ] `bun run typecheck` — o typecheck estrito passa com exit 0.
+- [x] `bun test tests/parity` — a suíte de paridade passa com exit 0.
+- [x] `bun run typecheck` — o typecheck estrito passa com exit 0.
 
-### [ ] [1.1] Registrar DEC-030 e atualizar a restrição normativa
+### [x] [1.1] Registrar DEC-030 e atualizar a restrição normativa
 
 **Requirement:** FR-005
 **Depends on:** none
@@ -37,7 +37,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [ ] [1.2] Capturar a linha de base e criar o executor diferencial
+### [x] [1.2] Capturar a linha de base e criar o executor diferencial
 
 **Requirement:** FR-001
 **Depends on:** 1.1
@@ -61,7 +61,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [ ] [1.3] Gerar os vetores de referência
+### [x] [1.3] Gerar os vetores de referência
 
 **Requirement:** FR-003
 **Depends on:** 1.2
@@ -85,7 +85,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [ ] [1.4] Gerar o conjunto de conformidade do validador
+### [x] [1.4] Gerar o conjunto de conformidade do validador
 
 **Requirement:** FR-004
 **Depends on:** 1.1
@@ -109,7 +109,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [ ] [1.5] Provar o pwn TypeScript dentro do sandbox do verificador
+### [x] [1.5] Provar o pwn TypeScript dentro do sandbox do verificador
 
 **Requirement:** FR-002
 **Depends on:** 1.2

@@ -1,0 +1,121 @@
+{
+  "audit_checks": {
+    "AC-1": {
+      "command": [
+        "bun",
+        "test",
+        "tests/parity/acceptance-baseline.test.ts"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.2-ac-1.log",
+      "log_sha256": "30e68e66a62c2bb44636b500e78fdff74f4a9152154901358a5b82fd12d28a70",
+      "recorded_at": "2026-10-29T02:29:56.781Z",
+      "green_sha256": "1d4603fec8fda0f29002b13fe8e083dc704c0037e6ac5b035396772200d0b634",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    },
+    "AC-2": {
+      "command": [
+        "bun",
+        "scripts/parity/diff.ts",
+        "--self-test"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.2-ac-2.log",
+      "log_sha256": "b02affa8418f19b7cc9fcfeebfd2096102367cc1a13949fc08a4fec2cbd402c0",
+      "recorded_at": "2026-10-29T02:29:56.858Z",
+      "green_sha256": "1d4603fec8fda0f29002b13fe8e083dc704c0037e6ac5b035396772200d0b634",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    }
+  },
+  "baseline_commit": "ecfb81f182e56fda6ef06587318d22d089c1a2ff",
+  "baseline_implementation": {
+    "scripts/parity/capture-baseline.ts": {
+      "exists": true,
+      "sha256": "7bd7b82f68af5245bb9e25b5b9e5f0d672f915fb1a7b832a6df992731e79ad85"
+    },
+    "scripts/parity/diff.ts": {
+      "exists": true,
+      "sha256": "afc1ccf9f7dc3ff843db9e1eef1a20165370c9f0356b9182c755c41e7b2b129c"
+    }
+  },
+  "baseline_tests": {
+    "tests/parity/baseline.test.ts": {
+      "exists": false,
+      "sha256": null
+    },
+    "tests/parity/acceptance-baseline.test.ts": {
+      "exists": true,
+      "sha256": "db00ccff0d881d9000ba7743ae2cd6cd38b324724676c7b9bb961eebc3929698"
+    }
+  },
+  "contract": {
+    "id": "CTR-002",
+    "sha256": "0be798e06e75947a62f49124fcbfcb5e73e1ea6af1a4326359098f9b8a6a15ca"
+  },
+  "created_at": "2026-10-29T02:29:24.921Z",
+  "frozen_tests": [
+    {
+      "path": "tests/parity/acceptance-baseline.test.ts",
+      "sha256": "db00ccff0d881d9000ba7743ae2cd6cd38b324724676c7b9bb961eebc3929698"
+    }
+  ],
+  "green_expect": null,
+  "green_implementation": {
+    "scripts/parity/capture-baseline.ts": {
+      "exists": true,
+      "sha256": "de94017376ab3ba16399700831bd4c5c12dc2c8742631a18f4268035dedaaa88"
+    },
+    "scripts/parity/diff.ts": {
+      "exists": true,
+      "sha256": "8fba9a8864bfe62c0c1c1448142ca1e5bfb1302a56308fa26ddbe7d7ec27b456"
+    }
+  },
+  "green_tests": {
+    "tests/parity/baseline.test.ts": {
+      "exists": true,
+      "sha256": "5f5349ae4c992655307bc566be90d53fb58222aa8d9a8b25205ff7e0b381f87c"
+    },
+    "tests/parity/acceptance-baseline.test.ts": {
+      "exists": true,
+      "sha256": "db00ccff0d881d9000ba7743ae2cd6cd38b324724676c7b9bb961eebc3929698"
+    }
+  },
+  "implementation_files": [
+    "scripts/parity/capture-baseline.ts",
+    "scripts/parity/diff.ts"
+  ],
+  "plan_path": ".todo/0002-tasks.md",
+  "red_command": [
+    "bun",
+    "test",
+    "tests/parity/baseline.test.ts"
+  ],
+  "red_expect": "BASELINE-COUNT",
+  "red_tests": {
+    "tests/parity/baseline.test.ts": {
+      "exists": true,
+      "sha256": "5f5349ae4c992655307bc566be90d53fb58222aa8d9a8b25205ff7e0b381f87c"
+    },
+    "tests/parity/acceptance-baseline.test.ts": {
+      "exists": true,
+      "sha256": "db00ccff0d881d9000ba7743ae2cd6cd38b324724676c7b9bb961eebc3929698"
+    }
+  },
+  "state_version": 2,
+  "task": "1.2",
+  "task_definition_sha256": "14dca7aa1726bd73ed5e5f4a78de74589b2457f33931cf51206e3f5c02dc261e",
+  "test_files": [
+    "tests/parity/baseline.test.ts",
+    "tests/parity/acceptance-baseline.test.ts"
+  ]
+}

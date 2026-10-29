@@ -1,0 +1,112 @@
+{
+  "audit_checks": {
+    "AC-1": {
+      "command": [
+        "bun",
+        "test",
+        "tests/parity/acceptance-schema.test.ts"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.4-ac-1.log",
+      "log_sha256": "1bb71a239aee8e79ee0b33168b1b4bfd5cc798e96c33d5e92d81be41f810e70d",
+      "recorded_at": "2026-10-29T02:34:05.532Z",
+      "green_sha256": "d9955645b28145a583a4ac3e330a865e6397d18953dc7dd89de46dd9d90d3754",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    },
+    "AC-2": {
+      "command": [
+        "bun",
+        "scripts/parity/schema-corpus.ts",
+        "--check"
+      ],
+      "expect": null,
+      "exit_code": 0,
+      "verdict": "PASS",
+      "log": ".todo/evidence/0002/1.4-ac-2.log",
+      "log_sha256": "3fdfc9e6893ceeb8f9b8f327e92a01bb88ed0c0b4ca3fe3b61d8ae231b980dcd",
+      "recorded_at": "2026-10-29T02:34:05.635Z",
+      "green_sha256": "d9955645b28145a583a4ac3e330a865e6397d18953dc7dd89de46dd9d90d3754",
+      "vacuity": {
+        "exit_code": 1,
+        "verdict": "PASS"
+      }
+    }
+  },
+  "baseline_commit": "3edac15742834707b1e7cf6efcb59cb127d2dda1",
+  "baseline_implementation": {
+    "scripts/parity/schema-corpus.ts": {
+      "exists": true,
+      "sha256": "51e10d672341275a4dc1ce7a36a049dc5847b280c149f0223dfad67b1ae00ac1"
+    }
+  },
+  "baseline_tests": {
+    "tests/parity/schema.test.ts": {
+      "exists": false,
+      "sha256": null
+    },
+    "tests/parity/acceptance-schema.test.ts": {
+      "exists": true,
+      "sha256": "3b5cee0ea59aca40137d4f3fb5f3cadc20609b223338098f0488c475fe196dac"
+    }
+  },
+  "contract": {
+    "id": "CTR-004",
+    "sha256": "80a6c820a52d69d48a6e150564f5853311fe024f1defa2ff30855bd84195668e"
+  },
+  "created_at": "2026-10-29T02:33:58.529Z",
+  "frozen_tests": [
+    {
+      "path": "tests/parity/acceptance-schema.test.ts",
+      "sha256": "3b5cee0ea59aca40137d4f3fb5f3cadc20609b223338098f0488c475fe196dac"
+    }
+  ],
+  "green_expect": null,
+  "green_implementation": {
+    "scripts/parity/schema-corpus.ts": {
+      "exists": true,
+      "sha256": "8fcfc0406884804cd89f3bc7375b4cbbd0a37e0e59d63cb5376b6866b2f94576"
+    }
+  },
+  "green_tests": {
+    "tests/parity/schema.test.ts": {
+      "exists": true,
+      "sha256": "eb6601c9cf086c6f288fa50ce3cb05e1efa5449dc29c893c072632cb229c4cc4"
+    },
+    "tests/parity/acceptance-schema.test.ts": {
+      "exists": true,
+      "sha256": "3b5cee0ea59aca40137d4f3fb5f3cadc20609b223338098f0488c475fe196dac"
+    }
+  },
+  "implementation_files": [
+    "scripts/parity/schema-corpus.ts"
+  ],
+  "plan_path": ".todo/0002-tasks.md",
+  "red_command": [
+    "bun",
+    "test",
+    "tests/parity/schema.test.ts"
+  ],
+  "red_expect": "SCHEMA-CORPUS-FAILED",
+  "red_tests": {
+    "tests/parity/schema.test.ts": {
+      "exists": true,
+      "sha256": "eb6601c9cf086c6f288fa50ce3cb05e1efa5449dc29c893c072632cb229c4cc4"
+    },
+    "tests/parity/acceptance-schema.test.ts": {
+      "exists": true,
+      "sha256": "3b5cee0ea59aca40137d4f3fb5f3cadc20609b223338098f0488c475fe196dac"
+    }
+  },
+  "state_version": 2,
+  "task": "1.4",
+  "task_definition_sha256": "428a5a2f37e22f8c64aeeb14e621b297a0f48af8ec4c156625b47908956466ef",
+  "test_files": [
+    "tests/parity/schema.test.ts",
+    "tests/parity/acceptance-schema.test.ts"
+  ]
+}
