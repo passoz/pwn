@@ -7,17 +7,17 @@ import (
 	"syscall"
 )
 
-// configureProcessGroup coloca o comando em um grupo de processos próprio,
+// ConfigureProcessGroup coloca o comando em um grupo de processos próprio,
 // equivalente a detached: true no processo-pool.ts.
-func configureProcessGroup(cmd *exec.Cmd) {
+func ConfigureProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// killProcessGroup mata o grupo inteiro. O fallback cobre processo já fora do
+// KillProcessGroup mata o grupo inteiro. O fallback cobre processo já fora do
 // grupo (por exemplo, setsid feito pelo próprio filho). A falha do fallback é
 // intencionalmente descartada: o timeout já fixa o status 137 e a espera pelo
 // Wait detecta a morte real do processo.
-func killProcessGroup(cmd *exec.Cmd) {
+func KillProcessGroup(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return
 	}

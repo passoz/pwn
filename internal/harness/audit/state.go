@@ -84,6 +84,8 @@ type State struct {
 	GreenTests             Snapshot                    `json:"green_tests"`
 	GreenExpect            *string                     `json:"green_expect"`
 	AuditChecks            map[string]AuditCheckRecord `json:"audit_checks"`
+	// AuditCheckOrder guarda a ordem de inserção de AuditChecks no arquivo.
+	AuditCheckOrder []string `json:"-"`
 }
 
 // workPaths são os diretórios de evidência do Work.
@@ -163,6 +165,9 @@ func tryLoadState(paths workPaths, task string) (*State, string) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Sprintf("state unreadable for task %s: %v", task, err)
 	}
+	if err := rebuildCheckOrder(data, &state); err != nil {
+		return nil, fmt.Sprintf("state unreadable for task %s: %v", task, err)
+	}
 	return &state, ""
 }
 
@@ -180,31 +185,75 @@ func saveState(paths workPaths, state *State) error {
 		"frozen_tests":            nonNilFrozen(state.FrozenTests),
 		"implementation_files":    nonNilStrings(state.ImplementationFiles),
 		"test_files":              nonNilStrings(state.TestFiles),
-		"baseline_implementation": nonNilSnapshot(state.BaselineImplementation),
-		"baseline_tests":          nonNilSnapshot(state.BaselineTests),
-		"red_tests":               state.RedTests,
+		"baseline_implementation": orderedSnapshot(state.BaselineImplementation, state.ImplementationFiles),
+		"baseline_tests":          orderedSnapshot(state.BaselineTests, state.TestFiles),
+		"red_tests":               nil,
 	}
 	if state.RedTests != nil {
+		record["red_tests"] = orderedSnapshot(*state.RedTests, state.TestFiles)
 		record["red_command"] = nonNilStrings(state.RedCommand)
 		record["red_expect"] = state.RedExpect
 	}
 	if state.GreenImplementation != nil || state.GreenTests != nil {
-		record["green_implementation"] = state.GreenImplementation
-		record["green_tests"] = state.GreenTests
+		record["green_implementation"] = orderedSnapshot(state.GreenImplementation, state.ImplementationFiles)
+		record["green_tests"] = orderedSnapshot(state.GreenTests, state.TestFiles)
 		record["green_expect"] = state.GreenExpect
 	}
 	if state.AuditChecks != nil {
-		record["audit_checks"] = state.AuditChecks
+		checks := make(jsonx.Fields, 0, len(state.AuditChecks))
+		for _, name := range orderedKeys(state.AuditChecks, state.AuditCheckOrder) {
+			checks = append(checks, jsonx.Field{Key: name, Value: state.AuditChecks[name]})
+		}
+		record["audit_checks"] = checks
 	}
 
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(record); err != nil {
+	// JSON.stringify da referência: chaves de topo ordenadas, objetos aninhados em
+	// ordem de inserção (um map de Go sairia em ordem alfabética).
+	compact, err := jsonx.Insertion(record)
+	if err != nil {
 		return err
 	}
-	return fsx.WriteFileAtomic(statePath(paths, state.Task), buffer.String())
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, compact, "", "  "); err != nil {
+		return err
+	}
+	pretty.WriteByte('\n')
+	return fsx.WriteFileAtomic(statePath(paths, state.Task), pretty.String())
+}
+
+// orderedKeys devolve as chaves de values: primeiro as de order (sem repetir),
+// depois as restantes em ordem alfabética.
+func orderedKeys[V any](values map[string]V, order []string) []string {
+	keys := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, key := range order {
+		if _, ok := values[key]; !ok {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	rest := make([]string, 0)
+	for key := range values {
+		if _, ok := seen[key]; !ok {
+			rest = append(rest, key)
+		}
+	}
+	sort.Strings(rest)
+	return append(keys, rest...)
+}
+
+// orderedSnapshot emite o instantâneo na ordem em que os arquivos foram listados
+// (a ordem de inserção de Object.fromEntries na referência).
+func orderedSnapshot(value Snapshot, order []string) jsonx.Fields {
+	fields := make(jsonx.Fields, 0, len(value))
+	for _, filePath := range orderedKeys(value, order) {
+		fields = append(fields, jsonx.Field{Key: filePath, Value: value[filePath]})
+	}
+	return fields
 }
 
 func nonNilStrings(value []string) []string {
@@ -221,11 +270,35 @@ func nonNilFrozen(value []FrozenTest) []FrozenTest {
 	return value
 }
 
-func nonNilSnapshot(value Snapshot) Snapshot {
-	if value == nil {
-		return Snapshot{}
+// rebuildCheckOrder lê de data a ordem em que audit_checks foi gravado, porque
+// o map de Go não guarda a ordem de inserção.
+func rebuildCheckOrder(data []byte, state *State) error {
+	var raw struct {
+		AuditChecks json.RawMessage `json:"audit_checks"`
 	}
-	return value
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if len(raw.AuditChecks) == 0 || string(raw.AuditChecks) == "null" {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw.AuditChecks))
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, _ := token.(string)
+		state.AuditCheckOrder = append(state.AuditCheckOrder, name)
+		var skipped json.RawMessage
+		if err := decoder.Decode(&skipped); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // changed devolve os caminhos cujo digest mudou entre dois instantâneos.

@@ -15,8 +15,9 @@ const batchUsage = `pwn work batch plan [--work NNNN] [--jobs N]        Mostra o
 pwn work batch prepare [--work NNNN] [--jobs N] [--tasks 1.2,1.3]
                                                     Cria um worktree por task do lote (um agente por worktree)
 pwn work batch integrate [--work NNNN] [--timeout-seconds S] [-- <regressão do plano>]
-                                                    Integra as entregas prontas: um commit por task + evidência local
-pwn work batch rebase <task>                        Refaz uma task retida sobre o HEAD atual (3-way)
+                                                    Integra as entregas prontas: um commit por task + evidência local;
+                                                    com o comando de regressão, cada entrega é testada sobre o HEAD integrado antes de entrar
+pwn work batch rebase <task>                        Refaz uma task retida sobre o HEAD atual (3-way); conflito fica no worktree
 pwn work batch abort                                Descarta o lote ativo (worktrees e branches)`
 
 func batchJobs(raw string) (int, error) {

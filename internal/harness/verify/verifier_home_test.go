@@ -358,3 +358,25 @@ func TestReadConfigRejectsOtherVersions(t *testing.T) {
 		t.Errorf("config inválida = %+v, quer nil", config)
 	}
 }
+
+// O runtime vai para a configuração e para o digest do sandbox: um link no PATH
+// pode apontar para outra versão depois da aprovação, então o caminho é o real.
+func TestDefaultRuntimeResolvesSymlinks(t *testing.T) {
+	bin := t.TempDir()
+	real := filepath.Join(bin, "bun-1.0.0")
+	if err := os.WriteFile(real, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(bin, "bun")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	resolved, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := verify.DefaultRuntime(); got != resolved {
+		t.Fatalf("DefaultRuntime = %q, quer o caminho real %q", got, resolved)
+	}
+}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/passoz/pwn/internal/harness/contract"
 	"github.com/passoz/pwn/internal/harness/policy"
+	"github.com/passoz/pwn/internal/platform/proc"
 	"github.com/passoz/pwn/internal/platform/sandbox"
 )
 
@@ -340,6 +341,9 @@ func (t *ToolAPI) Exec(command string, args []string, timeout time.Duration) Too
 	cmd := exec.Command(execCommand, execArgs...)
 	cmd.Dir = t.cwd
 	cmd.Env = sanitizedEnv()
+	// Grupo próprio: matar só o filho deixaria os netos vivos segurando o pipe de
+	// saída, e o timeout esperaria por eles.
+	proc.ConfigureProcessGroup(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -364,7 +368,7 @@ func (t *ToolAPI) Exec(command string, args []string, timeout time.Duration) Too
 			timer.Stop()
 		case <-timer.C:
 			timedOut = true
-			_ = cmd.Process.Kill()
+			proc.KillProcessGroup(cmd)
 			waitErr = <-done
 		}
 	} else {

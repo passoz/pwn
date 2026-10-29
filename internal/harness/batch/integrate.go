@@ -19,6 +19,7 @@ import (
 	"github.com/passoz/pwn/internal/harness/verify"
 	"github.com/passoz/pwn/internal/platform/fsx"
 	"github.com/passoz/pwn/internal/platform/gitx"
+	"github.com/passoz/pwn/internal/platform/proc"
 	"github.com/passoz/pwn/internal/platform/sandbox"
 )
 
@@ -313,6 +314,13 @@ func runRegression(treeRoot string, regression RegressionOptions) (bool, string)
 	command := exec.CommandContext(ctx, executable, args...)
 	command.Dir = treeRoot
 	command.Env = withoutVerifierEnvironment(os.Environ())
+	// Timeout mata o grupo: netos vivos segurariam os pipes e o Run não voltaria.
+	proc.ConfigureProcessGroup(command)
+	command.Cancel = func() error {
+		proc.KillProcessGroup(command)
+		return nil
+	}
+	command.WaitDelay = 2 * time.Second
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr

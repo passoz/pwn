@@ -1,8 +1,11 @@
 package work_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/passoz/pwn/internal/harness/work"
@@ -118,5 +121,39 @@ func TestGetWorkArtifactsPaths(t *testing.T) {
 	}
 	if !filepath.IsAbs(paths.PRD) {
 		t.Fatalf("caminho relativo: %q", paths.PRD)
+	}
+}
+
+// Os templates seguem a ordem de inserção do JSON.stringify da referência, não
+// a ordem alfabética de um map.
+func TestInitWorkDirectoryKeepsTemplateKeyOrder(t *testing.T) {
+	root := t.TempDir()
+	paths, err := work.InitWorkDirectory("0001", root)
+	if err != nil {
+		t.Fatalf("InitWorkDirectory: %v", err)
+	}
+	data, err := os.ReadFile(paths.Discovery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if _, err := decoder.Token(); err != nil {
+		t.Fatal(err)
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, token.(string))
+		var skipped json.RawMessage
+		if err := decoder.Decode(&skipped); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"work_id", "problem", "actors", "objectives", "constraints"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("ordem das chaves = %v, quer %v", keys, want)
 	}
 }

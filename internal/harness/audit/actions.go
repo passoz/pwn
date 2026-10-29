@@ -508,6 +508,9 @@ func (a *auditor) check(args *parsedArgs) (int, error) {
 	if state.AuditChecks == nil {
 		state.AuditChecks = make(map[string]AuditCheckRecord)
 	}
+	if _, exists := state.AuditChecks[args.name]; !exists {
+		state.AuditCheckOrder = append(state.AuditCheckOrder, args.name)
+	}
 	state.AuditChecks[args.name] = record
 	if err := saveState(a.paths, state); err != nil {
 		return 0, err

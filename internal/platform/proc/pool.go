@@ -133,7 +133,7 @@ func runOne(job Job, timeout time.Duration) Result {
 	cmd.Stderr = &stderr
 	// Grupo próprio: matar só o filho deixaria os netos (sleep, go test) vivos
 	// segurando os pipes, e o pool esperaria EOF indefinidamente.
-	configureProcessGroup(cmd)
+	ConfigureProcessGroup(cmd)
 
 	if err := cmd.Start(); err != nil {
 		result.Status = 127
@@ -152,7 +152,7 @@ func runOne(job Job, timeout time.Duration) Result {
 			timer.Stop()
 		case <-timer.C:
 			result.TimedOut = true
-			killProcessGroup(cmd)
+			KillProcessGroup(cmd)
 			// Espera o Wait para não deixar goroutine nem pipe pendente. Com o
 			// grupo morto por SIGKILL o Wait retorna logo.
 			waitErr = <-done
