@@ -115,9 +115,9 @@
 **Depends on:** 1.2
 **Behavior:** Executa o pwn TypeScript e os testes diferenciais dentro do bwrap com a política do verificador e registra o resultado.
 **Components:** parity
-**Files:** `scripts/parity/sandbox-proof.ts`, `tests/parity/sandbox.test.ts`, `testdata/parity/sandbox.json`
-**Implementation files:** `scripts/parity/sandbox-proof.ts`
-**Test files:** `tests/parity/sandbox.test.ts`
+**Files:** `scripts/parity/sandbox-proof.ts`, `tests/parity/sandbox.test.ts`, `testdata/parity/sandbox.json`, `tests/parity/acceptance-sandbox.test.ts`, `src/core/verification-runner.ts`
+**Implementation files:** `src/core/verification-runner.ts`, `scripts/parity/sandbox-proof.ts`, `testdata/parity/sandbox.json`
+**Test files:** `tests/parity/sandbox.test.ts`, `tests/parity/acceptance-sandbox.test.ts`
 
 **RED:**
 - `bun test tests/parity/sandbox.test.ts` — o teste exige a prova no sandbox e falha antes do script
@@ -127,7 +127,7 @@
 2. Rodar o pwn e os testes dentro do bwrap
 
 **ACs:**
-- [ ] `bun test tests/parity/sandbox.test.ts` — o pwn TypeScript roda dentro do sandbox sem rede
+- [ ] `bun test tests/parity/acceptance-sandbox.test.ts` — o sandbox monta node_modules e bloqueia a rede
 
 **Visual:** N/A
 **Documentation:** N/A

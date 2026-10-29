@@ -5,7 +5,9 @@
   "title": "Provar o pwn TypeScript dentro do sandbox do verificador",
   "risk": {
     "level": "L2",
-    "reasons": ["Execução de prova no bwrap, sem chave privada e sem rede"]
+    "reasons": [
+      "Execução de prova no bwrap, sem chave privada e sem rede"
+    ]
   },
   "validation_strategy": "tdd-strict",
   "behavioral_contract": {
@@ -19,19 +21,33 @@
     ]
   },
   "change_contract": {
-    "target_files": ["scripts/parity/sandbox-proof.ts", "testdata/parity/sandbox.json"],
-    "affected_components": ["parity"]
+    "target_files": [
+      "scripts/parity/sandbox-proof.ts",
+      "testdata/parity/sandbox.json"
+    ],
+    "affected_components": [
+      "parity"
+    ]
   },
   "architecture_contract": {
-    "invariants": ["A chave privada não entra no sandbox", "A rede fica desligada", "O HOME do operador não é montado"],
-    "forbidden_dependencies": ["src/**"]
+    "invariants": [
+      "A chave privada não entra no sandbox",
+      "A rede fica desligada",
+      "O HOME do operador não é montado"
+    ],
+    "forbidden_dependencies": [
+      "src/**"
+    ]
   },
   "acceptance_contract": {
     "commands": [
       "bun test tests/parity/sandbox.test.ts",
+      "bun test tests/parity/acceptance-sandbox.test.ts",
       "bun test"
     ],
-    "required_evidence": ["evidence.json"],
+    "required_evidence": [
+      "evidence.json"
+    ],
     "frozen_tests": []
   },
   "scope_contract": {
@@ -40,10 +56,22 @@
       "tests/parity/sandbox.test.ts",
       "testdata/parity/sandbox.json",
       ".prompts/**",
-      ".sources/**"
+      ".sources/**",
+      "src/core/verification-runner.ts",
+      "tests/parity/acceptance-sandbox.test.ts"
     ],
-    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
-    "out_of_scope": ["Implementação do binário Go", "Alteração normativa"]
+    "write_deny": [
+      ".git/**",
+      "src/**",
+      "schemas/**",
+      "package.json",
+      "bun.lock",
+      ".env*"
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go",
+      "Alteração normativa"
+    ]
   },
   "budget_contract": {
     "max_tokens": 60000,

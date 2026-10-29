@@ -226,13 +226,18 @@
       "files": [
         "scripts/parity/sandbox-proof.ts",
         "tests/parity/sandbox.test.ts",
-        "testdata/parity/sandbox.json"
+        "testdata/parity/sandbox.json",
+        "tests/parity/acceptance-sandbox.test.ts",
+        "src/core/verification-runner.ts"
       ],
       "implementation_files": [
-        "scripts/parity/sandbox-proof.ts"
+        "src/core/verification-runner.ts",
+        "scripts/parity/sandbox-proof.ts",
+        "testdata/parity/sandbox.json"
       ],
       "test_files": [
-        "tests/parity/sandbox.test.ts"
+        "tests/parity/sandbox.test.ts",
+        "tests/parity/acceptance-sandbox.test.ts"
       ],
       "red": {
         "command": "bun test tests/parity/sandbox.test.ts",
@@ -244,8 +249,8 @@
       ],
       "acceptance_criteria": [
         {
-          "command": "bun test tests/parity/sandbox.test.ts",
-          "description": "o pwn TypeScript roda dentro do sandbox sem rede"
+          "command": "bun test tests/parity/acceptance-sandbox.test.ts",
+          "description": "o sandbox monta node_modules e bloqueia a rede"
         }
       ],
       "visual": "N/A",
