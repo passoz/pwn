@@ -444,14 +444,18 @@ O audit exige que o RED mostre a asserção na saída. O mutation check restaura
 
 Um arquivo novo é removido nessa restauração. O teste então falha na compilação e a saída não traz a asserção. O mutation check reprova.
 
+O teste RED e o teste de aceitação congelado são arquivos diferentes. O RED muda o teste focado. O arquivo congelado não muda. Se o mesmo arquivo servir aos dois papéis, a mudança do RED invalida o congelamento.
+
 Por isso cada tarefa segue esta ordem:
 
 1. Commite um stub que compila. O stub tem as assinaturas e retorna valores errados.
-2. Commite o teste. A mensagem de falha contém um identificador literal, por exemplo `SUM-001`.
-3. Rode `audit baseline`. A árvore precisa estar limpa nos arquivos declarados.
-4. Rode `audit red --expect "SUM-001"`.
-5. Implemente e rode `audit green`.
-6. Rode `audit check` para cada AC e para `REGRESSION`.
+2. Commite o teste de aceitação congelado.
+3. Congele o teste de aceitação no contrato.
+4. Rode `audit baseline` com o teste RED ainda ausente.
+5. Escreva o teste RED. A mensagem de falha contém um identificador literal, por exemplo `SUM-001`.
+6. Rode `audit red --expect "SUM-001"`.
+7. Implemente e rode `audit green`.
+8. Rode `audit check` para cada AC e para `REGRESSION`.
 
 ### 10.3 Regras de aceitação
 
@@ -459,6 +463,9 @@ Por isso cada tarefa segue esta ordem:
 - Use `-tags=integration` nos testes diferenciais.
 - O comando `go test ./...` fica nos portões globais. O gate rejeita a suíte inteira como critério de aceite.
 - O texto de `--expect` é a asserção literal do teste.
+- O snapshot do verificador exclui `.git`. Um teste que cria worktree a partir da raiz real não roda nesse snapshot.
+- O portão global do Work usa um subconjunto compatível com o snapshot. A CI roda a suíte completa.
+- Corrija o teste incompatível antes de usar a suíte completa como portão global.
 
 ### 10.4 Configuração do verificador para Go
 
@@ -574,3 +581,5 @@ Esta seção lista cada achado da revisão 1 e a correção no plano.
 | R15 | A estimativa de 29 a 39 dias era baixa | A Fase 2 antiga tinha cerca de 9 mil linhas em 6 a 8 dias | 43 a 55 dias, com taxa declarada |
 | R16 | O JSON de Go difere do `JSON.stringify` | Cinco diferenças (seção 4.1) | Vetores e decodificador próprio |
 | R17 | O limite semântico do plano é menor que o schema | `work plan` recusou 6 arquivos de implementação, 4 ACs e 4 passos; o limite real é 3, 3 e 2 | Tarefas da Fase 0 divididas em 5; seções 3, 10.1 e 11 corrigidas |
+| R18 | A suíte completa não roda no snapshot do verificador | `tests/executor.test.ts` cria worktree a partir da raiz; o snapshot exclui `.git` e o `REGRESSION` falhou | Portão global da Fase 0 restrito a `bun test tests/parity` e `bun run typecheck`; regra na seção 10.3 |
+| R19 | Teste RED e teste congelado no mesmo arquivo invalidam o congelamento | O `RED` exige mudança no teste; o `approve` exige hash igual ao congelado | Arquivos separados; regra na seção 10.2 |
