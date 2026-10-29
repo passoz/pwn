@@ -201,6 +201,7 @@ func (r *Runner) workBatch(args []string) int {
 		for _, warning := range result.Warnings {
 			fmt.Fprintf(r.errOut(), "⚠  %s\n", warning)
 		}
+		r.autoRebase(ctx, result)
 		if len(result.Remaining) > 0 {
 			fmt.Fprintf(r.errOut(), "\nContinuam no lote: %s — corrija nos worktrees e rode integrate de novo, ou descarte com 'pwn work batch abort'.\n", strings.Join(result.Remaining, ", "))
 		} else {

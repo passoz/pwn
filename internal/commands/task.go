@@ -42,13 +42,14 @@ func (r *Runner) taskRun(args []string) int {
 
 	isolated := !noIsolation
 	result := run.Run(contextBackground(), run.Options{
-		WorkID:   workID,
-		TaskID:   taskID,
-		Command:  command,
-		Timeout:  secondsToDuration(float64(timeoutSeconds)),
-		RootDir:  r.rootDir(),
-		Isolated: &isolated,
-		Log:      r.errOut(),
+		WorkID:     workID,
+		TaskID:     taskID,
+		Command:    command,
+		Timeout:    secondsToDuration(float64(timeoutSeconds)),
+		RootDir:    r.rootDir(),
+		Isolated:   &isolated,
+		Gatekeeper: deciderGatekeeper{},
+		Log:        r.errOut(),
 	})
 	if result.Stdout != "" {
 		fmt.Fprintf(r.out(), "%s\n", result.Stdout)

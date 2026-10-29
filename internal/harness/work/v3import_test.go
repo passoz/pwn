@@ -428,20 +428,50 @@ func TestImportRiskDeciderRaisesDeterministicRisk(t *testing.T) {
 	}
 }
 
-func TestImportRiskDeciderErrorFallsBackToHeuristic(t *testing.T) {
+// Erro do decisor (por exemplo, `--operator decider` sem configuração) interrompe
+// a importação, como a exceção de src/core/v3-import.ts.
+func TestImportRiskDeciderErrorIsFatal(t *testing.T) {
 	root := v3Fixture(t, readTestdata(t, "plan.md"))
-	result, err := work.ImportV3Work(work.V3ImportOptions{
+	_, err := work.ImportV3Work(work.V3ImportOptions{
 		RootDir: root, WorkID: "0004", Risk: "auto", Force: true,
 		Decider: fakeDecider{err: errors.New("decisor indisponível")},
 	})
-	if err != nil {
-		t.Fatalf("ImportV3Work: %v", err)
+	if err == nil || !contains(err.Error(), "decisor indisponível") {
+		t.Fatalf("erro = %v, quer o erro do decisor", err)
 	}
-	if !containsWarning(result.Warnings, "decisor indisponível") {
-		t.Fatalf("warnings = %v", result.Warnings)
+}
+
+func TestImportRiskDeciderKeepsHeuristicWithWarning(t *testing.T) {
+	cases := map[string]struct {
+		decision work.RiskDecision
+		want     string
+	}{
+		"fora do escopo": {
+			decision: work.RiskDecision{HumanReason: "ponto 'risk' fora do escopo do decisor"},
+			want:     "--risk auto: ponto 'risk' fora do escopo do decisor; risco heurístico mantido.",
+		},
+		"sem respostas": {
+			decision: work.RiskDecision{Unanswered: true, DecisionID: "abc123", Reasons: []string{"decisor indisponível: timeout"}},
+			want:     "--risk auto: decisor indisponível: timeout; risco heurístico mantido (registro abc123).",
+		},
 	}
-	if result.RiskMapping[0].Risk != contract.RiskL3 {
-		t.Fatalf("heurística não foi mantida: %s", result.RiskMapping[0].Risk)
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := v3Fixture(t, readTestdata(t, "plan.md"))
+			result, err := work.ImportV3Work(work.V3ImportOptions{
+				RootDir: root, WorkID: "0004", Risk: "auto", Force: true,
+				Decider: fakeDecider{decision: test.decision},
+			})
+			if err != nil {
+				t.Fatalf("ImportV3Work: %v", err)
+			}
+			if !containsWarning(result.Warnings, test.want) {
+				t.Fatalf("warnings = %v, quer %q", result.Warnings, test.want)
+			}
+			if result.RiskMapping[0].Risk != contract.RiskL3 {
+				t.Fatalf("heurística não foi mantida: %s", result.RiskMapping[0].Risk)
+			}
+		})
 	}
 }
 

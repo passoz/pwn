@@ -75,11 +75,14 @@ type GateRequest struct {
 	Command   []string
 }
 
-// GateDecision é o veredicto do decisor.
+// GateDecision é o veredicto do decisor. Log são as linhas que a run escreve em
+// stderr antes de enfileirar; Err interrompe a run (decisor mal configurado).
 type GateDecision struct {
 	Outcome    GateOutcome
 	Reasons    []string
 	DecisionID string
+	Log        []string
+	Err        error
 }
 
 // Gatekeeper é o ponto de decisão da fila AFK (L4). O composition root liga o
@@ -209,8 +212,11 @@ func Run(ctx context.Context, options Options) Result {
 					Contracts: cloneContracts(contracts),
 					Command:   append([]string(nil), options.Command...),
 				})
-				for _, reason := range gate.Reasons {
-					fmt.Fprintf(logWriter, "[DECISOR] %s\n", reason)
+				if gate.Err != nil {
+					return Result{Status: 1, Stderr: gate.Err.Error(), RunID: runID, DiffViolations: []string{}}
+				}
+				for _, line := range gate.Log {
+					fmt.Fprintln(logWriter, line)
 				}
 			}
 

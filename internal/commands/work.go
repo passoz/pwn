@@ -372,6 +372,7 @@ func (r *Runner) workImport(args []string) int {
 			Force:     force,
 			Risk:      riskArg,
 			GateChain: gateChain,
+			Decider:   deciderRisk{rootDir: rootDir},
 		})
 		if err != nil {
 			fmt.Fprintf(r.errOut(), "✗ Work %s: %s\n", workID, err.Error())
@@ -733,13 +734,14 @@ func (r *Runner) workRun(args []string) int {
 
 	isolated := !noIsolation
 	result := run.Run(contextBackground(), run.Options{
-		WorkID:   workID,
-		TaskID:   taskID,
-		Command:  command,
-		Timeout:  secondsToDuration(float64(timeoutSeconds)),
-		RootDir:  rootDir,
-		Isolated: &isolated,
-		Log:      r.errOut(),
+		WorkID:     workID,
+		TaskID:     taskID,
+		Command:    command,
+		Timeout:    secondsToDuration(float64(timeoutSeconds)),
+		RootDir:    rootDir,
+		Isolated:   &isolated,
+		Gatekeeper: deciderGatekeeper{},
+		Log:        r.errOut(),
 	})
 	if result.Stdout != "" {
 		fmt.Fprintf(r.out(), "%s\n", result.Stdout)

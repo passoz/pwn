@@ -270,6 +270,13 @@ type RiskRaise struct {
 type RiskDecision struct {
 	Raises  []RiskRaise `json:"raises"`
 	Reasons []string    `json:"reasons"`
+	// DecisionID é o registro assinado que motivou a resposta.
+	DecisionID string `json:"decision_id"`
+	// Unanswered indica registro sem respostas (decisor indisponível): vale a
+	// heurística e o aviso cita o registro.
+	Unanswered bool `json:"unanswered"`
+	// HumanReason é o motivo de o decisor não governar o ponto; vale a heurística.
+	HumanReason string `json:"human_reason"`
 }
 
 // RiskDecider decide elevar o risco determinístico de uma task.
@@ -306,15 +313,15 @@ func applyRiskDecider(ctx context.Context, decider RiskDecider, workID string, t
 	}
 	decision, err := decider.RaiseRisk(ctx, workID, candidates)
 	if err != nil {
-		*warnings = append(*warnings, "--risk auto: "+err.Error()+"; risco heurístico mantido.")
+		return err
+	}
+	if decision.HumanReason != "" {
+		*warnings = append(*warnings, "--risk auto: "+decision.HumanReason+"; risco heurístico mantido.")
 		return nil
 	}
-	if len(decision.Raises) == 0 {
-		reasons := "sem elevação"
-		if len(decision.Reasons) > 0 {
-			reasons = strings.Join(decision.Reasons, "; ")
-		}
-		*warnings = append(*warnings, "--risk auto: "+reasons+"; risco heurístico mantido.")
+	if decision.Unanswered {
+		*warnings = append(*warnings, fmt.Sprintf(
+			"--risk auto: %s; risco heurístico mantido (registro %s).", strings.Join(decision.Reasons, "; "), decision.DecisionID))
 		return nil
 	}
 	for _, raise := range decision.Raises {
