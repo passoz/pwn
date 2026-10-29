@@ -53,7 +53,7 @@
     },
     {
       "origin": "DISC-001",
-      "requirement_id": "QR-001",
+      "requirement_id": "FR-006",
       "decision_id": "DEC-030",
       "spec_section": "CAP-001",
       "task_id": "1.2",
@@ -63,7 +63,7 @@
     },
     {
       "origin": "DISC-001",
-      "requirement_id": "QR-002",
+      "requirement_id": "FR-007",
       "decision_id": "DEC-030",
       "spec_section": "CAP-001",
       "task_id": "1.2",

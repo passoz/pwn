@@ -32,38 +32,56 @@
       "type": "functional",
       "statement": "Capturar a linha de base de testes do commit c81a18b com contagem e código de saída.",
       "priority": "must",
-      "acceptance_criteria": ["bun test tests/parity/baseline.test.ts"]
+      "acceptance_criteria": [
+        "bun test tests/parity/baseline.test.ts"
+      ]
     },
     {
       "id": "FR-002",
       "type": "functional",
       "statement": "Criar o executor diferencial para comparar os dois binários no mesmo cenário.",
       "priority": "must",
-      "acceptance_criteria": ["bun scripts/parity/diff.ts --self-test"]
+      "acceptance_criteria": [
+        "bun scripts/parity/diff.ts --self-test"
+      ]
     },
     {
       "id": "FR-003",
       "type": "functional",
       "statement": "Gerar vetores de referência para JSON, criptografia, recibo e markdown do plano.",
       "priority": "must",
-      "acceptance_criteria": ["bun scripts/parity/golden.ts --check"]
+      "acceptance_criteria": [
+        "bun scripts/parity/golden.ts --check"
+      ]
     },
     {
       "id": "FR-004",
       "type": "functional",
       "statement": "Gerar o conjunto de conformidade do validador com as 17 palavras-chave dos schemas.",
       "priority": "must",
-      "acceptance_criteria": ["bun test tests/parity/schema.test.ts"]
+      "acceptance_criteria": [
+        "bun test tests/parity/schema.test.ts"
+      ]
     },
     {
       "id": "FR-005",
       "type": "functional",
       "statement": "Registrar DEC-030 em spec.json e .specs/system.json, com a restrição DEC-005 substituída.",
       "priority": "must",
-      "acceptance_criteria": ["bun test tests/parity/normative.test.ts"]
+      "acceptance_criteria": [
+        "bun test tests/parity/normative.test.ts"
+      ]
     }
   ],
-  "accepted_requirements": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-005"],
+  "accepted_requirements": [
+    "FR-001",
+    "FR-002",
+    "FR-003",
+    "FR-004",
+    "FR-005",
+    "FR-006",
+    "FR-007"
+  ],
   "stakeholders": [
     {
       "name": "Operador humano",

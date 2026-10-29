@@ -42,7 +42,7 @@
       ]
     },
     {
-      "id": "QR-001",
+      "id": "FR-006",
       "title": "Captura determinística",
       "user_story": "Como operador, quero que a captura não altere o repositório e produza o mesmo resultado em duas execuções.",
       "acceptance_criteria": [
@@ -50,7 +50,7 @@
       ]
     },
     {
-      "id": "QR-002",
+      "id": "FR-007",
       "title": "Execução sem rede",
       "user_story": "Como operador, quero que o executor diferencial rode sem rede no sandbox.",
       "acceptance_criteria": [

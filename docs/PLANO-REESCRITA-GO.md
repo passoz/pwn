@@ -37,7 +37,7 @@ Reescreva o CLI (interface de linha de comando) pwn em Go. Mantenha o comportame
 | Interface | 36 subcomandos |
 | Schemas | 7 arquivos Draft-07, 1.324 linhas |
 | Palavras-chave de schema em uso | 17 (seção 7) |
-| Limites do schema do plano | 40 tarefas por Work, 12 arquivos de implementação por tarefa, 3 componentes por tarefa |
+| Limites do plano | 40 tarefas por Work, 3 componentes por tarefa. O schema aceita 12 arquivos de implementação, mas o validador semântico limita 3 arquivos, 3 critérios de aceite e 2 passos por tarefa |
 | Targets | `pi`, `opencode`, `omp`, `raw` |
 | Ambiente de teste | Bun 1.4.2 |
 | Conjunto de ferramentas Go | Go 1.27.1 instalado |
@@ -426,7 +426,7 @@ O pwn atual governa a reescrita. O pwn Go só entra depois do corte.
 3. Crie o Work da fase com `bun bin/pwn.js work scaffold --title "<fase>" --risk L3`.
 4. Use um Work por fase, de `0002` a `0010`. O schema limita um Work a 40 tarefas.
 5. Substitua o esqueleto pelos artefatos da fase. Detalhe discovery, requirements, PRD (documento de requisitos de produto), spec e plan.
-6. Divida o trabalho em tarefas de até 6 arquivos de implementação e até 3 componentes. O limite duro é 12 arquivos.
+6. Divida o trabalho em tarefas de até 3 arquivos de implementação, 3 critérios de aceite e 2 passos. O schema aceita 12 arquivos, mas o validador semântico recusa acima de 3.
 7. Defina `write_allow` por tarefa. Negue `.pwn/**`, `.git/**`, `queue/**` e a raiz do verificador.
 8. Use risco L3 nos pacotes críticos e congele os testes. Use L4 só quando a tarefa lê ou grava a chave privada do verificador.
 9. Aprove cada tarefa com `pwn verify approve`.
@@ -573,3 +573,4 @@ Esta seção lista cada achado da revisão 1 e a correção no plano.
 | R14 | A versão do harness entra no HMAC | `gate-cache.ts` lê `package.json` | Arquivo `VERSION` embutido (Fase 4) |
 | R15 | A estimativa de 29 a 39 dias era baixa | A Fase 2 antiga tinha cerca de 9 mil linhas em 6 a 8 dias | 43 a 55 dias, com taxa declarada |
 | R16 | O JSON de Go difere do `JSON.stringify` | Cinco diferenças (seção 4.1) | Vetores e decodificador próprio |
+| R17 | O limite semântico do plano é menor que o schema | `work plan` recusou 6 arquivos de implementação, 4 ACs e 4 passos; o limite real é 3, 3 e 2 | Tarefas da Fase 0 divididas em 5; seções 3, 10.1 e 11 corrigidas |
