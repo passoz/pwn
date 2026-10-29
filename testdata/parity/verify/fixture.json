@@ -1,0 +1,180 @@
+{
+  "note": "gerado por bun a partir da referência TypeScript; não edite à mão",
+  "verifier": {
+    "config": {
+      "version": 1,
+      "verifier_id": "parity-verifier",
+      "created_at": "2026-01-01T00:00:00.000Z",
+      "runtime": {
+        "bun": "/nonexistent/bun"
+      },
+      "isolation": {
+        "mode": "bwrap",
+        "bwrap": null,
+        "network": false
+      }
+    },
+    "private_key_pem": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIIpy/A+H91q0UXHya88wXH48c1+Nu0WFsYA78iP49MI+\n-----END PRIVATE KEY-----\n",
+    "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAYDSOOQ4C0f9BV04cxLMZc3STPljhkayffvzjDEZ/6Lk=\n-----END PUBLIC KEY-----\n",
+    "fingerprint": "9e24d5be4a503879de6054453377155b2869a24a39624c335e8365873d1006f3"
+  },
+  "approval_content": {
+    "version": 1,
+    "work_id": "0002",
+    "task_id": "1.3",
+    "kind": "task",
+    "approved_by": "operator",
+    "created_at": "2026-01-02T03:04:05.678Z",
+    "plan_path": ".todo/0002-tasks.md",
+    "plan_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "contract_id": "CTR-001",
+    "contract_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "baseline_commit": "0123456789abcdef0123456789abcdef01234567",
+    "implementation_files": [
+      "src/lib.ts"
+    ],
+    "checks": [
+      {
+        "id": "AC-1",
+        "command": [
+          "/usr/bin/bun",
+          "test",
+          "tests/acceptance.test.ts"
+        ],
+        "expect_output": null,
+        "require_baseline_failure": true
+      },
+      {
+        "id": "REGRESSION",
+        "command": [
+          "/usr/bin/bun",
+          "test"
+        ],
+        "expect_output": "ok",
+        "require_baseline_failure": false
+      }
+    ],
+    "approved_files": [
+      {
+        "path": "tests/acceptance.test.ts",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ]
+  },
+  "approval_id": "e06cdddd3eb0b0ea7e8b3f70454156ce9ed0446ff3e7bed10fda83d386f707c0",
+  "receipt": {
+    "receipt_id": "0903be6859c59b3a120c393839091eb6797ca3fc9e86fef61c412ba628711196",
+    "version": 1,
+    "kind": "independent-acceptance",
+    "work_id": "0002",
+    "task_id": "1.3",
+    "approval_id": "e06cdddd3eb0b0ea7e8b3f70454156ce9ed0446ff3e7bed10fda83d386f707c0",
+    "candidate_snapshot_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+    "dependency_digest": "8888888888888888888888888888888888888888888888888888888888888888",
+    "sandbox_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+    "outcome": "pass",
+    "checks": [
+      {
+        "id": "AC-1",
+        "outcome": "pass",
+        "exit_code": 0,
+        "output_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "baseline_exit_code": 1,
+        "baseline_suspect_environmental": false
+      },
+      {
+        "id": "REGRESSION",
+        "outcome": "pass",
+        "exit_code": 0,
+        "output_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+        "baseline_exit_code": null,
+        "baseline_suspect_environmental": false
+      }
+    ],
+    "verifier": {
+      "id": "parity-verifier",
+      "public_key_fingerprint": "9e24d5be4a503879de6054453377155b2869a24a39624c335e8365873d1006f3"
+    },
+    "created_at": "2026-10-29T03:33:07.976Z",
+    "signature": "DwfN/tZqEZnqzaA7qm14oXg1PKkG2XGRqZztbiHoNmXPI79SFMYE62wUGfZkCTI6w2ZZtzk9afVctXYpUuoKDQ=="
+  },
+  "snapshot": {
+    "tree": [
+      {
+        "path": "a.txt",
+        "content": "alpha\n"
+      },
+      {
+        "path": "sub/b.txt",
+        "content": "beta\n"
+      },
+      {
+        "path": "link.txt",
+        "symlink": "a.txt"
+      },
+      {
+        "path": ".git/HEAD",
+        "content": "ref: refs/heads/main\n"
+      },
+      {
+        "path": "node_modules/pkg/index.js",
+        "content": "module.exports = 1;\n"
+      },
+      {
+        "path": ".todo/x.md",
+        "content": "x\n"
+      }
+    ],
+    "files": [
+      {
+        "path": "a.txt",
+        "kind": "file",
+        "mode": 420,
+        "sha256": "b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060"
+      },
+      {
+        "path": "link.txt",
+        "kind": "symlink",
+        "mode": 511,
+        "target": "a.txt"
+      },
+      {
+        "path": "sub/b.txt",
+        "kind": "file",
+        "mode": 420,
+        "sha256": "f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad"
+      }
+    ],
+    "digest": "e5d3422fa1bc7d31ecb37652d0e21982048b065c99f626057626d502e79f862a"
+  },
+  "dependency": {
+    "manifests": {
+      "package.json": "{\"name\":\"x\"}\n",
+      "bun.lock": "lock\n",
+      "bunfig.toml": "logLevel = \"error\"\n"
+    },
+    "files": [
+      {
+        "path": "package.json",
+        "sha256": "a1c5e150230b343ed793a951c4e0c11e2ba4872496cce306b50bde9a6c62a252"
+      },
+      {
+        "path": "bun.lock",
+        "sha256": "d8c9f2728aa278ebcd33ccedf3ad309a866870ad5fb93a03526b4b7655c9e911"
+      },
+      {
+        "path": "bun.lockb",
+        "sha256": null
+      },
+      {
+        "path": "bunfig.toml",
+        "sha256": "ea7e782b7ebedd280e444796a04f6961b095c848e38cf7785e04103bfed91436"
+      },
+      {
+        "path": "tsconfig.json",
+        "sha256": null
+      }
+    ],
+    "digest": "9e98fe96757b0e52f39d7d3c0efeb864693f832bac5260ced12c0c738c39c48b"
+  }
+}
