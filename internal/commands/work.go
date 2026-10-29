@@ -58,8 +58,7 @@ func (r *Runner) Work(subcommand string, args []string) int {
 	case "sync":
 		return r.workSync(args)
 	case "batch":
-		fmt.Fprint(r.errOut(), "✗ pwn work batch: comando ainda não portado para Go\n")
-		return 1
+		return r.workBatch(args)
 	default:
 		fmt.Fprintf(r.errOut(), "Subcomando desconhecido para 'pwn work': %s\n", subcommand)
 		fmt.Fprint(r.out(), "\nUso:\n")
