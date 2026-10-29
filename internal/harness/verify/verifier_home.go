@@ -178,6 +178,14 @@ func ReceiptDir(root string) string { return filepath.Join(root, "receipts") }
 
 // DefaultRuntime devolve o caminho do executável que roda o verificador.
 func DefaultRuntime() string {
+	// O runtime aprovado é o ambiente que executa os checks. Prefira um
+	// interpretador conhecido, como o TypeScript fazia com o próprio Bun; o
+	// executável do pwn fica como último recurso.
+	for _, name := range []string{"bun", "go"} {
+		if found, ok := FindExecutable(name); ok {
+			return found
+		}
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return ""

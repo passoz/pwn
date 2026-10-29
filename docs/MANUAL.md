@@ -1,7 +1,9 @@
 # 📖 Manual Completo do PWN — Policy Work Norms (`pwn`)
 
 > **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
-> *Versão do Harness: v0.1.0 (Bun / TypeScript)*
+> *Versão do Harness: v0.1.0 (Go)*
+>
+> A implementação oficial é o binário Go. A implementação TypeScript em `src/` permanece como referência de comportamento e oráculo de paridade.
 
 ---
 
@@ -29,7 +31,7 @@
 
 O **PWN** (`pwn`) foi projetado para resolver o maior problema de agentes autônomos de desenvolvimento de software: **a degradação silenciosa e o desvio de escopo (scope drift)**.
 
-Diferente de assistentes convencionais baseados unicamente em instruções genéricas em Markdown, o PWN opera sob o princípio de **Governança por Contratos Nativos**. Toda decisão de arquitetura, tarefa atômica e modificação no código-fonte deve ser respaldada por um contrato auditável e verificada deterministicamente por código TypeScript nativo.
+Diferente de assistentes convencionais baseados unicamente em instruções genéricas em Markdown, o PWN opera sob o princípio de **Governança por Contratos Nativos**. Toda decisão de arquitetura, tarefa atômica e modificação no código-fonte deve ser respaldada por um contrato auditável e verificada deterministicamente por código Go nativo.
 
 ### Princípios Fundamentais:
 1. **Contratos antes da Execução:** Nenhum código é modificado sem um contrato congelado V4.
@@ -63,7 +65,7 @@ Conforme estabelecido pela **DEC-029**, todos os documentos que regem o comporta
 ### Validação dos Documentos:
 Você pode validar a integridade de todos os documentos normativos do repositório a qualquer momento com:
 ```bash
-bun bin/pwn.js validate
+bin/pwn validate
 ```
 
 ### Leis embutidas e pinagem (drift)
@@ -115,7 +117,7 @@ Cada tarefa executada pelo PWN possui um **Task Contract V4**. O contrato estrut
 ### Gerando a Cápsula de Contexto:
 Para visualizar o resumo formatado do contrato V4 congelado para uma tarefa:
 ```bash
-bun bin/pwn.js task capsule T-001 0001
+bin/pwn task capsule T-001 0001
 ```
 
 Na seção **3 (VALIDATION COMMANDS)**, além da **allowlist do contrato** (os prefixos que o shell do sandbox executa), a cápsula imprime o bloco **`PLANO (o audit exige EXATAMENTE estes comandos):`** — o **RED** da task, cada check exigido (`AC-1..n`, `VISUAL`/`DOCUMENTATION` quando exigidos, `REGRESSION`) com os comandos autorizados, e os itens de `## Global gates`. Assim o agente vê o critério de aceitação real, e não apenas a allowlist do contrato, que **não** é o AC.
@@ -139,7 +141,7 @@ A partir de **L3**, os testes de aceitação precisam ser escritos e **congelado
 O congelamento protege a **imutabilidade** dos arquivos após sua aprovação; não prova que os testes sejam suficientes nem que a implementação esteja completa ou correta.
 
 ```bash
-bun bin/pwn.js work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
+bin/pwn work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
 ```
 
 ---
@@ -162,7 +164,7 @@ O **Diff Guard** (`src/core/contract-guard.ts`) é o mecanismo de segurança que
 
 ## 6. Portões Determinísticos (Gates)
 
-Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` que validam se um Work possui todos os artefatos necessários antes de avançar para a próxima fase.
+Os portões (*gates*) são funções Go nativas em `internal/harness/gates` que validam se um Work possui todos os artefatos necessários antes de avançar para a próxima fase.
 
 ### Portões Disponíveis:
 - **`GATE-DISC-REQ`:** Valida se `discovery.json` e `requirements.json` existem no Work e se todos os requisitos possuem critérios de aceite testáveis.
@@ -176,7 +178,7 @@ Os portões (*gates*) são funções TypeScript nativas em `src/core/gates.ts` q
 `pwn work gate --all` avalia os **5 gates numa única passada** e agrupa todos os findings por gate, seguidos de um resumo (`GATE-X: pass|pass_with_notes|blocked (N findings)`). Exit `1` se qualquer gate estiver bloqueado. O objetivo é trocar N ciclos de "corrigir → rodar → descobrir o próximo problema" por um único ciclo com a lista completa.
 
 ```bash
-bun bin/pwn.js work gate --all --work 0001
+bin/pwn work gate --all --work 0001
 ```
 
 ### Cache de veredicto de gate (Certificado Assinado por HMAC):
@@ -186,9 +188,9 @@ Cada gate calcula hashes (`shortHash`) dos seus inputs. O `input_versions` do ve
 A chave de assinatura é lida de `PWN_VERIFIER_KEY` (em CI/ambiente protegido) ou do arquivo com permissão restrita `0600` em `.pwn/.verifier_key`. Adulteração do payload sem a chave quebra o HMAC e faz o cache ser rejeitado, forçando reavaliação do gate; alteração de schema embutido invalida caches pelo `laws_sha256`. A chave default permanece acessível na árvore: isso não protege contra um repositório hostil, e é por isso que o **cache de gate** (recálculo determinístico) é separado da **aceitação independente** — esta última usa a raiz protegida fora do repositório e um recibo Ed25519 (`pwn verify`); o `cache` assinado por HMAC **não** autoriza conclusão.
 
 ```bash
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0001   # 1ª: avalia e assina; 2ª: (cache verificado)
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0001 --no-cache
-bun bin/pwn.js work gate --clear-cache
+bin/pwn work gate GATE-DISC-REQ --work 0001   # 1ª: avalia e assina; 2ª: (cache verificado)
+bin/pwn work gate GATE-DISC-REQ --work 0001 --no-cache
+bin/pwn work gate --clear-cache
 ```
 
 ### Pré-voo de execução:
@@ -196,7 +198,7 @@ bun bin/pwn.js work gate --clear-cache
 `pwn work run --dry-run` roda os 5 gates e valida os contratos V4 de cada task (`risk.level`, `write_allow` não vazio, `acceptance_contract.commands` não vazio), listando **todos** os impedimentos — sem criar sandbox, sem executar comando. Exit `1` se houver qualquer impedimento.
 
 ```bash
-bun bin/pwn.js work run --dry-run --work 0001 -- bun test
+bin/pwn work run --dry-run --work 0001 -- bun test
 ```
 
 ### Cobertura agregada do Work:
@@ -204,7 +206,7 @@ bun bin/pwn.js work run --dry-run --work 0001 -- bun test
 `pwn work status --coverage` deriva, dos próprios artefatos, quantos requisitos estão aceitos, quantas capabilities têm regras, quantas tasks têm contrato congelado e critérios de aceite. Exit `0` quando não há lacunas, `1` caso contrário.
 
 ```bash
-bun bin/pwn.js work status --coverage --work 0001
+bin/pwn work status --coverage --work 0001
 ```
 
 ### Enforcement no caminho de execução (fail-closed):
@@ -219,18 +221,18 @@ política ainda ativa); não há escape para a política de shell.
 
 ```bash
 # Default: gates + sandbox + diff guard
-bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0001 --timeout-seconds 600 -- bun test
 
 # Pula os gates (governança), mas mantém o enforcement
-bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 
 # Pula o sandbox (executa no diretório de trabalho), política continua ativa
-bun bin/pwn.js work run --no-isolation --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-isolation --work 0001 --timeout-seconds 600 -- bun test
 ```
 
 ### Executando um Gate:
 ```bash
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0001
+bin/pwn work gate GATE-DISC-REQ --work 0001
 ```
 
 Retorno JSON do Gate:
@@ -341,15 +343,15 @@ Quando o PWN é executado em modo não supervisionado (AFK - *Away From Keyboard
 
 1. **Listar tarefas em aguardo:**
    ```bash
-   bun bin/pwn.js queue list
+   bin/pwn queue list
    ```
 2. **Aprovar uma tarefa suspensa** (depois, rode de novo o mesmo comando; a aprovação vale só para ele e para o contrato revisado):
    ```bash
-   bun bin/pwn.js queue approve RUN-001
+   bin/pwn queue approve RUN-001
    ```
 3. **Rejeitar uma tarefa suspensa:**
    ```bash
-   bun bin/pwn.js queue reject RUN-001
+   bin/pwn queue reject RUN-001
    ```
 
 ---
@@ -368,13 +370,13 @@ O PWN é agnóstico de runtime de IA. O **Target Materializer** (`src/core/targe
 ### Comandos de Target:
 ```bash
 # Exibir matriz de capacidades
-bun bin/pwn.js target list
+bin/pwn target list
 
 # Materializar artefatos para OpenCode
-bun bin/pwn.js target materialize --target opencode
+bin/pwn target materialize --target opencode
 
 # Materializar artefatos para omp (oh my pi)
-bun bin/pwn.js target materialize --target omp
+bin/pwn target materialize --target omp
 ```
 
 ---
@@ -405,7 +407,7 @@ rodaram sem isolamento.
 ### Sugestões de Otimização de Routing:
 O comando `pwn metrics optimize` analisa o histórico e gera sugestões consultivas (sem alterar arquivos automaticamente):
 ```bash
-bun bin/pwn.js metrics optimize
+bin/pwn metrics optimize
 ```
 *Exemplo de saída:*
 > `[Sugestão #1] Papel Atual: strong (<modelos reais do histórico>) -> Recomendado: cheap`  
@@ -529,7 +531,7 @@ exige o congelamento e guarda uma cópia aprovada do conteúdo na raiz protegida
 task precisa exercitar cada arquivo (senão o `GATE-PLAN-CONTRACT` acusa `FROZEN-UNUSED`).
 
 ```bash
-bun bin/pwn.js work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
+bin/pwn work contract --work 0001 --task 1.1 --freeze-tests tests/calc.test.ts
 ```
 
 ### `pwn work run [--work <work-id>] [--task <task-id>] [--no-gate] [--no-isolation] -- <comando>...`
@@ -563,10 +565,10 @@ os arquivos modificados e grava telemetria.
 
 ```bash
 # Executa apenas se a cadeia de 5 gates aprovar
-bun bin/pwn.js work run --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0001 --timeout-seconds 600 -- bun test
 
 # Execução sem a cadeia de gates (decisão explícita de operador)
-bun bin/pwn.js work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
 ```
 
 ### `pwn work run-all [--works 0001,0002] [--jobs N] [--timeout-seconds S] [--no-gate] -- <comando>...`
@@ -611,14 +613,14 @@ O código `2` imprime a lista **completa** do que falta (não para no primeiro i
 
 ```bash
 # Verifica evidência da task 1.1 do Work 0001 (comando do plano)
-bun bin/pwn.js work audit --work 0001 --task 1.1 -- bun tests/calc.test.mjs
+bin/pwn work audit --work 0001 --task 1.1 -- bun tests/calc.test.mjs
 
 # RED com a asserção amarrada ao arquivo de teste
-bun bin/pwn.js work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" -- bun tests/calc.test.mjs
+bin/pwn work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" -- bun tests/calc.test.mjs
 
 # GREEN e checks locais (mesmo comando do plano)
-bun bin/pwn.js work audit green --work 0001 --task 1.1 -- bun tests/calc.test.mjs
-bun bin/pwn.js work audit check --work 0001 --task 1.1 --name AC-1 -- bun tests/calc.test.mjs
+bin/pwn work audit green --work 0001 --task 1.1 -- bun tests/calc.test.mjs
+bin/pwn work audit check --work 0001 --task 1.1 --name AC-1 -- bun tests/calc.test.mjs
 ```
 
 **Conclusão:** o resultado do audit é apenas o diagnóstico local (RED/GREEN/checks). A task só conta como concluída (`ACCEPTED`) quando existe um **recibo de aceitação independente** válido para a árvore atual — veja `pwn verify` abaixo.
@@ -627,8 +629,8 @@ bun bin/pwn.js work audit check --work 0001 --task 1.1 --name AC-1 -- bun tests/
 Relatório do panorama do Work. Uma task só conta como **concluída** (`stage: ACCEPTED`) quando existe um **recibo de aceitação independente válido** para ela e a **árvore atual permanece idêntica** à avaliada (snapshot e digest de dependências); um `[x]` sem recibo válido vira **`INCONSISTENT STATE`** com o motivo (task marcada sem `ACCEPTED`, ou `ACCEPTED` sem marcador). `TASKS COMPLETE` significa que todas as tasks estão concluídas mas os **gates globais** (`## Global gates`) ainda não têm um **recibo próprio** (`pwn verify approve --global G-n` + `pwn verify run --global G-n`); ele mapeia para o manifest `active` e evolui para `COMPLETE` quando **todos** os gates globais têm recibo independente válido. `--coverage` deriva, dos próprios artefatos, quantos requisitos estão aceitos, quantas capabilities têm regras, quantas tasks têm contrato congelado e critérios de aceite (exit `0` sem lacunas, `1` caso contrário).
 
 ```bash
-bun bin/pwn.js work status --work 0001
-bun bin/pwn.js work status --coverage --work 0001
+bin/pwn work status --work 0001
+bin/pwn work status --coverage --work 0001
 ```
 
 ### `pwn verify <subcomando> [--work <work-id>] [--task <task-id>] [--global G-n] [--by <responsável>] [--timeout-seconds N]`
@@ -642,11 +644,11 @@ bun bin/pwn.js work status --coverage --work 0001
 - **`show [--task T]`** — mostra a aprovação vigente e o último recibo.
 
 ```bash
-bun bin/pwn.js verify init
-bun bin/pwn.js verify approve --work 0001 --task 1.1 --by "ana"
-bun bin/pwn.js verify run --work 0001 --task 1.1
-bun bin/pwn.js verify status --work 0001 --task 1.1
-bun bin/pwn.js verify show --work 0001
+bin/pwn verify init
+bin/pwn verify approve --work 0001 --task 1.1 --by "ana"
+bin/pwn verify run --work 0001 --task 1.1
+bin/pwn verify status --work 0001 --task 1.1
+bin/pwn verify show --work 0001
 ```
 
 O **recibo é imutável no sentido de autorização**: qualquer arquivo alterado depois do `run` invalida a aceitação (o recibo continua sendo histórico, não permissão). O `work run --task` dispara a aceitação independente automaticamente quando existe aprovação vigente — sem aprovação, ele registra explicitamente que não há conclusão (nunca inventa um `pass`).
@@ -655,7 +657,7 @@ O **recibo é imutável no sentido de autorização**: qualquer arquivo alterado
 Valida os documentos normativos do framework. Com `--mutate`, roda **mutation testing dos próprios gates**: copia um Work para um diretório temporário, quebra um artefato de propósito e verifica se o gate correspondente passa de `pass` para `blocked`. O relatório é explícito sobre gates que **não** bloqueiam (advisory) — é assim que se descobre um gate decorativo. Exit `1` quando uma mutação que deveria ser detectada não é; o Work real nunca é modificado.
 
 ```bash
-bun bin/pwn.js self-check --mutate
+bin/pwn self-check --mutate
 ```
 
 ### `pwn task capsule <task-id> [work-id]`
@@ -692,8 +694,8 @@ Ele cria a cadeia completa e válida e aprova os 5 gates:
 ### Opção A2: Modo Direto pelo CLI
 Equivalente ao script, sem o encadeamento de gates:
 ```bash
-bun bin/pwn.js work scaffold --title "Sistema de Notificações em Tempo Real" --risk L2
-bun bin/pwn.js work contract --work 0002
+bin/pwn work scaffold --title "Sistema de Notificações em Tempo Real" --risk L2
+bin/pwn work contract --work 0002
 ```
 > O scaffold gera um **esqueleto** (task `1.1` com placeholders). Detalhe o `plan.json` e regenere o
 > markdown com `pwn work plan --work 0002 --force` antes de implementar.
@@ -702,14 +704,14 @@ bun bin/pwn.js work contract --work 0002
 Se o projeto ainda usa `.work/`, `.todo/`, `.prompts/`, `.sources/` e `.specs/system.md`, traduza os
 Works existentes para o layout canônico (sem tocar nos arquivos v3):
 ```bash
-bun bin/pwn.js work import --all --gate-chain
+bin/pwn work import --all --gate-chain
 ```
 
 ### Opção B: Modo Passo a Passo via CLI
 
 #### Passo 1: Inicializar a Estrutura do Work (Auto-Incrementado)
 ```bash
-bun bin/pwn.js work init
+bin/pwn work init
 ```
 O comando criará automaticamente a pasta sequencial (ex: `.pwn/work/0002/`) com os arquivos iniciais:
 - `discovery.json`
@@ -724,36 +726,36 @@ O comando criará automaticamente a pasta sequencial (ex: `.pwn/work/0002/`) com
 #### Passo 2: Preencher Requisitos e Rodar o Primeiro Gate
 Edite `.pwn/work/0002/requirements.json` adicionando seus requisitos e critérios de aceite. Em seguida, valide o portão (se omitido, `--work` usa o último Work ID):
 ```bash
-bun bin/pwn.js work gate GATE-DISC-REQ
+bin/pwn work gate GATE-DISC-REQ
 ```
 
 #### Passo 3: Consolidar o PRD e Rodar o Segundo Gate
 Vincule os requisitos aceitos em `.pwn/work/0002/prd.json` e execute:
 ```bash
-bun bin/pwn.js work gate GATE-REQ-PRD
+bin/pwn work gate GATE-REQ-PRD
 ```
 
 #### Passo 4: Consolidar PRD em Spec e Plano (Gates 3–5)
 Com o PRD aprovado, gere a especificação técnica (`spec.json`) e o plano de tarefas com contratos (`plan.json`), validando cada transição:
 
 ```bash
-bun bin/pwn.js work gate GATE-PRD-SPEC
-bun bin/pwn.js work gate GATE-SPEC-PLAN
-bun bin/pwn.js work gate GATE-PLAN-CONTRACT
+bin/pwn work gate GATE-PRD-SPEC
+bin/pwn work gate GATE-SPEC-PLAN
+bin/pwn work gate GATE-PLAN-CONTRACT
 ```
 
 #### Passo 5: Materializar Runtimes e Executar
 Materialize a configuração do seu runtime de preferência (ex: OpenCode, Pi ou omp):
 
 ```bash
-bun bin/pwn.js target materialize --target opencode
+bin/pwn target materialize --target opencode
 ```
 
 Toda execução via `pwn work run` é **fail-closed**: sem `--no-gate`, o CLI reavalia a cadeia completa dos 5 gates sobre os artefatos e recusa (exit 1) qualquer Work com transição não aprovada ou artefato ausente. O `--no-gate` é o único escape e fica explícito na saída:
 
 ```bash
-bun bin/pwn.js work run --work 0002 --timeout-seconds 600 -- bun test          # exige a cadeia aprovada
-bun bin/pwn.js work run --no-gate --work 0002 --timeout-seconds 600 -- bun test # escape explícito (humano)
+bin/pwn work run --work 0002 --timeout-seconds 600 -- bun test          # exige a cadeia aprovada
+bin/pwn work run --no-gate --work 0002 --timeout-seconds 600 -- bun test # escape explícito (humano)
 ```
 
 Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard monitorando cada alteração e total rastreabilidade.

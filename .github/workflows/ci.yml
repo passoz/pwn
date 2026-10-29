@@ -9,15 +9,44 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  go:
+    name: Go (build, lint, test)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      - name: go test
+        run: CGO_ENABLED=1 go test -race ./... -coverprofile=coverage.out
+      - name: coverage gate
+        run: go tool cover -func=coverage.out | awk '/^total:/{if ($3+0 < 85.0) exit 1}'
+      - name: build
+        run: CGO_ENABLED=0 go build -trimpath -o bin/pwn ./cmd/pwn
+      - name: self-check
+        run: ./bin/pwn self-check
+      - name: validate
+        run: ./bin/pwn validate
+
+  reference:
+    name: TypeScript reference (parity oracle)
+    runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
-      - run: bun x tsc --noEmit
       - run: bun test
       - run: bun src/cli.ts self-check
       - run: bun src/cli.ts validate

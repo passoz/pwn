@@ -36,3 +36,6 @@ queue/review/
 /bin/pwn
 coverage.out
 *.test
+
+# Binário criado por go build ./cmd/pwn
+/pwn

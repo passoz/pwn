@@ -2,10 +2,9 @@
 
 > **Contract-Governed Agent Harness CLI** — Governança determinística de agentes de IA por contratos normativos em JSON, validação mecânica de portões (*gates*), execução isolada em Git Worktree sandboxes e contenção de escopo via Diff Guard.
 
-[![Bun](https://img.shields.io/badge/Bun-v1.4+-black?logo=bun)](https://bun.sh)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go)](https://go.dev/)
 [![JSON Schema](https://img.shields.io/badge/JSON_Schema-Draft_07-green?logo=json)](https://json-schema.org/)
-[![Tests](https://img.shields.io/badge/Tests-304%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-go%20test%20.%2F...-brightgreen)](internal/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 ---
@@ -25,7 +24,7 @@ O **PWN** substitui a confiança cega em prompts por **mecanismos determinístic
 | Prompts longos e instruções informais em Markdown | **Documentos normativos JSON** validados contra JSON Schemas formais |
 | Agente altera qualquer arquivo do repositório | **Diff Guard mecânico**: escrita bloqueada fora de `write_allow` |
 | Execução direta no branch de trabalho | **Sandboxes descartáveis em Git Worktree** (`.pwn/sandboxes/`) |
-| Transições de fase avaliadas pelo próprio LLM | **5 Gates determinísticos em TypeScript** com cache por hash e veredito HMAC |
+| Transições de fase avaliadas pelo próprio LLM | **5 Gates determinísticos em Go** com cache por hash e veredito HMAC |
 | Modelo único ou seleção manual | **Roteamento por 5 níveis de risco (L0–L4)** com escalação automática |
 | Conclusão baseada em texto ("Tarefa finalizada!") | **Aceitação independente** (`pwn verify`) com recibo assinado Ed25519 sobre um snapshot executado em sandbox; o loop local (`work audit`) apenas diagnostica |
 
@@ -59,8 +58,9 @@ flowchart LR
 ## 🚀 Instalação e Uso Rápido
 
 ### Pré-requisitos
-- [Bun](https://bun.sh) v1.4.0 ou superior (o PWN é Bun-first; Node.js não é necessário)
+- [Go](https://go.dev/dl/) 1.27 ou superior
 - [Git](https://git-scm.com/)
+- `bwrap` para a aceitação independente em Linux
 
 ### Instalação
 
@@ -69,19 +69,19 @@ flowchart LR
 git clone https://github.com/passoz/pwn.git
 cd pwn
 
-# 2. Instalar dependências (rápido, apenas Ajv + types)
-bun install
+# 2. Compilar o binário estático
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/pwn ./cmd/pwn
 
 # 3. Validar a integridade dos documentos normativos do framework
-bun bin/pwn.js self-check
+bin/pwn self-check
 
-# 4. Rodar a suíte completa de testes (304 testes)
-bun test
+# 4. Rodar a suíte completa de testes
+go test ./...
 ```
 
 *(Opcional)* Crie um alias local no seu shell para facilitar:
 ```bash
-alias pwn="bun $(pwd)/bin/pwn.js"
+alias pwn="$(pwd)/bin/pwn"
 ```
 
 ---
@@ -97,7 +97,7 @@ Para criar uma funcionalidade do zero com a cadeia completa e válida de ponta a
 ./scripts/prepare-greenfield-work.sh "Sistema de Autenticação JWT"
 
 # Ou diretamente pelo CLI:
-bun bin/pwn.js work scaffold --title "Sistema de Autenticação JWT" --risk L2
+bin/pwn work scaffold --title "Sistema de Autenticação JWT" --risk L2
 ```
 
 O comando gera os artefatos sob `.pwn/work/<work-id>/` (ex.: `.pwn/work/0002/`).
@@ -108,11 +108,11 @@ Verifique se a cadeia documental está íntegra antes de encostar no código:
 
 ```bash
 # Roda todos os 5 gates e exibe todos os achados em uma passada só:
-bun bin/pwn.js work gate --all --work 0002
+bin/pwn work gate --all --work 0002
 
 # Ou avalie um portão específico (com cache determinístico por hash):
-bun bin/pwn.js work gate GATE-DISC-REQ --work 0002
-bun bin/pwn.js work gate GATE-PLAN-CONTRACT --work 0002
+bin/pwn work gate GATE-DISC-REQ --work 0002
+bin/pwn work gate GATE-PLAN-CONTRACT --work 0002
 ```
 
 ### 3. Pré-voo de Execução (`--dry-run`)
@@ -120,7 +120,7 @@ bun bin/pwn.js work gate GATE-PLAN-CONTRACT --work 0002
 Antes de gastar tokens ou criar sandboxes, faça o pré-voo para listar **todos** os impedimentos:
 
 ```bash
-bun bin/pwn.js work run --dry-run --work 0002 -- bun test
+bin/pwn work run --dry-run --work 0002 -- bun test
 ```
 
 Se houver gates pendentes ou contratos inválidos, o PWN lista todos os problemas e encerra sem executar comandos.
@@ -131,7 +131,7 @@ Execute a tarefa com confinamento estrito:
 
 ```bash
 # Exige gates aprovados, cria worktree temporária em .pwn/sandboxes/ e confere diff:
-bun bin/pwn.js work run --work 0002 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0002 --timeout-seconds 600 -- bun test
 ```
 
 - **Fail-closed:** Sem `--no-gate`, recusa qualquer Work com portão pendente.
@@ -147,29 +147,29 @@ As ações válidas são **`baseline`, `red`, `green`, `verify` e `check`**. Ess
 ```bash
 # 1. Baseline: exige árvore limpa nos arquivos declarados e congela a definição da task
 #    (digest do bloco do plano + hash do contrato).
-bun bin/pwn.js work audit baseline --work 0002 --task 1.1
+bin/pwn work audit baseline --work 0002 --task 1.1
 
 # 2. RED: o comando tem que ser o RED do plano; --expect precisa ser não-genérico e
 #    estar literalmente no arquivo de teste congelado.
-bun bin/pwn.js work audit red --work 0002 --task 1.1 --expect "should throw UnauthorizedError" -- bun test tests/auth.test.ts
+bin/pwn work audit red --work 0002 --task 1.1 --expect "should throw UnauthorizedError" -- bun test tests/auth.test.ts
 
 # 3. GREEN: implementação pronta. O mutation check restaura a implementação ao commit do
 #    baseline e exige que a asserção volte a falhar; os testes não podem mudar após o RED.
-bun bin/pwn.js work audit green --work 0002 --task 1.1 -- bun test tests/auth.test.ts
+bin/pwn work audit green --work 0002 --task 1.1 -- bun test tests/auth.test.ts
 
 # 4. Checks do plano sobre o snapshot do GREEN. Todo AC-* roda também SEM a implementação:
 #    se ainda passar, é recusado como vácuo.
-bun bin/pwn.js work audit check --work 0002 --task 1.1 --name AC-1 -- bun test tests/auth.test.ts
-bun bin/pwn.js work audit check --work 0002 --task 1.1 --name REGRESSION -- bun test
+bin/pwn work audit check --work 0002 --task 1.1 --name AC-1 -- bun test tests/auth.test.ts
+bin/pwn work audit check --work 0002 --task 1.1 --name REGRESSION -- bun test
 
 # 5. Verify local: re-executa o comando do plano sobre a árvore atual (exit 0 + expect).
-bun bin/pwn.js work audit verify --work 0002 --task 1.1 -- bun test tests/auth.test.ts
+bin/pwn work audit verify --work 0002 --task 1.1 -- bun test tests/auth.test.ts
 ```
 
 - **Amarrado ao plano:** comando divergente do declarado reprova a ação; um `--expect` genérico (`fail`, `Error`, `expected`, muito curto…) é recusado no contrato v3.
 - **Drift e contrato atual:** todas as fases do audit recusam divergência entre o Markdown e `plan.json`; um `plan.json` existente ilegível também é recusado. O `status` marca `INVALID PLAN` mesmo sem recibo.
 - **GREEN/VERIFY:** exigem exit code `0` e o texto de sucesso (`expect`) quando declarado; a presença de `redExpect` na saída bem-sucedida não implica falha. O mutation check continua exigindo falha ao restaurar a implementação ao baseline.
-- **Teste congelado (L3+):** `bun bin/pwn.js work contract --work 0002 --task 1.1 --freeze-tests tests/auth.test.ts` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, o audit recusa `baseline` e o verificador recusa a aprovação (`frozen_tests` exigidos e conferidos contra o arquivo).
+- **Teste congelado (L3+):** `bin/pwn work contract --work 0002 --task 1.1 --freeze-tests tests/auth.test.ts` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, o audit recusa `baseline` e o verificador recusa a aprovação (`frozen_tests` exigidos e conferidos contra o arquivo).
 - **Marcador `[x]`:** só depois de `pwn verify run` **PASS** para a árvore atual. O `status` acusa `INCONSISTENT STATE` quando o marcador e o recibo discordam.
 
 #### Aceitação independente
@@ -179,21 +179,21 @@ O audit local roda no mesmo processo e na mesma árvore do agente — por isso e
 ```bash
 # 1. init: cria a raiz protegida (~/.config/pwn/verifier, ou PWN_VERIFIER_HOME)
 #    com chaves Ed25519, runtime aprovado e suporte a bwrap detectados no host.
-bun bin/pwn.js verify init
+bin/pwn verify init
 
 # 2. approve: o OPERADOR aprova o pacote imutável de uma task (checks do plano +
 #    cópia dos testes de aceitação congelados). Exige --by <responsável>.
-bun bin/pwn.js verify approve --work 0002 --task 1.1 --by "ana"
+bin/pwn verify approve --work 0002 --task 1.1 --by "ana"
 #    Ou um item de ## Global gates:
-bun bin/pwn.js verify approve --work 0002 --global G-1 --by "ana"
+bin/pwn verify approve --work 0002 --global G-1 --by "ana"
 
 # 3. run: captura o snapshot da entrega, restaura o teste aprovado, executa cada
 #    check em bwrap com mounts mínimos e emite o recibo assinado.
-bun bin/pwn.js verify run --work 0002 --task 1.1
+bin/pwn verify run --work 0002 --task 1.1
 
 # 4. status/show: consulta a aceitação vigente e inspeciona aprovação + último recibo.
-bun bin/pwn.js verify status --work 0002 --task 1.1
-bun bin/pwn.js verify show --work 0002
+bin/pwn verify status --work 0002 --task 1.1
+bin/pwn verify show --work 0002
 ```
 
 - **Pacote imutável:** a aprovação guarda, na raiz protegida, o conteúdo dos testes de aceitação congelados. Durante o `run`, o verificador **restaura** esses arquivos por cima da cópia do candidato — enfraquecer o teste no repositório não muda o que é executado.
@@ -210,13 +210,13 @@ Tarefas de risco **L4** ou que falharam em múltiplas tentativas são suspensas 
 
 ```bash
 # Listar tarefas suspensas aguardando aprovação
-bun bin/pwn.js queue list
+bin/pwn queue list
 
 # Inspecionar e aprovar para execução
-bun bin/pwn.js queue approve <run-id>
+bin/pwn queue approve <run-id>
 
 # Rejeitar execução de alto risco
-bun bin/pwn.js queue reject <run-id>
+bin/pwn queue reject <run-id>
 ```
 
 ### 7. Pós-conciliação (mudanças feitas sem o PWN)
@@ -225,15 +225,15 @@ Alterou o código por conta própria? Peça para o PWN conciliar depois do fato:
 
 ```bash
 # Lista o que mudou fora da governança (não commitado; ou --since <commit> para o que já foi commitado)
-bun bin/pwn.js work reconcile --dry-run
+bin/pwn work reconcile --dry-run
 
 # Cria o Work conciliado (contrato com escopo exato dos arquivos). Sem teste na mudança? O Work já declara o teste a escrever depois
-bun bin/pwn.js work reconcile --title "Corrige soma do add"
+bin/pwn work reconcile --title "Corrige soma do add"
 
 # Commite, congele o teste (se o comando avisar) e passe pela aceitação independente
-bun bin/pwn.js work gate --all --work 0003
-bun bin/pwn.js verify approve --work 0003 --task 1.1 --by "ana"   # baseline = commit anterior à mudança
-bun bin/pwn.js verify run --work 0003 --task 1.1
+bin/pwn work gate --all --work 0003
+bin/pwn verify approve --work 0003 --task 1.1 --by "ana"   # baseline = commit anterior à mudança
+bin/pwn verify run --work 0003 --task 1.1
 ```
 
 A conciliação **não declara nada concluído**: não houve RED/GREEN observado. A task só vira `ACCEPTED` com recibo do `pwn verify`,
@@ -249,54 +249,52 @@ Se você deseja desenvolver ou estender o PWN, a arquitetura foi desenhada para 
 
 ```
 pwn/
-├── bin/pwn.js                 # Ponto de entrada executável (Node-guard + Bun boot)
-├── src/
-│   ├── cli.ts                 # Despacho de subcomandos e tratamento de flags
-│   ├── commands/              # Handlers de comandos CLI
-│   │   ├── work.ts            # Gestão da cadeia de Works, gates, scaffold e audit
-│   │   ├── verify.ts          # Aceitação independente (init/approve/run/status/show)
-│   │   ├── task.ts            # Execução de tarefas isoladas e cápsula de contexto
-│   │   ├── queue.ts           # Fila de aprovação humana AFK
-│   │   ├── target.ts          # Materialização de alvos (Pi, OpenCode, omp)
-│   │   ├── metrics.ts         # Métricas e otimização consultiva de custos
-│   │   └── validate.ts        # Validação de schemas e mutation testing
-│   ├── core/                  # Motores determinísticos do harness
-│   │   ├── gates.ts           # Implementação dos 5 portões determinísticos
-│   │   ├── gate-cache.ts      # Cache de vereditos com assinatura HMAC
-│   │   ├── contract-engine.ts # Contratos de 7 dimensões e cálculo de risco
-│   │   ├── contract-guard.ts  # Diff Guard mecânico (write_allow / write_deny)
-│   │   ├── router.ts          # Roteamento econômico de modelos por risco (L0-L4)
-│   │   ├── sandbox.ts         # Isolamento via Git Worktree
-│   │   ├── verifier-home.ts   # Raiz protegida do verificador (chaves Ed25519, prontidão)
-│   │   ├── acceptance-approval.ts # Pacote aprovado imutável (checks + testes congelados)
-│   │   ├── candidate-snapshot.ts # Snapshot determinístico da entrega e digest de deps
-│   │   ├── verification-runner.ts # Execução dos checks em bwrap com mounts mínimos
-│   │   ├── verification-receipt.ts # Recibo assinado e avaliação de aceitação
-│   │   ├── validator.ts       # Validador Ajv com leis embutidas (drift detector)
-│   │   ├── self_check_mutate.ts # Mutation testing dos próprios portões
-│   │   └── tool-api.ts        # Execução confinada com bloqueio de path traversal
-│   └── targets/               # Adapters de materialização (pi, opencode, omp)
+├── cmd/pwn/                   # Composition root e código de saída
+├── internal/
+│   ├── cli/                   # Despacho de subcomandos, flags e ajuda
+│   ├── commands/              # Handlers dos comandos (work, verify, task, queue, metrics, target, validate)
+│   ├── assets/                # Schemas e VERSION embutidos com go:embed
+│   ├── harness/
+│   │   ├── plan/              # Plano, aceitação, validação e cápsula
+│   │   ├── contract/          # Contrato V4, risco e Diff Guard
+│   │   ├── policy/            # Política declarativa e motor ALLOW/DENY
+│   │   ├── gates/             # 5 portões, cache HMAC e mutation testing
+│   │   ├── audit/             # baseline/red/green/check/verify
+│   │   ├── verify/            # Raiz protegida, snapshot, bwrap e recibo Ed25519
+│   │   ├── decider/           # Decisor, políticas e ledger
+│   │   ├── run/               # Orquestrador, Tool API e roteador
+│   │   ├── sandbox/           # Git worktree e bwrap
+│   │   ├── work/              # Artefatos, scaffold, reconcile e import v3
+│   │   ├── batch/             # Lotes paralelos
+│   │   ├── queue/             # Fila AFK
+│   │   ├── metrics/           # Telemetria
+│   │   ├── learnings/         # Aprendizados
+│   │   └── target/            # Materializador Pi, OpenCode e omp
+│   └── platform/              # jsonx, jsonschema, glob, fsx, proc, gitx, sandbox, cryptox
 ├── schemas/                   # JSON Schemas formais (Draft-07)
-├── tests/                     # 30 suítes de testes unitários e adversariais
-└── tools/
-    └── pipeline-editor/       # Editor visual standalone (HTML/CSS/JS sem servidor)
+├── testdata/parity/           # Linha de base, vetores, corpus e prova do sandbox
+├── tests/                     # Suíte TypeScript de referência
+├── src/                       # Implementação TypeScript de referência
+└── tools/pipeline-editor/     # Editor visual standalone (HTML/CSS/JS sem servidor)
 ```
+
+A implementação oficial é o binário Go. `src/` e `tests/` permanecem como referência de comportamento e oráculo de paridade.
 
 ### Leis Embutidas e Proteção contra *Drift*
 
-Os JSON Schemas em `schemas/` são embutidos diretamente no código TypeScript via import estático. Se os schemas em disco divergirem da cópia embutida, o CLI aborta imediatamente com erro de integridade. Isso impede que alterações acidentais em schemas afrouxem a governança em tempo de execução.
+Os JSON Schemas em `schemas/` são copiados para `internal/assets/` e embutidos no binário com `go:embed`. Se os schemas em disco divergirem da cópia embutida, o CLI aborta com erro de integridade. Isso impede que alterações acidentais em schemas afrouxem a governança em tempo de execução.
 
 ### Comandos de Verificação do Framework
 
 ```bash
 # Valida conformidade de schemas do framework
-bun bin/pwn.js self-check
+bin/pwn self-check
 
 # Mutation testing dos gates (revela se algum gate é decorativo)
-bun bin/pwn.js self-check --mutate
+bin/pwn self-check --mutate
 
-# Validação completa de CI (Typecheck + Testes + Self-check + Validações de Work)
-bun run check
+# Validação completa de CI (gofmt + vet + lint + testes + self-check + validate)
+make check
 ```
 
 ---
@@ -308,7 +306,7 @@ bun run check
 |---|---|
 | `pwn self-check` | Valida todos os documentos normativos do framework contra seus schemas |
 | `pwn self-check --mutate` | Roda mutation testing quebrando artefatos para verificar se os gates bloqueiam |
-| `pwn validate [--work NNNN]` | Valida os documentos JSON do(s) Work(s) com Ajv |
+| `pwn validate [--work NNNN]` | Valida os documentos JSON do(s) Work(s) com o validador Draft-07 |
 
 ### 📋 Governança de Works e Gates
 | Comando | Descrição |
