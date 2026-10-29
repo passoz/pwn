@@ -37,7 +37,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [ ] [1.2] Capturar a linha de base e criar o executor diferencial
+### [x] [1.2] Capturar a linha de base e criar o executor diferencial
 
 **Requirement:** FR-001
 **Depends on:** 1.1

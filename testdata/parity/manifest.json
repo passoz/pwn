@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "command": "bun run check",
+  "commit": "ecfb81f182e56fda6ef06587318d22d089c1a2ff",
+  "exit_code": 0,
+  "tests_pass": 478,
+  "tests_fail": 0,
+  "test_files": 45
+}
