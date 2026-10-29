@@ -20,9 +20,9 @@
 **Depends on:** none
 **Behavior:** Substitui DEC-005 por DEC-030 em spec.json e .specs/system.json e registra a decisão em docs/archive/DECISIONS.md.
 **Components:** governance
-**Files:** `spec.json`, `.specs/system.json`, `docs/archive/DECISIONS.md`, `tests/parity/normative.test.ts`
+**Files:** `spec.json`, `.specs/system.json`, `docs/archive/DECISIONS.md`, `tests/parity/normative.test.ts`, `tests/parity/acceptance.test.ts`
 **Implementation files:** `spec.json`, `.specs/system.json`, `docs/archive/DECISIONS.md`
-**Test files:** `tests/parity/normative.test.ts`
+**Test files:** `tests/parity/normative.test.ts`, `tests/parity/acceptance.test.ts`
 
 **RED:**
 - `bun test tests/parity/normative.test.ts` — o teste exige DEC-030 e falha antes da atualização normativa
@@ -32,7 +32,7 @@
 2. Registrar DEC-030 em docs/archive/DECISIONS.md
 
 **ACs:**
-- [ ] `bun test tests/parity/normative.test.ts` — DEC-030 substitui DEC-005 nos dois documentos normativos
+- [ ] `bun test tests/parity/acceptance.test.ts` — DEC-030 substitui DEC-005 nos dois documentos normativos
 
 **Visual:** N/A
 **Documentation:** N/A

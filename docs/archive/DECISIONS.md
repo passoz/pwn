@@ -80,36 +80,6 @@ Mitigações:
 
 ---
 
-## DEC-030 — Implementação em Go (revisão de DEC-005)
-
-**Status:** Accepted
-
-**Data:** 2026-10-28
-
-**Supersedes:** DEC-005
-
-**Contexto:**
-
-O pwn é um CLI. A distribuição em TypeScript sobre Bun exige um ambiente de execução instalado. A reescrita em Go reduz a superfície de distribuição e mantém o comportamento observável, os artefatos e as garantias de segurança.
-
-**Decisão:**
-
-Adotar Go como implementação do pwn. O binário é estático, com `CGO_ENABLED=0`. TypeScript sobre Bun permanece apenas no período de transição.
-
-**Consequências:**
-
-- `spec.json` e `.specs/system.json` declaram DEC-030.
-- O pwn atual governa a reescrita até o corte.
-- Os formatos de artefato e as garantias de segurança não mudam.
-- A decisão D9 do plano aprovado autoriza a substituição.
-
-**Rastreabilidade:**
-
-- Implementado em: `cmd/pwn` e `internal/`
-- Plano: `docs/PLANO-REESCRITA-GO.md`
-
----
-
 ## Formato de ID
 
 Decisões usam o formato `DEC-XXX` onde XXX é um número sequencial de 3 dígitos.

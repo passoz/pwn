@@ -29,6 +29,7 @@
   "acceptance_contract": {
     "commands": [
       "bun test tests/parity/normative.test.ts",
+      "bun test tests/parity/acceptance.test.ts",
       "bun test",
       "bun run check"
     ],
@@ -41,6 +42,7 @@
       ".specs/system.json",
       "docs/archive/DECISIONS.md",
       "tests/parity/normative.test.ts",
+      "tests/parity/acceptance.test.ts",
       ".prompts/**",
       ".sources/**"
     ],

@@ -28,14 +28,18 @@
         "spec.json",
         ".specs/system.json",
         "docs/archive/DECISIONS.md",
-        "tests/parity/normative.test.ts"
+        "tests/parity/normative.test.ts",
+        "tests/parity/acceptance.test.ts"
       ],
       "implementation_files": [
         "spec.json",
         ".specs/system.json",
         "docs/archive/DECISIONS.md"
       ],
-      "test_files": ["tests/parity/normative.test.ts"],
+      "test_files": [
+        "tests/parity/normative.test.ts",
+        "tests/parity/acceptance.test.ts"
+      ],
       "red": {
         "command": "bun test tests/parity/normative.test.ts",
         "description": "o teste exige DEC-030 e falha antes da atualização normativa"
@@ -46,7 +50,7 @@
       ],
       "acceptance_criteria": [
         {
-          "command": "bun test tests/parity/normative.test.ts",
+          "command": "bun test tests/parity/acceptance.test.ts",
           "description": "DEC-030 substitui DEC-005 nos dois documentos normativos"
         }
       ],

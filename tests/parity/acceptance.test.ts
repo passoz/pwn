@@ -21,7 +21,7 @@ function checkDocument(relative: string): void {
   }
 }
 
-describe('DEC-030', () => {
+describe('DEC-030 (aceitação)', () => {
   test('spec.json substitui DEC-005', () => {
     checkDocument('spec.json');
   });
