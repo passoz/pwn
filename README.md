@@ -120,7 +120,7 @@ bin/pwn work gate GATE-PLAN-CONTRACT --work 0002
 Antes de gastar tokens ou criar sandboxes, faça o pré-voo para listar **todos** os impedimentos:
 
 ```bash
-bin/pwn work run --dry-run --work 0002 -- bun test
+bin/pwn work run --dry-run --work 0002 -- go test ./... -count=1
 ```
 
 Se houver gates pendentes ou contratos inválidos, o PWN lista todos os problemas e encerra sem executar comandos.
@@ -131,7 +131,7 @@ Execute a tarefa com confinamento estrito:
 
 ```bash
 # Exige gates aprovados, cria worktree temporária em .pwn/sandboxes/ e confere diff:
-bin/pwn work run --work 0002 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0002 --timeout-seconds 600 -- go test ./... -count=1
 ```
 
 - **Fail-closed:** Sem `--no-gate`, recusa qualquer Work com portão pendente.
@@ -151,25 +151,25 @@ bin/pwn work audit baseline --work 0002 --task 1.1
 
 # 2. RED: o comando tem que ser o RED do plano; --expect precisa ser não-genérico e
 #    estar literalmente no arquivo de teste congelado.
-bin/pwn work audit red --work 0002 --task 1.1 --expect "should throw UnauthorizedError" -- bun test tests/auth.test.ts
+bin/pwn work audit red --work 0002 --task 1.1 --expect "should throw UnauthorizedError" -- go test ./internal/auth -count=1
 
 # 3. GREEN: implementação pronta. O mutation check restaura a implementação ao commit do
 #    baseline e exige que a asserção volte a falhar; os testes não podem mudar após o RED.
-bin/pwn work audit green --work 0002 --task 1.1 -- bun test tests/auth.test.ts
+bin/pwn work audit green --work 0002 --task 1.1 -- go test ./internal/auth -count=1
 
 # 4. Checks do plano sobre o snapshot do GREEN. Todo AC-* roda também SEM a implementação:
 #    se ainda passar, é recusado como vácuo.
-bin/pwn work audit check --work 0002 --task 1.1 --name AC-1 -- bun test tests/auth.test.ts
-bin/pwn work audit check --work 0002 --task 1.1 --name REGRESSION -- bun test
+bin/pwn work audit check --work 0002 --task 1.1 --name AC-1 -- go test ./internal/auth -count=1
+bin/pwn work audit check --work 0002 --task 1.1 --name REGRESSION -- go test ./... -count=1
 
 # 5. Verify local: re-executa o comando do plano sobre a árvore atual (exit 0 + expect).
-bin/pwn work audit verify --work 0002 --task 1.1 -- bun test tests/auth.test.ts
+bin/pwn work audit verify --work 0002 --task 1.1 -- go test ./internal/auth -count=1
 ```
 
 - **Amarrado ao plano:** comando divergente do declarado reprova a ação; um `--expect` genérico (`fail`, `Error`, `expected`, muito curto…) é recusado no contrato v3.
 - **Drift e contrato atual:** todas as fases do audit recusam divergência entre o Markdown e `plan.json`; um `plan.json` existente ilegível também é recusado. O `status` marca `INVALID PLAN` mesmo sem recibo.
 - **GREEN/VERIFY:** exigem exit code `0` e o texto de sucesso (`expect`) quando declarado; a presença de `redExpect` na saída bem-sucedida não implica falha. O mutation check continua exigindo falha ao restaurar a implementação ao baseline.
-- **Teste congelado (L3+):** `bin/pwn work contract --work 0002 --task 1.1 --freeze-tests tests/auth.test.ts` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, o audit recusa `baseline` e o verificador recusa a aprovação (`frozen_tests` exigidos e conferidos contra o arquivo).
+- **Teste congelado (L3+):** `bin/pwn work contract --work 0002 --task 1.1 --freeze-tests internal/auth/auth_test.go` grava o `sha256` dos testes no contrato antes da implementação. A partir de risco L3 o `GATE-PLAN-CONTRACT` exige o congelamento; se um teste congelado mudar, o audit recusa `baseline` e o verificador recusa a aprovação (`frozen_tests` exigidos e conferidos contra o arquivo).
 - **Marcador `[x]`:** só depois de `pwn verify run` **PASS** para a árvore atual. O `status` acusa `INCONSISTENT STATE` quando o marcador e o recibo discordam.
 
 #### Aceitação independente
@@ -274,13 +274,11 @@ pwn/
 │   │   └── target/            # Materializador Pi, OpenCode e omp
 │   └── platform/              # jsonx, jsonschema, glob, fsx, proc, gitx, sandbox, cryptox
 ├── schemas/                   # JSON Schemas formais (Draft-07)
-├── testdata/parity/           # Linha de base, vetores, corpus e prova do sandbox
-├── tests/                     # Suíte TypeScript de referência
-├── src/                       # Implementação TypeScript de referência
+├── testdata/golden/           # Vetores, corpus de schemas e prova do sandbox usados pelos testes
 └── tools/pipeline-editor/     # Editor visual standalone (HTML/CSS/JS sem servidor)
 ```
 
-A implementação oficial é o binário Go. `src/` e `tests/` permanecem como referência de comportamento e oráculo de paridade.
+A implementação é o binário Go. A versão TypeScript/Bun anterior está arquivada em `passoz/pwn-bun` (privado).
 
 ### Leis Embutidas e Proteção contra *Drift*
 
@@ -405,7 +403,7 @@ Você pode customizar thresholds, palavras-chave de risco e allowlists de shell 
     "max_acs_per_task": 12
   },
   "shell": {
-    "allowed_commands": [{ "command": "bun", "args": ["test"] }],
+    "allowed_commands": [{ "command": "go", "args": ["test"] }],
     "denied_commands": [],
     "allow_all_shell": false
   },

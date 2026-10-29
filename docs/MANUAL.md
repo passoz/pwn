@@ -3,7 +3,7 @@
 > **Guia Técnico de Arquitetura, Governança Contratual e Execução de Agentes**  
 > *Versão do Harness: v0.1.0 (Go)*
 >
-> A implementação oficial é o binário Go. A implementação TypeScript em `src/` permanece como referência de comportamento e oráculo de paridade.
+> A implementação é o binário Go. A versão TypeScript/Bun anterior está arquivada em `passoz/pwn-bun`.
 
 ---
 
@@ -70,10 +70,8 @@ bin/pwn validate
 
 ### Leis embutidas e pinagem (drift)
 
-Os schemas são **embutidos no bundle** (`import` de JSON em `src/core/validator.ts`): sob
-`bun src/cli.ts` o import é resolvido do disco a cada execução; sob `bun build --compile` a
-cópia congelada viaja dentro do binário. Em nenhum dos dois casos o caminho do módulo entra na
-decisão — o mesmo binário, movido para outro diretório e sem `schemas/` ao lado, continua
+Os schemas são **embutidos no binário** (`go:embed` em `internal/assets`): a cópia congelada
+viaja dentro do executável. O caminho do módulo não entra na decisão — o mesmo binário, movido para outro diretório e sem `schemas/` ao lado, continua
 validando contra as mesmas leis.
 
 `schemas/` (e um `schemas/` ao lado do executável, quando existir) passa a ser apenas cópia
@@ -99,7 +97,7 @@ Cada tarefa executada pelo PWN possui um **Task Contract V4**. O contrato estrut
    - Componentes afetados, dependências permitidas e proibidas.
    - Padrões arquiteturais obrigatórios.
 4. **Acceptance Contract (`acceptance_contract`):**
-   - Comandos de validação (ex: `bun test`).
+   - Comandos de validação (ex: `go test ./...`).
    - Critérios de aceite quantitativos e qualitativos.
 5. **Scope Contract (`scope_contract`):**
    - `write_allow`: Padrões Glob de arquivos permitidos para edição (ex: `src/**`, `tests/**`).
@@ -198,7 +196,7 @@ bin/pwn work gate --clear-cache
 `pwn work run --dry-run` roda os 5 gates e valida os contratos V4 de cada task (`risk.level`, `write_allow` não vazio, `acceptance_contract.commands` não vazio), listando **todos** os impedimentos — sem criar sandbox, sem executar comando. Exit `1` se houver qualquer impedimento.
 
 ```bash
-bin/pwn work run --dry-run --work 0001 -- bun test
+bin/pwn work run --dry-run --work 0001 -- go test ./... -count=1
 ```
 
 ### Cobertura agregada do Work:
@@ -221,13 +219,13 @@ política ainda ativa); não há escape para a política de shell.
 
 ```bash
 # Default: gates + sandbox + diff guard
-bin/pwn work run --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0001 --timeout-seconds 600 -- go test ./... -count=1
 
 # Pula os gates (governança), mas mantém o enforcement
-bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- go test ./... -count=1
 
 # Pula o sandbox (executa no diretório de trabalho), política continua ativa
-bin/pwn work run --no-isolation --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-isolation --work 0001 --timeout-seconds 600 -- go test ./... -count=1
 ```
 
 ### Executando um Gate:
@@ -565,10 +563,10 @@ os arquivos modificados e grava telemetria.
 
 ```bash
 # Executa apenas se a cadeia de 5 gates aprovar
-bin/pwn work run --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --work 0001 --timeout-seconds 600 -- go test ./... -count=1
 
 # Execução sem a cadeia de gates (decisão explícita de operador)
-bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- bun test
+bin/pwn work run --no-gate --work 0001 --timeout-seconds 600 -- go test ./... -count=1
 ```
 
 ### `pwn work run-all [--works 0001,0002] [--jobs N] [--timeout-seconds S] [--no-gate] -- <comando>...`
@@ -613,14 +611,14 @@ O código `2` imprime a lista **completa** do que falta (não para no primeiro i
 
 ```bash
 # Verifica evidência da task 1.1 do Work 0001 (comando do plano)
-bin/pwn work audit --work 0001 --task 1.1 -- bun tests/calc.test.mjs
+bin/pwn work audit --work 0001 --task 1.1 -- go test ./calc -count=1
 
 # RED com a asserção amarrada ao arquivo de teste
-bin/pwn work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" -- bun tests/calc.test.mjs
+bin/pwn work audit red --work 0001 --task 1.1 --expect "SUM-MISMATCH" -- go test ./calc -count=1
 
 # GREEN e checks locais (mesmo comando do plano)
-bin/pwn work audit green --work 0001 --task 1.1 -- bun tests/calc.test.mjs
-bin/pwn work audit check --work 0001 --task 1.1 --name AC-1 -- bun tests/calc.test.mjs
+bin/pwn work audit green --work 0001 --task 1.1 -- go test ./calc -count=1
+bin/pwn work audit check --work 0001 --task 1.1 --name AC-1 -- go test ./calc -count=1
 ```
 
 **Conclusão:** o resultado do audit é apenas o diagnóstico local (RED/GREEN/checks). A task só conta como concluída (`ACCEPTED`) quando existe um **recibo de aceitação independente** válido para a árvore atual — veja `pwn verify` abaixo.
@@ -754,8 +752,8 @@ bin/pwn target materialize --target opencode
 Toda execução via `pwn work run` é **fail-closed**: sem `--no-gate`, o CLI reavalia a cadeia completa dos 5 gates sobre os artefatos e recusa (exit 1) qualquer Work com transição não aprovada ou artefato ausente. O `--no-gate` é o único escape e fica explícito na saída:
 
 ```bash
-bin/pwn work run --work 0002 --timeout-seconds 600 -- bun test          # exige a cadeia aprovada
-bin/pwn work run --no-gate --work 0002 --timeout-seconds 600 -- bun test # escape explícito (humano)
+bin/pwn work run --work 0002 --timeout-seconds 600 -- go test ./... -count=1          # exige a cadeia aprovada
+bin/pwn work run --no-gate --work 0002 --timeout-seconds 600 -- go test ./... -count=1 # escape explícito (humano)
 ```
 
 Pronto! Seu agente executará sob isolamento de Git Worktree, com Diff Guard monitorando cada alteração e total rastreabilidade.

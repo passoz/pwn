@@ -30,7 +30,7 @@ func goldenFile(t *testing.T, name string) string {
 	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return filepath.Join(dir, "testdata", "parity", "golden", name)
+			return filepath.Join(dir, "testdata", "golden", "golden", name)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {

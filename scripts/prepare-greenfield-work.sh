@@ -11,7 +11,7 @@
 #
 # AMBIENTE:
 #   PWN_DIR  diretório do projeto-alvo (default: cwd)
-#   PWN_BIN  comando do CLI (default: `pwn` no PATH, senão bun <repo>/bin/pwn.js)
+#   PWN_BIN  comando do CLI (default: `pwn` no PATH, senão <repo>/bin/pwn)
 # ==============================================================================
 
 set -euo pipefail
@@ -33,7 +33,7 @@ if [ -n "${PWN_BIN:-}" ]; then
 elif command -v pwn >/dev/null 2>&1; then
   PWN="pwn"
 else
-  PWN="bun $REPO_ROOT/bin/pwn.js"
+  PWN="$REPO_ROOT/bin/pwn"
 fi
 
 TARGET_DIR="${PWN_DIR:-$PWD}"

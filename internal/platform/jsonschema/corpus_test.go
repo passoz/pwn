@@ -10,7 +10,7 @@ import (
 )
 
 // corpusPath is the Ajv-generated conformance set at the repository root.
-const corpusPath = "../../../testdata/parity/schema/corpus.json"
+const corpusPath = "../../../testdata/golden/schema/corpus.json"
 
 type corpusCase struct {
 	ID       string `json:"id"`

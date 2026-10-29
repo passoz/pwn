@@ -36,17 +36,3 @@ jobs:
         run: ./bin/pwn self-check
       - name: validate
         run: ./bin/pwn validate
-
-  reference:
-    name: TypeScript reference (parity oracle)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.0
-      - run: bun install --frozen-lockfile
-      - run: bun test
-      - run: bun src/cli.ts self-check
-      - run: bun src/cli.ts validate

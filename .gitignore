@@ -1,4 +1,3 @@
-node_modules/
 # Runtime do agente; a exceção é o config do relay, versionado de propósito.
 .pi/*
 !.pi/remote-pi/

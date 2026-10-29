@@ -43,7 +43,7 @@ type parityFixture struct {
 
 func loadParity(t *testing.T) parityFixture {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "parity", "verify", "fixture.json"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "golden", "verify", "fixture.json"))
 	if err != nil {
 		t.Fatalf("ler a fixture de paridade: %v", err)
 	}
