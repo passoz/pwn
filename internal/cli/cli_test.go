@@ -102,19 +102,21 @@ func TestUnknownCommandShowsHelp(t *testing.T) {
 
 func TestGlobalFlagsBeforeSeparatorOnly(t *testing.T) {
 	t.Run("--version do operador não é interceptado", func(t *testing.T) {
+		inTempDir(t)
 		code, stdout, stderr := runCLI(t, "work", "audit", "check", "--", "bun", "--version")
 		if code != 1 {
 			t.Fatalf("código = %d, quer 1", code)
 		}
-		if strings.Contains(stdout, "pwn v") {
-			t.Fatalf("stdout = %q, não pode conter a versão do pwn", stdout)
+		if strings.Contains(stdout, "pwn v") || strings.Contains(stderr, "pwn v") {
+			t.Fatalf("stdout = %q, stderr = %q, não podem conter a versão do pwn", stdout, stderr)
 		}
-		if !strings.Contains(stderr, "ainda não portado") {
-			t.Fatalf("stderr = %q, quer o erro de comando não portado", stderr)
+		if !strings.Contains(stderr, "FAIL: missing required option: --work") {
+			t.Fatalf("stderr = %q, quer o diagnóstico do audit", stderr)
 		}
 	})
 
 	t.Run("--help do operador não é interceptado", func(t *testing.T) {
+		inTempDir(t)
 		code, stdout, stderr := runCLI(t, "work", "run", "--", "--help")
 		if code != 1 {
 			t.Fatalf("código = %d, quer 1", code)
@@ -122,12 +124,13 @@ func TestGlobalFlagsBeforeSeparatorOnly(t *testing.T) {
 		if strings.Contains(stdout, "COMANDOS DISPONÍVEIS:") {
 			t.Fatalf("stdout = %q, não pode conter a ajuda", stdout)
 		}
-		if !strings.Contains(stderr, "ainda não portado") {
-			t.Fatalf("stderr = %q, quer o erro de comando não portado", stderr)
+		if !strings.Contains(stderr, "[GATE BLOCKED] Work 0001 não existe em ") {
+			t.Fatalf("stderr = %q, quer o diagnóstico do handler", stderr)
 		}
 	})
 
 	t.Run("--operator do operador não é interpretado", func(t *testing.T) {
+		inTempDir(t)
 		code, stdout, stderr := runCLI(t, "work", "run", "--", "--operator", "bogus")
 		if code != 1 {
 			t.Fatalf("código = %d, quer 1", code)
@@ -137,6 +140,9 @@ func TestGlobalFlagsBeforeSeparatorOnly(t *testing.T) {
 		}
 		if strings.Contains(stdout, "COMANDOS DISPONÍVEIS:") {
 			t.Fatalf("stdout = %q, não pode conter a ajuda", stdout)
+		}
+		if !strings.Contains(stderr, "[GATE BLOCKED] Work 0001 não existe em ") {
+			t.Fatalf("stderr = %q, quer o diagnóstico do handler", stderr)
 		}
 	})
 
@@ -161,12 +167,16 @@ func TestOperator(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			code, _, stderr := runCLI(t, test.args...)
-			if code != 1 {
-				t.Fatalf("código = %d, quer 1", code)
+			inTempDir(t)
+			code, stdout, stderr := runCLI(t, test.args...)
+			if code != 0 {
+				t.Fatalf("código = %d, quer 0 (stderr: %q)", code, stderr)
 			}
-			if !strings.Contains(stderr, "ainda não portado") {
-				t.Fatalf("stderr = %q, quer o erro de comando não portado", stderr)
+			if !strings.Contains(stdout, "=== [pwn work status] Relatório de Status do Work ===") {
+				t.Fatalf("stdout = %q, quer o relatório de status", stdout)
+			}
+			if strings.Contains(stderr, "ainda não portado") {
+				t.Fatalf("stderr = %q, o comando já está portado", stderr)
 			}
 		})
 	}
@@ -221,26 +231,28 @@ func TestOperatorEnvironment(t *testing.T) {
 	})
 
 	t.Run("--operator substitui o ambiente inválido", func(t *testing.T) {
+		inTempDir(t)
 		t.Setenv(config.OperatorEnv, "auto")
 		var stdout, stderr bytes.Buffer
 		code := Run([]string{"--operator", "human", "work", "status"}, &stdout, &stderr)
-		if code != 1 {
-			t.Fatalf("código = %d, quer 1", code)
+		if code != 0 {
+			t.Fatalf("código = %d, quer 0 (stderr: %q)", code, stderr.String())
 		}
 		if strings.Contains(stderr.String(), "PWN_OPERATOR inválido") {
 			t.Fatalf("stderr = %q, não pode validar o ambiente", stderr.String())
 		}
-		if !strings.Contains(stderr.String(), "ainda não portado") {
-			t.Fatalf("stderr = %q, quer o erro de comando não portado", stderr.String())
+		if !strings.Contains(stdout.String(), "=== [pwn work status] Relatório de Status do Work ===") {
+			t.Fatalf("stdout = %q, quer o relatório de status", stdout.String())
 		}
 	})
 
 	t.Run("espaços são ignorados no ambiente", func(t *testing.T) {
+		inTempDir(t)
 		t.Setenv(config.OperatorEnv, "  decider  ")
 		var stdout, stderr bytes.Buffer
 		code := Run([]string{"work", "status"}, &stdout, &stderr)
-		if code != 1 {
-			t.Fatalf("código = %d, quer 1", code)
+		if code != 0 {
+			t.Fatalf("código = %d, quer 0 (stderr: %q)", code, stderr.String())
 		}
 		if strings.Contains(stderr.String(), "PWN_OPERATOR inválido") {
 			t.Fatalf("stderr = %q, não pode rejeitar o valor com espaços", stderr.String())
@@ -249,27 +261,28 @@ func TestOperatorEnvironment(t *testing.T) {
 }
 
 func TestSubcommandDispatch(t *testing.T) {
-	t.Run("comandos conhecidos chegam ao handler pendente", func(t *testing.T) {
-		// Os comandos portados têm handlers próprios e são cobertos em
-		// commands_test.go.
-		notPorted := map[string]bool{
-			"init": true, "decider": true, "work": true, "task": true, "verify": true,
+	t.Run("comandos conhecidos chegam aos handlers portados", func(t *testing.T) {
+		// Cada linha usa um subcomando sem efeito colateral no diretório
+		// temporário. O texto "ainda não portado" é exclusivo do stub.
+		tests := []struct {
+			name string
+			args []string
+		}{
+			{name: "init", args: []string{"init"}},
+			{name: "decider", args: []string{"decider", "show"}},
+			{name: "work", args: []string{"work", "sync", "--work", "0001"}},
+			{name: "task", args: []string{"task", "capsule"}},
+			{name: "verify", args: []string{"verify", "show", "--work", "0001"}},
 		}
-		for _, spec := range commandSpecs {
-			if !notPorted[spec.name] {
-				continue
-			}
-			args := []string{spec.name}
-			if len(spec.subcommands) > 0 {
-				args = append(args, spec.subcommands[0])
-			}
-			code, _, stderr := runCLI(t, args...)
-			if code != 1 {
-				t.Fatalf("%v: código = %d, quer 1", args, code)
-			}
-			if !strings.Contains(stderr, "ainda não portado") {
-				t.Fatalf("%v: stderr = %q, quer o erro de comando não portado", args, stderr)
-			}
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				inTempDir(t)
+				isolatedVerifier(t)
+				_, stdout, stderr := runCLI(t, test.args...)
+				if strings.Contains(stdout, "ainda não portado") || strings.Contains(stderr, "ainda não portado") {
+					t.Fatalf("%v: comando ainda no stub", test.args)
+				}
+			})
 		}
 	})
 

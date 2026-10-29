@@ -1,5 +1,5 @@
 // Package commands porta os handlers de src/commands (validate, self-check,
-// target, queue e metrics) para o CLI em Go.
+// target, queue, metrics, init, decider, work, task e verify) para o CLI em Go.
 //
 // Cada handler devolve o código de saída e escreve o texto na ordem da
 // referência TypeScript. A raiz do projeto vem de Runner.RootDir; quando vazia,
@@ -17,8 +17,10 @@ import (
 
 // Runner executa um handler de comando.
 type Runner struct {
-	Stdout  io.Writer
-	Stderr  io.Writer
+	Stdout io.Writer
+	Stderr io.Writer
+	// Stdin é a entrada das perguntas interativas. nil usa os.Stdin.
+	Stdin   io.Reader
 	RootDir string
 }
 

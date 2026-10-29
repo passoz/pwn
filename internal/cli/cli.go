@@ -109,6 +109,16 @@ func (r *runner) resolve(command string, args []string) (commandSpec, string, bo
 func (r *runner) run(_ config.Config, spec commandSpec, subcommand string, args []string) int {
 	handler := &commands.Runner{Stdout: r.stdout, Stderr: r.stderr}
 	switch spec.name {
+	case "init":
+		return handler.Init(args)
+	case "decider":
+		return handler.Decider(subcommand, args)
+	case "work":
+		return handler.Work(subcommand, args)
+	case "task":
+		return handler.Task(subcommand, args)
+	case "verify":
+		return handler.Verify(subcommand, args)
 	case "validate":
 		return handler.Validate(args)
 	case "self-check":
