@@ -1,0 +1,74 @@
+================================================================================
+                      PWN TASK CONTEXT CAPSULE (v4.0)
+================================================================================
+TASK ID:    1.1 (Work: 0002)
+TITLE:      Registrar DEC-030 e atualizar a restrição normativa
+RISK LEVEL: L2 (Mudança normativa documentada e aprovada pela decisão D9)
+STRATEGY:   tdd-strict
+
+--------------------------------------------------------------------------------
+1. BEHAVIORAL SCENARIOS
+--------------------------------------------------------------------------------
+[SCENARIO-1.1-01]
+Given: Dado o arquivo spec.json com a restrição DEC-005
+When:  Quando a tarefa registra DEC-030
+Then:  Então spec.json e .specs/system.json declaram DEC-030 com a referência a DEC-005 substituída
+
+--------------------------------------------------------------------------------
+2. CHANGE & WRITE ALLOWLIST
+--------------------------------------------------------------------------------
+WRITE ALLOW:
+  + spec.json
+  + .specs/system.json
+  + docs/archive/DECISIONS.md
+  + tests/parity/normative.test.ts
+  + tests/parity/acceptance.test.ts
+  + .prompts/**
+  + .sources/**
+
+WRITE DENY (PROHIBITED):
+  - .git/**
+  - src/**
+  - schemas/**
+  - package.json
+  - bun.lock
+  - .env*
+
+OUT OF SCOPE:
+  ! Implementação do binário Go
+
+--------------------------------------------------------------------------------
+3. VALIDATION COMMANDS
+--------------------------------------------------------------------------------
+CONTRACT ALLOWLIST (o shell do sandbox só executa estes prefixos):
+  $ bun test tests/parity/normative.test.ts
+  $ bun test tests/parity/acceptance.test.ts
+  $ bun test
+  $ bun run check
+
+PLANO (o audit exige EXATAMENTE estes comandos):
+  RED:        bun test tests/parity/normative.test.ts
+  AC-1        `bun test tests/parity/acceptance.test.ts`
+  REGRESSION  [o plano não declara comando de regressão]
+  GATES GLOBAIS: `bun test tests/parity` | `bun run typecheck`
+FROZEN ACCEPTANCE TESTS (não editar — o audit recusa a atestação se mudarem):
+  = tests/parity/acceptance.test.ts
+
+ACEITAÇÃO: o audit local (red/green/check) é DIAGNÓSTICO e não conclui nada.
+A conclusão exige o verificador independente: 'pwn verify run --work <W> --task <T>'.
+Você não aprova critérios nem emite o recibo: isso é ato do operador.
+
+--------------------------------------------------------------------------------
+4. BUDGET & ESCALATION RULES
+--------------------------------------------------------------------------------
+Max Agent Attempts:   5
+Max LLM Calls:        20
+Max Tool Calls:       40
+Max Shell Executions: 15
+Max Duration:         15 mins
+Max USD:              $0.5
+
+On Write Violation: block_and_escalate
+On Budget Exceeded:  escalate_to_strong_agent
+On Attempt Failed:   retry_with_strong
+================================================================================
