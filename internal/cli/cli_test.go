@@ -250,7 +250,15 @@ func TestOperatorEnvironment(t *testing.T) {
 
 func TestSubcommandDispatch(t *testing.T) {
 	t.Run("comandos conhecidos chegam ao handler pendente", func(t *testing.T) {
+		// Os comandos portados têm handlers próprios e são cobertos em
+		// commands_test.go.
+		notPorted := map[string]bool{
+			"init": true, "decider": true, "work": true, "task": true, "verify": true,
+		}
 		for _, spec := range commandSpecs {
+			if !notPorted[spec.name] {
+				continue
+			}
 			args := []string{spec.name}
 			if len(spec.subcommands) > 0 {
 				args = append(args, spec.subcommands[0])

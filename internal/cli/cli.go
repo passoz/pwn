@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/passoz/pwn/internal/commands"
 	"github.com/passoz/pwn/internal/config"
 )
 
@@ -61,7 +62,13 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	return runner.run(cfg, spec, subcommand)
+	// Sem subcomando, os argumentos do handler começam em rest[1:]; com
+	// subcomando, depois dele.
+	commandArgs := rest[1:]
+	if len(spec.subcommands) > 0 {
+		commandArgs = rest[2:]
+	}
+	return runner.run(cfg, spec, subcommand, commandArgs)
 }
 
 type runner struct {
@@ -97,9 +104,23 @@ func (r *runner) resolve(command string, args []string) (commandSpec, string, bo
 	return spec, subcommand, true
 }
 
-// run chama o handler do comando. Nenhum handler foi portado para Go ainda.
-// cfg fica reservado para os handlers que forem migrados.
-func (r *runner) run(_ config.Config, spec commandSpec, subcommand string) int {
+// run chama o handler do comando. Os comandos ainda não migrados devolvem a
+// mensagem de não portado.
+func (r *runner) run(_ config.Config, spec commandSpec, subcommand string, args []string) int {
+	handler := &commands.Runner{Stdout: r.stdout, Stderr: r.stderr}
+	switch spec.name {
+	case "validate":
+		return handler.Validate(args)
+	case "self-check":
+		return handler.SelfCheck(args)
+	case "target":
+		return handler.Target(subcommand, args)
+	case "queue":
+		return handler.Queue(subcommand, args)
+	case "metrics":
+		return handler.Metrics(subcommand, args)
+	}
+
 	name := spec.name
 	if subcommand != "" {
 		name += " " + subcommand
