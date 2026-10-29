@@ -5,7 +5,9 @@
   "title": "Registrar DEC-030 e atualizar a restrição normativa",
   "risk": {
     "level": "L2",
-    "reasons": ["Mudança normativa documentada e aprovada pela decisão D9"]
+    "reasons": [
+      "Mudança normativa documentada e aprovada pela decisão D9"
+    ]
   },
   "validation_strategy": "tdd-strict",
   "behavioral_contract": {
@@ -19,12 +21,23 @@
     ]
   },
   "change_contract": {
-    "target_files": ["spec.json", ".specs/system.json", "docs/archive/DECISIONS.md"],
-    "affected_components": ["governance"]
+    "target_files": [
+      "spec.json",
+      ".specs/system.json",
+      "docs/archive/DECISIONS.md"
+    ],
+    "affected_components": [
+      "governance"
+    ]
   },
   "architecture_contract": {
-    "invariants": ["Não alterar schemas", "Não tocar em src/ nem em package.json"],
-    "forbidden_dependencies": ["src/**"]
+    "invariants": [
+      "Não alterar schemas",
+      "Não tocar em src/ nem em package.json"
+    ],
+    "forbidden_dependencies": [
+      "src/**"
+    ]
   },
   "acceptance_contract": {
     "commands": [
@@ -33,8 +46,15 @@
       "bun test",
       "bun run check"
     ],
-    "required_evidence": ["evidence.json"],
-    "frozen_tests": []
+    "required_evidence": [
+      "evidence.json"
+    ],
+    "frozen_tests": [
+      {
+        "path": "tests/parity/acceptance.test.ts",
+        "sha256": "277e544eaaf395f2b5efc22e4613b1a31a626664c7be499bfc94d6d9993dfabb"
+      }
+    ]
   },
   "scope_contract": {
     "write_allow": [
@@ -46,8 +66,17 @@
       ".prompts/**",
       ".sources/**"
     ],
-    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
-    "out_of_scope": ["Implementação do binário Go"]
+    "write_deny": [
+      ".git/**",
+      "src/**",
+      "schemas/**",
+      "package.json",
+      "bun.lock",
+      ".env*"
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go"
+    ]
   },
   "budget_contract": {
     "max_tokens": 40000,

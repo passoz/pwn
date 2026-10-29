@@ -11,8 +11,8 @@
 | `governance` | Decisão normativa DEC-030 e rastreabilidade |
 
 ## Global gates
-- [ ] `bun test` — a suíte completa passa com exit 0.
-- [ ] `bun run check` — typecheck estrito passa com exit 0.
+- [ ] `bun test tests/parity` — a suíte de paridade passa com exit 0.
+- [ ] `bun run typecheck` — o typecheck estrito passa com exit 0.
 
 ### [ ] [1.1] Registrar DEC-030 e atualizar a restrição normativa
 
