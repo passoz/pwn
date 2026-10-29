@@ -1,6 +1,6 @@
 {
-  "node_modules_visible": false,
+  "node_modules_visible": true,
   "network": false,
-  "check_exit": 1,
-  "source": "stub"
+  "check_exit": 0,
+  "output_tail": "AJV-OK"
 }

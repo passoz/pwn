@@ -48,7 +48,12 @@
     "required_evidence": [
       "evidence.json"
     ],
-    "frozen_tests": []
+    "frozen_tests": [
+      {
+        "path": "tests/parity/acceptance-sandbox.test.ts",
+        "sha256": "5d37c2a5ad696b06bf307b3f5e621b2391dcd5db0bda34058b8cb27094d5a37f"
+      }
+    ]
   },
   "scope_contract": {
     "write_allow": [

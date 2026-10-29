@@ -163,14 +163,16 @@ function spawnInSandbox(
 ): SandboxSpawnResult {
   const args: string[] = [];
   for (const mount of policy.mounts_ro) args.push("--ro-bind", mount, mount);
-  for (const [source, destination] of extraRoBinds) args.push("--ro-bind", source, destination);
   if (policy.home !== "/nonexistent") args.push("--dir", policy.home);
   for (const mount of policy.mounts) {
     args.push("--dir", mount.dest);
     args.push("--ro-bind", mount.source, mount.dest);
   }
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp");
-  args.push("--bind", workDir, workDir, "--chdir", workDir);
+  args.push("--bind", workDir, workDir);
+  // Depois do bind da árvore: uma montagem anterior seria encoberta por ele.
+  for (const [source, destination] of extraRoBinds) args.push("--ro-bind", source, destination);
+  args.push("--chdir", workDir);
   args.push("--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent");
   args.push("--clearenv");
   args.push("--setenv", "HOME", policy.home);
