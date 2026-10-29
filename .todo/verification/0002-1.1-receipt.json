@@ -1,0 +1,36 @@
+{
+  "receipt_id": "49739fb88984d44c25ed827085b9b815e74766a6a25c3fcd001fb9fb12463fdf",
+  "version": 1,
+  "kind": "independent-acceptance",
+  "work_id": "0002",
+  "task_id": "1.1",
+  "approval_id": "400e30c96e72f1200f47e8a9ab659f259476cd31e5d15e2b5bddd572f96e1ab1",
+  "candidate_snapshot_digest": "f413c87852eeb9f4ae5af58342a1e152f89d45ecfc2380aac2758facdc79f3e5",
+  "dependency_digest": "e78bb3d5382814a249f7fdf510394d2b385ee07b526dc0000b9bae778a01428b",
+  "sandbox_digest": "38ae776010c9f2d3368f8972cc8ca93e9c766987b9d01e8d4670591a2c805953",
+  "outcome": "pass",
+  "checks": [
+    {
+      "id": "AC-1",
+      "outcome": "pass",
+      "exit_code": 0,
+      "output_digest": "f8de6adf67ae97a4f3fe34857eaf8252ff4a7c0a8d36674e79adef085e88fa42",
+      "baseline_exit_code": 1,
+      "baseline_suspect_environmental": false
+    },
+    {
+      "id": "REGRESSION",
+      "outcome": "pass",
+      "exit_code": 0,
+      "output_digest": "9262160fc22f8b807906933a6825974770a3ceab15cc6529d210a72eefc10bcd",
+      "baseline_exit_code": null,
+      "baseline_suspect_environmental": false
+    }
+  ],
+  "verifier": {
+    "id": "note-2fc7b258",
+    "public_key_fingerprint": "454a5cb63b7e7e28c5f8b05e73cd14773771ff414b15e0e1d087cb7a66f53615"
+  },
+  "created_at": "2026-10-29T02:23:36.647Z",
+  "signature": "49P+Ig8ZUbZuFe/TZhnEdy0yq73HRCf8ihy7/hAC3VyAIkhnhmW3KP3p+kRArAHpQd799p8I/awBQ66yBoKjDQ=="
+}

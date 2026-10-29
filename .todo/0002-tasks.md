@@ -14,7 +14,7 @@
 - [ ] `bun test tests/parity` — a suíte de paridade passa com exit 0.
 - [ ] `bun run typecheck` — o typecheck estrito passa com exit 0.
 
-### [ ] [1.1] Registrar DEC-030 e atualizar a restrição normativa
+### [x] [1.1] Registrar DEC-030 e atualizar a restrição normativa
 
 **Requirement:** FR-005
 **Depends on:** none

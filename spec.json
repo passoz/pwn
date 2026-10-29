@@ -363,7 +363,7 @@
 
   "restrictions": [
     { "decision_id": "DEC-001", "statement": "JSON para documentos normativos; Markdown para documentação humana", "reference": "SPEC.md §2.3 (superseded por DEC-029)" },
-    { "decision_id": "DEC-005", "statement": "implementação em TypeScript sobre Bun; distribuição standalone opcional", "reference": "SPEC.md §11.1" },
+    { "decision_id": "DEC-030", "statement": "implementação em Go com binário estático; TypeScript sobre Bun permanece apenas no período de transição", "reference": "DECISIONS.md DEC-030 (supersedes DEC-005)" },
     { "decision_id": "DEC-008", "statement": "pipeline JSON é o orquestrador; sem roteador LLM no MVP", "reference": "SPEC.md §2.6 (atualizado por DEC-029)" },
     { "decision_id": "DEC-014", "statement": "o executável chama-se pwn", "reference": "SPEC.md §5" },
     { "decision_id": "DEC-017", "statement": "modelos fortes definem contratos e tratam escalações; modelos baratos executam sob limites", "reference": "SPEC.md §4.2" },
