@@ -31,3 +31,8 @@ queue/review/
 # Variáveis de ambiente (podem conter segredos)
 .env*
 !.env.example
+
+# Build Go
+/bin/pwn
+coverage.out
+*.test

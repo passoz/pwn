@@ -1,0 +1,16 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.go"
+      run: golangci-lint run ./...
+    secrets:
+      run: gitleaks git --staged --redact
+pre-push:
+  commands:
+    test:
+      run: go test ./...
