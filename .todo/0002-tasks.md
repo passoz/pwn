@@ -14,7 +14,7 @@
 - [ ] `bun test tests/parity` — a suíte de paridade passa com exit 0.
 - [ ] `bun run typecheck` — o typecheck estrito passa com exit 0.
 
-### [x] [1.1] Registrar DEC-030 e atualizar a restrição normativa
+### [ ] [1.1] Registrar DEC-030 e atualizar a restrição normativa
 
 **Requirement:** FR-005
 **Depends on:** none
@@ -43,9 +43,9 @@
 **Depends on:** 1.1
 **Behavior:** Grava o resultado de bun run check e compara dois binários por código de saída, saída normalizada e árvore de arquivos, sem rede.
 **Components:** parity
-**Files:** `scripts/parity/capture-baseline.ts`, `scripts/parity/diff.ts`, `tests/parity/baseline.test.ts`, `testdata/parity/manifest.json`
+**Files:** `scripts/parity/capture-baseline.ts`, `scripts/parity/diff.ts`, `tests/parity/baseline.test.ts`, `testdata/parity/manifest.json`, `tests/parity/acceptance-baseline.test.ts`
 **Implementation files:** `scripts/parity/capture-baseline.ts`, `scripts/parity/diff.ts`
-**Test files:** `tests/parity/baseline.test.ts`
+**Test files:** `tests/parity/baseline.test.ts`, `tests/parity/acceptance-baseline.test.ts`
 
 **RED:**
 - `bun test tests/parity/baseline.test.ts` — o teste exige o relatório da linha de base e falha antes do capturador
@@ -55,7 +55,7 @@
 2. Gravar o manifesto e comparar duas execuções
 
 **ACs:**
-- [ ] `bun test tests/parity/baseline.test.ts` — a linha de base registra 470 testes e código de saída 0
+- [ ] `bun test tests/parity/acceptance-baseline.test.ts` — a linha de base registra 470 testes e código de saída 0
 - [ ] `bun scripts/parity/diff.ts --self-test` — o executor compara saída e árvore de arquivos
 
 **Visual:** N/A

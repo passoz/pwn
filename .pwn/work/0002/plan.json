@@ -23,7 +23,9 @@
       "requirement_id": "FR-005",
       "depends_on": [],
       "behavior": "Substitui DEC-005 por DEC-030 em spec.json e .specs/system.json e registra a decisão em docs/archive/DECISIONS.md.",
-      "components": ["governance"],
+      "components": [
+        "governance"
+      ],
       "files": [
         "spec.json",
         ".specs/system.json",
@@ -65,20 +67,28 @@
       "id": "1.2",
       "title": "Capturar a linha de base e criar o executor diferencial",
       "requirement_id": "FR-001",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "behavior": "Grava o resultado de bun run check e compara dois binários por código de saída, saída normalizada e árvore de arquivos, sem rede.",
-      "components": ["parity"],
+      "components": [
+        "parity"
+      ],
       "files": [
         "scripts/parity/capture-baseline.ts",
         "scripts/parity/diff.ts",
         "tests/parity/baseline.test.ts",
-        "testdata/parity/manifest.json"
+        "testdata/parity/manifest.json",
+        "tests/parity/acceptance-baseline.test.ts"
       ],
       "implementation_files": [
         "scripts/parity/capture-baseline.ts",
         "scripts/parity/diff.ts"
       ],
-      "test_files": ["tests/parity/baseline.test.ts"],
+      "test_files": [
+        "tests/parity/baseline.test.ts",
+        "tests/parity/acceptance-baseline.test.ts"
+      ],
       "red": {
         "command": "bun test tests/parity/baseline.test.ts",
         "description": "o teste exige o relatório da linha de base e falha antes do capturador"
@@ -89,7 +99,7 @@
       ],
       "acceptance_criteria": [
         {
-          "command": "bun test tests/parity/baseline.test.ts",
+          "command": "bun test tests/parity/acceptance-baseline.test.ts",
           "description": "a linha de base registra 470 testes e código de saída 0"
         },
         {
@@ -108,16 +118,24 @@
       "id": "1.3",
       "title": "Gerar os vetores de referência",
       "requirement_id": "FR-003",
-      "depends_on": ["1.2"],
+      "depends_on": [
+        "1.2"
+      ],
       "behavior": "Gera vetores de JSON canônico, SHA-256, HMAC, Ed25519, recibo e markdown e os compara com a cópia gravada.",
-      "components": ["parity"],
+      "components": [
+        "parity"
+      ],
       "files": [
         "scripts/parity/golden.ts",
         "tests/parity/golden.test.ts",
         "testdata/parity/golden/"
       ],
-      "implementation_files": ["scripts/parity/golden.ts"],
-      "test_files": ["tests/parity/golden.test.ts"],
+      "implementation_files": [
+        "scripts/parity/golden.ts"
+      ],
+      "test_files": [
+        "tests/parity/golden.test.ts"
+      ],
       "red": {
         "command": "bun test tests/parity/golden.test.ts",
         "description": "o teste exige os vetores e falha antes do gerador"
@@ -143,16 +161,24 @@
       "id": "1.4",
       "title": "Gerar o conjunto de conformidade do validador",
       "requirement_id": "FR-004",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "behavior": "Gera casos válidos e inválidos com o Ajv para as 17 palavras-chave e grava o conjunto que o validador Go deve reproduzir.",
-      "components": ["parity"],
+      "components": [
+        "parity"
+      ],
       "files": [
         "scripts/parity/schema-corpus.ts",
         "tests/parity/schema.test.ts",
         "testdata/parity/schema/"
       ],
-      "implementation_files": ["scripts/parity/schema-corpus.ts"],
-      "test_files": ["tests/parity/schema.test.ts"],
+      "implementation_files": [
+        "scripts/parity/schema-corpus.ts"
+      ],
+      "test_files": [
+        "tests/parity/schema.test.ts"
+      ],
       "red": {
         "command": "bun test tests/parity/schema.test.ts",
         "description": "o teste exige o conjunto e falha antes do gerador"
@@ -178,16 +204,24 @@
       "id": "1.5",
       "title": "Provar o pwn TypeScript dentro do sandbox do verificador",
       "requirement_id": "FR-002",
-      "depends_on": ["1.2"],
+      "depends_on": [
+        "1.2"
+      ],
       "behavior": "Executa o pwn TypeScript e os testes diferenciais dentro do bwrap com a política do verificador e registra o resultado.",
-      "components": ["parity"],
+      "components": [
+        "parity"
+      ],
       "files": [
         "scripts/parity/sandbox-proof.ts",
         "tests/parity/sandbox.test.ts",
         "testdata/parity/sandbox.json"
       ],
-      "implementation_files": ["scripts/parity/sandbox-proof.ts"],
-      "test_files": ["tests/parity/sandbox.test.ts"],
+      "implementation_files": [
+        "scripts/parity/sandbox-proof.ts"
+      ],
+      "test_files": [
+        "tests/parity/sandbox.test.ts"
+      ],
       "red": {
         "command": "bun test tests/parity/sandbox.test.ts",
         "description": "o teste exige a prova no sandbox e falha antes do script"

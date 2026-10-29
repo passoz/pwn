@@ -5,7 +5,9 @@
   "title": "Capturar a linha de base e criar o executor diferencial",
   "risk": {
     "level": "L2",
-    "reasons": ["Ferramenta de teste e captura de dados, sem acesso à chave do verificador"]
+    "reasons": [
+      "Ferramenta de teste e captura de dados, sem acesso à chave do verificador"
+    ]
   },
   "validation_strategy": "tdd-strict",
   "behavioral_contract": {
@@ -25,21 +27,36 @@
     ]
   },
   "change_contract": {
-    "target_files": ["scripts/parity/capture-baseline.ts", "scripts/parity/diff.ts", "testdata/parity/**"],
-    "affected_components": ["parity"]
+    "target_files": [
+      "scripts/parity/capture-baseline.ts",
+      "scripts/parity/diff.ts",
+      "testdata/parity/**"
+    ],
+    "affected_components": [
+      "parity"
+    ]
   },
   "architecture_contract": {
-    "invariants": ["Não alterar src/", "O executor não acessa a rede", "A captura não altera a árvore do repositório"],
-    "forbidden_dependencies": ["src/**"]
+    "invariants": [
+      "Não alterar src/",
+      "O executor não acessa a rede",
+      "A captura não altera a árvore do repositório"
+    ],
+    "forbidden_dependencies": [
+      "src/**"
+    ]
   },
   "acceptance_contract": {
     "commands": [
       "bun test tests/parity/baseline.test.ts",
       "bun scripts/parity/diff.ts --self-test",
       "bun test",
-      "bun run check"
+      "bun run check",
+      "bun test tests/parity/acceptance-baseline.test.ts"
     ],
-    "required_evidence": ["evidence.json"],
+    "required_evidence": [
+      "evidence.json"
+    ],
     "frozen_tests": []
   },
   "scope_contract": {
@@ -49,10 +66,21 @@
       "tests/parity/baseline.test.ts",
       "testdata/parity/**",
       ".prompts/**",
-      ".sources/**"
+      ".sources/**",
+      "tests/parity/acceptance-baseline.test.ts"
     ],
-    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
-    "out_of_scope": ["Implementação do binário Go", "Alteração normativa"]
+    "write_deny": [
+      ".git/**",
+      "src/**",
+      "schemas/**",
+      "package.json",
+      "bun.lock",
+      ".env*"
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go",
+      "Alteração normativa"
+    ]
   },
   "budget_contract": {
     "max_tokens": 80000,
