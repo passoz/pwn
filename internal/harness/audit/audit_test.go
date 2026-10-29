@@ -402,7 +402,7 @@ func TestRejectsVacuousAcceptanceCriterion(t *testing.T) {
 	writeFile(t, dir, "gate.sh", "sh app.test.sh\n")
 	planFor(t, dir, []fixtureTask{{
 		id: "1.1", title: "Implement value", implementation: "app.value", test: "app.test.sh", assertion: "VALUE-NEW",
-		acs: []string{"sh app.test.sh", "sh --version"},
+		acs: []string{"sh app.test.sh", "true"},
 	}})
 	commit(t, dir, "baseline")
 
@@ -417,7 +417,7 @@ func TestRejectsVacuousAcceptanceCriterion(t *testing.T) {
 
 	code, stdout, stderr = runAudit(t, dir, "check", "--work", "0001", "--task", "1.1", "--name", "AC-1", "--", "sh", "app.test.sh")
 	mustCode(t, 0, []string{"check AC-1"}, code, stdout, stderr)
-	code, _, stderr = runAudit(t, dir, "check", "--work", "0001", "--task", "1.1", "--name", "AC-2", "--", "sh", "--version")
+	code, _, stderr = runAudit(t, dir, "check", "--work", "0001", "--task", "1.1", "--name", "AC-2", "--", "true")
 	mustCode(t, 1, []string{"check AC-2 vácuo"}, code, "", stderr)
 	if !strings.Contains(stderr, "AC-2 é vácuo") || !strings.Contains(stderr, "implementação removida") {
 		t.Fatalf("mensagem inesperada: %s", stderr)

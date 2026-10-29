@@ -189,11 +189,19 @@ func copyDirectoryForTest(src, dst string) error {
 
 // TestSemanticGapFixtureParity compara os achados, a ordem deles e as
 // assinaturas de uma fixture com múltiplas violações semânticas.
+const goldenFixtureRoot = "/home/passoz/dev/pwn-pwngo/internal/harness/gates/testdata/fixtures/semantic-gap"
+
 func TestSemanticGapFixtureParity(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "semantic-gap-expected.json"))
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}
+	workDir, err := filepath.Abs(filepath.Join("testdata", "fixtures", "semantic-gap"))
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	// O golden guarda o caminho absoluto de quem o gerou nos source_refs.
+	data = bytes.ReplaceAll(data, []byte(goldenFixtureRoot), []byte(workDir))
 	var document struct {
 		VerifierKey string       `json:"verifier_key"`
 		LawsSHA256  string       `json:"laws_sha256"`
@@ -204,10 +212,6 @@ func TestSemanticGapFixtureParity(t *testing.T) {
 	}
 	t.Setenv("PWN_VERIFIER_KEY", document.VerifierKey)
 
-	workDir, err := filepath.Abs(filepath.Join("testdata", "fixtures", "semantic-gap"))
-	if err != nil {
-		t.Fatalf("abs: %v", err)
-	}
 	outputs := gates.EvaluateAllGates("0099", workDir)
 	if len(outputs) != len(document.Gates) {
 		t.Fatalf("outputs = %d, want %d", len(outputs), len(document.Gates))
@@ -240,7 +244,9 @@ func TestSemanticGapFixtureParity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: sign: %v", output.Gate, err)
 		}
-		if signature != expected.Signature {
+		// A assinatura cobre os source_refs, que levam o caminho absoluto do golden:
+		// só é comparável quando o repositório está no mesmo caminho de quem o gerou.
+		if workDir == goldenFixtureRoot && signature != expected.Signature {
 			t.Fatalf("%s: signature = %q, want %q", output.Gate, signature, expected.Signature)
 		}
 	}
