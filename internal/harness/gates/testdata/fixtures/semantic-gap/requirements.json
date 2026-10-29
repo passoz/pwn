@@ -1,0 +1,7 @@
+{
+  "work_id": "0099",
+  "requirements": [
+    { "id": "FR-001", "title": "A", "user_story": "x", "acceptance_criteria": ["A interface sera agradavel"] },
+    { "id": "FR-002", "title": "B", "user_story": "y", "acceptance_criteria": ["o teste deve falhar antes"] }
+  ]
+}

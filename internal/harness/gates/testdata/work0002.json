@@ -1,0 +1,119 @@
+{
+  "gate_cache_version": "2",
+  "harness_version": "0.1.0",
+  "laws_sha256": "ab758ed1dc6a61b9",
+  "verifier_key": "golden-test-key",
+  "gates": [
+    {
+      "output": {
+        "gate": "GATE-DISC-REQ",
+        "work_id": "0002",
+        "input_versions": {
+          "discovery": "d22263ecf95f",
+          "requirements": "9dd3435a58a1",
+          "traceability_matrix": "4233975a3aae"
+        },
+        "result": "pass",
+        "summary": {
+          "covered": 7,
+          "gaps": 0,
+          "conflicts": 0,
+          "ambiguities": 0,
+          "traceability_gaps": 0
+        },
+        "findings": []
+      },
+      "cache_key": "503b684aade2",
+      "signature": "9fcbe4be470276688f09ae804a93720954d62f50d102117ded726bdc4c67610c"
+    },
+    {
+      "output": {
+        "gate": "GATE-REQ-PRD",
+        "work_id": "0002",
+        "input_versions": {
+          "requirements": "9dd3435a58a1",
+          "prd": "465a0993bc8d",
+          "traceability_matrix": "4233975a3aae"
+        },
+        "result": "pass",
+        "summary": {
+          "covered": 7,
+          "gaps": 0,
+          "conflicts": 0,
+          "ambiguities": 0,
+          "traceability_gaps": 0
+        },
+        "findings": []
+      },
+      "cache_key": "c23ade88f845",
+      "signature": "9d290001963b7ced859fbe08ae092250e108e93f57a9d082834c30fbb95d1f1b"
+    },
+    {
+      "output": {
+        "gate": "GATE-PRD-SPEC",
+        "work_id": "0002",
+        "input_versions": {
+          "prd": "465a0993bc8d",
+          "technical_decisions": "absent",
+          "spec": "c6047967280b",
+          "traceability_matrix": "4233975a3aae"
+        },
+        "result": "pass",
+        "summary": {
+          "covered": 2,
+          "gaps": 0,
+          "conflicts": 0,
+          "ambiguities": 0,
+          "traceability_gaps": 0
+        },
+        "findings": []
+      },
+      "cache_key": "fb0145669c56",
+      "signature": "585367d5b1fa4728043c4fe710dd131f7b393fb5292a165550d4360a84ca6f21"
+    },
+    {
+      "output": {
+        "gate": "GATE-SPEC-PLAN",
+        "work_id": "0002",
+        "input_versions": {
+          "spec": "c6047967280b",
+          "work_governance": "absent",
+          "plan": "2bec7a3e50af"
+        },
+        "result": "pass",
+        "summary": {
+          "covered": 5,
+          "gaps": 0,
+          "conflicts": 0,
+          "ambiguities": 0,
+          "traceability_gaps": 0
+        },
+        "findings": []
+      },
+      "cache_key": "3a95b3e8bd6f",
+      "signature": "ebd11e771e201106417f9019021a7c82f9b3a2ac7e7e0b0e9527a117227698e4"
+    },
+    {
+      "output": {
+        "gate": "GATE-PLAN-CONTRACT",
+        "work_id": "0002",
+        "input_versions": {
+          "plan": "2bec7a3e50af",
+          "task_contracts": "4233975a3aae",
+          "contracts": "59d2accb103f"
+        },
+        "result": "pass",
+        "summary": {
+          "covered": 5,
+          "gaps": 0,
+          "conflicts": 0,
+          "ambiguities": 0,
+          "traceability_gaps": 0
+        },
+        "findings": []
+      },
+      "cache_key": "1301057c853e",
+      "signature": "64efbe141194e83111ba2b16a79e575db885bbd0bc648851d671739f9d7c18ef"
+    }
+  ]
+}

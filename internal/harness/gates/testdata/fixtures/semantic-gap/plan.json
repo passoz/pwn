@@ -1,0 +1,21 @@
+{
+  "work_id": "0099",
+  "components": [{ "name": "core", "purpose": "Componente", "regression": "bun run check" }],
+  "global_gates": ["`bun test` — a suíte passa"],
+  "tasks": [
+    {
+      "id": "1.1",
+      "title": "Task com violações",
+      "spec_reference": "CAP-001 + CAP-002",
+      "components": ["core", "cli"],
+      "behavior": "faz a e b e c e d",
+      "implementation_files": ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts", "g.ts"],
+      "acceptance_criteria": [
+        { "command": "bun test", "description": "roda a suíte" },
+        { "description": "sem comando" }
+      ],
+      "red": { "command": "" },
+      "contract_id": "CTR-001"
+    }
+  ]
+}

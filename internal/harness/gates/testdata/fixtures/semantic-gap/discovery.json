@@ -1,0 +1,7 @@
+{
+  "work_id": "0099",
+  "problem": "Fixture de paridade com achados semânticos",
+  "actors": ["ACT-001"],
+  "objectives": ["Objetivo"],
+  "constraints": ["Restrição"]
+}

@@ -1,0 +1,154 @@
+{
+  "gate_version": "2",
+  "harness_version": "0.1.0",
+  "laws_sha256": "ab758ed1dc6a61b9",
+  "computed_at": "2026-10-29T00:00:00.000Z",
+  "output": {
+    "gate": "GATE-SPEC-PLAN",
+    "work_id": "0099",
+    "input_versions": {
+      "spec": "3857558e73df",
+      "work_governance": "absent",
+      "plan": "4db154b0a9f5"
+    },
+    "result": "blocked",
+    "summary": {
+      "covered": 1,
+      "gaps": 4,
+      "conflicts": 0,
+      "ambiguities": 0,
+      "traceability_gaps": 1
+    },
+    "findings": [
+      {
+        "id": "FIND-PLAN-XREF-1",
+        "severity": "medium",
+        "type": "traceability_gap",
+        "source_refs": [
+          "plan.json",
+          "spec.json"
+        ],
+        "target_refs": [
+          "CAP-001 + CAP-002"
+        ],
+        "description": "Task 1.1 referencia spec \"CAP-001 + CAP-002\" que não existe na spec.json",
+        "required_resolution": "Corrigir spec_reference na task 1.1",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-AC-GENERIC-1.1-1",
+        "severity": "high",
+        "type": "unverifiable_acceptance",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "1.1"
+        ],
+        "description": "AC-1 da task 1.1 (`bun test`) repete um gate global/comando de regressão — gate não é critério de aceite da task",
+        "required_resolution": "Usar um comando focado no comportamento da task (arquivo de teste, filtro de nome ou probe do observável)",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-AC-COMMAND-1.1-2",
+        "severity": "high",
+        "type": "unverifiable_acceptance",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "1.1"
+        ],
+        "description": "AC-2 da task 1.1 não tem comando executável",
+        "required_resolution": "Declarar o AC como { command, description }: texto livre não é verificável",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-RED-MISSING-1.1",
+        "severity": "high",
+        "type": "unverifiable_acceptance",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "1.1"
+        ],
+        "description": "Task 1.1 não declara comando RED",
+        "required_resolution": "Declarar o comando focado que falha antes da implementação",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-FILES-MISSING-1.1-test_files",
+        "severity": "high",
+        "type": "coverage_gap",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "1.1"
+        ],
+        "description": "Task 1.1 não declara Test files",
+        "required_resolution": "Declarar os arquivos concretos que o audit congela no baseline",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-ATOMIC-SPEC-1.1",
+        "severity": "medium",
+        "type": "coverage_gap",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "CAP-001 + CAP-002"
+        ],
+        "description": "Task 1.1 referencia múltiplas capabilities em spec_reference (\"CAP-001 + CAP-002\")",
+        "required_resolution": "Dividir a task para referenciar uma única capability",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-ATOMIC-COMP-1.1",
+        "severity": "low",
+        "type": "coverage_gap",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "core",
+          "cli"
+        ],
+        "description": "Task 1.1 cobre 2 componentes (core, cli)",
+        "required_resolution": "Dividir a task por componente ou justificar o acoplamento",
+        "resolution_owner": "planner",
+        "status": "open"
+      },
+      {
+        "id": "FIND-ATOMIC-FILES-1.1",
+        "severity": "low",
+        "type": "coverage_gap",
+        "source_refs": [
+          "plan.json"
+        ],
+        "target_refs": [
+          "a.ts",
+          "b.ts",
+          "c.ts",
+          "d.ts",
+          "e.ts",
+          "f.ts",
+          "g.ts"
+        ],
+        "description": "Task 1.1 declara 7 arquivos de implementação (> 6)",
+        "required_resolution": "Dividir a task em unidades menores",
+        "resolution_owner": "planner",
+        "status": "open"
+      }
+    ]
+  },
+  "signature": "75b48e22595399c77a223b9cf98b53d2616fe2849d0fc39f74867cdb5d88f1b5"
+}

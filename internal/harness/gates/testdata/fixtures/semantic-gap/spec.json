@@ -1,0 +1,7 @@
+{
+  "work_id": "0099",
+  "capabilities": [
+    { "id": "CAP-001", "description": "Coberta", "covered_requirements": ["FR-002"], "rules": ["BR-001"] },
+    { "id": "CAP-002", "description": "Apenas um título" }
+  ]
+}

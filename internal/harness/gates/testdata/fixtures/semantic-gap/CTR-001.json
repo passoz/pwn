@@ -1,0 +1,13 @@
+{
+  "contract_version": "4.0",
+  "task_id": "1.1",
+  "work_id": "0099",
+  "title": "Task com violações",
+  "risk": { "level": "L3" },
+  "scope_contract": { "write_allow": ["src/x.ts"] },
+  "budget_contract": { "max_tokens": 1000 },
+  "acceptance_contract": {
+    "commands": ["bun run check"],
+    "frozen_tests": [{ "path": "tests/x.test.ts", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }]
+  }
+}

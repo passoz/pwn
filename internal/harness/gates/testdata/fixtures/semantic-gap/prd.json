@@ -1,0 +1,10 @@
+{
+  "id": "PRD-0099",
+  "title": "PRD da fixture",
+  "status": "approved",
+  "accepted_requirements": ["FR-001", "FR-002", "FR-404"],
+  "requirements": [
+    { "id": "FR-001", "statement": "A" },
+    { "id": "FR-002", "statement": "B" }
+  ]
+}
