@@ -49,7 +49,12 @@
     "required_evidence": [
       "evidence.json"
     ],
-    "frozen_tests": []
+    "frozen_tests": [
+      {
+        "path": "tests/parity/acceptance-schema.test.ts",
+        "sha256": "3b5cee0ea59aca40137d4f3fb5f3cadc20609b223338098f0488c475fe196dac"
+      }
+    ]
   },
   "scope_contract": {
     "write_allow": [
