@@ -63,10 +63,14 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return 1
 	}
 	// Sem subcomando, os argumentos do handler começam em rest[1:]; com
-	// subcomando, depois dele.
+	// subcomando, depois dele. O handler valida o subcomando e imprime o uso
+	// próprio, como o switch de src/cli.ts.
 	commandArgs := rest[1:]
-	if len(spec.subcommands) > 0 {
-		commandArgs = rest[2:]
+	if spec.takesSubcommand {
+		commandArgs = nil
+		if len(rest) > 2 {
+			commandArgs = rest[2:]
+		}
 	}
 	return runner.run(cfg, spec, subcommand, commandArgs)
 }
@@ -84,22 +88,13 @@ func (r *runner) resolve(command string, args []string) (commandSpec, string, bo
 		return commandSpec{}, "", false
 	}
 
-	if len(spec.subcommands) == 0 {
+	if !spec.takesSubcommand {
 		return spec, "", true
 	}
 
 	subcommand := ""
 	if len(args) > 0 {
 		subcommand = args[0]
-	}
-	if !containsSubcommand(spec, subcommand) {
-		shown := subcommand
-		if shown == "" {
-			shown = "(vazio)"
-		}
-		fmt.Fprintf(r.stderr, "Subcomando desconhecido para 'pwn %s': %s\n", spec.name, shown)
-		fmt.Fprintf(r.stdout, "\nUso:\n  %s\n", spec.usage)
-		return commandSpec{}, "", false
 	}
 	return spec, subcommand, true
 }

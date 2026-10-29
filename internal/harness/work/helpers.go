@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/passoz/pwn/internal/platform/fsx"
+	"github.com/passoz/pwn/internal/platform/jsonx"
 )
 
 // unmarshalJSON lê JSON preservando números como float64 — a mesma leitura que
@@ -26,6 +27,21 @@ func marshalIndent(value any) (string, error) {
 		return "", err
 	}
 	return trimFinalNewline(buffer.String()), nil
+}
+
+// marshalOrdered devolve o JSON indentado preservando a ordem de inserção
+// (jsonx.Fields, structs), sem quebra de linha final: `JSON.stringify(v, null, 2)`
+// de um objeto literal. Um map de Go sairia em ordem alfabética.
+func marshalOrdered(value any) (string, error) {
+	compact, err := jsonx.Insertion(value)
+	if err != nil {
+		return "", err
+	}
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, compact, "", "  "); err != nil {
+		return "", err
+	}
+	return pretty.String(), nil
 }
 
 // marshalDocument devolve o JSON indentado com a quebra de linha final que os

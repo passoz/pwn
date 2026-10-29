@@ -43,7 +43,7 @@ func (r *Runner) Init(args []string) int {
 	}
 	deciderName, deciderOK := flagValuePresent(args, "--decider")
 	if hasFlag(args, "--decider") && !deciderOK {
-		fmt.Fprint(r.errOut(), "✗ --decider exige <provedor>:modelo\n")
+		fmt.Fprint(r.errOut(), "✗ --decider exige <provedor>:<modelo>\n")
 		return 1
 	}
 	if deciderName != "" && hasFlag(args, "--no-decider") {
@@ -54,12 +54,12 @@ func (r *Runner) Init(args []string) int {
 	fmt.Fprintf(r.out(), "=== [pwn init] %s ===\n", repositoryRoot)
 	root, err := verify.Root()
 	if err != nil {
-		fmt.Fprintf(r.errOut(), "✗ %s\n", err.Error())
+		fmt.Fprintf(r.errOut(), "✗ pwn init falhou: %s\n", err.Error())
 		return 1
 	}
 	previous, err := decider.ReadConfig(repositoryRoot, root)
 	if err != nil {
-		fmt.Fprintf(r.errOut(), "✗ %s\n", err.Error())
+		fmt.Fprintf(r.errOut(), "✗ pwn init falhou: %s\n", err.Error())
 		return 1
 	}
 	if previous != nil {
@@ -88,7 +88,7 @@ func (r *Runner) Init(args []string) int {
 	case stdinIsTTY(r.stdin()):
 		input, err = r.askDecider(previous)
 		if err != nil {
-			fmt.Fprintf(r.errOut(), "✗ %s\n", err.Error())
+			fmt.Fprintf(r.errOut(), "✗ pwn init falhou: %s\n", err.Error())
 			return 1
 		}
 	default:
@@ -103,7 +103,7 @@ func (r *Runner) Init(args []string) int {
 
 	config, err := decider.WriteConfig(repositoryRoot, input, root)
 	if err != nil {
-		fmt.Fprintf(r.errOut(), "✗ %s\n", err.Error())
+		fmt.Fprintf(r.errOut(), "✗ pwn init falhou: %s\n", err.Error())
 		return 1
 	}
 	fmt.Fprintf(r.out(), "✓ %s\n", describeDecider(config))

@@ -183,6 +183,12 @@ func DefaultRuntime() string {
 	// executável do pwn fica como último recurso.
 	for _, name := range []string{"bun", "go"} {
 		if found, ok := FindExecutable(name); ok {
+			// O caminho real vai para a configuração e para o sandbox: um link
+			// como `.../bun/latest` pode apontar para outra versão depois da
+			// aprovação sem que o recibo perceba.
+			if real, err := filepath.EvalSymlinks(found); err == nil {
+				return real
+			}
 			return found
 		}
 	}

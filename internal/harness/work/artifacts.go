@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/passoz/pwn/internal/platform/jsonx"
 )
 
 // WorkArtifactsPaths são os caminhos canônicos de um Work.
@@ -138,79 +140,94 @@ func InitWorkDirectory(workID, rootDir string) (WorkArtifactsPaths, error) {
 		return WorkArtifactsPaths{}, fmt.Errorf("work: criar %s: %w", paths.WorkDir, err)
 	}
 	now := nowISO()
+	// Os modelos usam jsonx.Fields: a ordem das chaves é a de JSON.stringify na
+	// referência. Um map de Go sairia em ordem alfabética.
 	templates := []struct {
 		path  string
-		value map[string]any
+		value jsonx.Fields
 	}{
-		{paths.Intake, map[string]any{
-			"work_id":    resolvedWorkID,
-			"created_at": now,
-			"objective":  "Objetivo do pedido bruto",
-			"requester":  "operator",
-			"status":     "draft",
+		{paths.Intake, jsonx.Fields{
+			{Key: "work_id", Value: resolvedWorkID},
+			{Key: "created_at", Value: now},
+			{Key: "objective", Value: "Objetivo do pedido bruto"},
+			{Key: "requester", Value: "operator"},
+			{Key: "status", Value: "draft"},
 		}},
-		{paths.Discovery, map[string]any{
-			"work_id":     resolvedWorkID,
-			"problem":     "Descrição do problema",
-			"actors":      []string{"ACT-001"},
-			"objectives":  []string{"Objetivo principal"},
-			"constraints": []string{"Restrição de tecnologia/tempo"},
+		{paths.Discovery, jsonx.Fields{
+			{Key: "work_id", Value: resolvedWorkID},
+			{Key: "problem", Value: "Descrição do problema"},
+			{Key: "actors", Value: []string{"ACT-001"}},
+			{Key: "objectives", Value: []string{"Objetivo principal"}},
+			{Key: "constraints", Value: []string{"Restrição de tecnologia/tempo"}},
 		}},
-		{paths.Requirements, map[string]any{
-			"work_id": resolvedWorkID,
-			"requirements": []any{
-				map[string]any{
-					"id":                  "FR-001",
-					"title":               "Primeiro Requisito Funcional",
-					"user_story":          "Como operador, quero funcionalidade X para beneficio Y",
-					"acceptance_criteria": []string{"Critério 1 observável"},
+		{paths.Requirements, jsonx.Fields{
+			{Key: "work_id", Value: resolvedWorkID},
+			{Key: "requirements", Value: []any{
+				jsonx.Fields{
+					{Key: "id", Value: "FR-001"},
+					{Key: "title", Value: "Primeiro Requisito Funcional"},
+					{Key: "user_story", Value: "Como operador, quero funcionalidade X para beneficio Y"},
+					{Key: "acceptance_criteria", Value: []string{"Critério 1 observável"}},
 				},
-			},
+			}},
 		}},
-		{paths.PRD, map[string]any{
-			"$schema": "https://pwn.dev/schemas/prd.schema.json",
-			"id":      "PRD-" + resolvedWorkID,
-			"meta": map[string]any{
-				"version":    "1.0",
-				"created_at": now,
-				"author":     "operator",
-			},
-			"title":    "PRD do Work " + resolvedWorkID,
-			"status":   "draft",
-			"scenario": "greenfield",
-			"problem":  map[string]any{"statement": "Problema resolvido pelo PRD — descreva o problema em detalhe"},
-			"solution": map[string]any{"statement": "Solucao proposta — descreva a abordagem"},
-			"decisions": []any{
-				map[string]any{"id": "DEC-001", "statement": "Decisao inicial do produto", "status": "proposed"},
-			},
-			"requirements": []any{
-				map[string]any{"id": "FR-001", "type": "functional", "statement": "Primeiro requisito funcional"},
-			},
-			"stakeholders":          []any{map[string]any{"name": "operator", "role": "ACT-001"}},
-			"scope":                 map[string]any{"in_scope": []string{"Escopo incluido"}, "out_of_scope": []string{"Nao-objetivos"}},
-			"accepted_requirements": []string{"FR-001"},
-		}},
-		{paths.TraceabilityMatrix, map[string]any{
-			"work_id": resolvedWorkID,
-			"matrix": []any{
-				map[string]any{
-					"origin":         "DISC-001",
-					"requirement_id": "FR-001",
-					"decision_id":    "TD-001",
-					"spec_section":   "SPEC-001",
-					"task_id":        "T-001",
-					"contract_id":    "CTR-001",
-					"evidence_id":    "EVD-001",
-					"status":         "planned",
+		{paths.PRD, jsonx.Fields{
+			{Key: "$schema", Value: "https://pwn.dev/schemas/prd.schema.json"},
+			{Key: "id", Value: "PRD-" + resolvedWorkID},
+			{Key: "meta", Value: jsonx.Fields{
+				{Key: "version", Value: "1.0"},
+				{Key: "created_at", Value: now},
+				{Key: "author", Value: "operator"},
+			}},
+			{Key: "title", Value: "PRD do Work " + resolvedWorkID},
+			{Key: "status", Value: "draft"},
+			{Key: "scenario", Value: "greenfield"},
+			{Key: "problem", Value: jsonx.Fields{{Key: "statement", Value: "Problema resolvido pelo PRD — descreva o problema em detalhe"}}},
+			{Key: "solution", Value: jsonx.Fields{{Key: "statement", Value: "Solucao proposta — descreva a abordagem"}}},
+			{Key: "decisions", Value: []any{
+				jsonx.Fields{
+					{Key: "id", Value: "DEC-001"},
+					{Key: "statement", Value: "Decisao inicial do produto"},
+					{Key: "status", Value: "proposed"},
 				},
-			},
+			}},
+			{Key: "requirements", Value: []any{
+				jsonx.Fields{
+					{Key: "id", Value: "FR-001"},
+					{Key: "type", Value: "functional"},
+					{Key: "statement", Value: "Primeiro requisito funcional"},
+				},
+			}},
+			{Key: "stakeholders", Value: []any{
+				jsonx.Fields{{Key: "name", Value: "operator"}, {Key: "role", Value: "ACT-001"}},
+			}},
+			{Key: "scope", Value: jsonx.Fields{
+				{Key: "in_scope", Value: []string{"Escopo incluido"}},
+				{Key: "out_of_scope", Value: []string{"Nao-objetivos"}},
+			}},
+			{Key: "accepted_requirements", Value: []string{"FR-001"}},
+		}},
+		{paths.TraceabilityMatrix, jsonx.Fields{
+			{Key: "work_id", Value: resolvedWorkID},
+			{Key: "matrix", Value: []any{
+				jsonx.Fields{
+					{Key: "origin", Value: "DISC-001"},
+					{Key: "requirement_id", Value: "FR-001"},
+					{Key: "decision_id", Value: "TD-001"},
+					{Key: "spec_section", Value: "SPEC-001"},
+					{Key: "task_id", Value: "T-001"},
+					{Key: "contract_id", Value: "CTR-001"},
+					{Key: "evidence_id", Value: "EVD-001"},
+					{Key: "status", Value: "planned"},
+				},
+			}},
 		}},
 	}
 	for _, template := range templates {
 		if _, err := os.Stat(template.path); err == nil {
 			continue
 		}
-		content, err := marshalIndent(template.value)
+		content, err := marshalOrdered(template.value)
 		if err != nil {
 			return WorkArtifactsPaths{}, err
 		}

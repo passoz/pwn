@@ -617,7 +617,7 @@ func TestInitCLI(t *testing.T) {
 		if code != 1 {
 			t.Fatalf("código = %d, quer 1", code)
 		}
-		want := "✗ --decider exige <provedor>:modelo\n"
+		want := "✗ --decider exige <provedor>:<modelo>\n"
 		if stderr != want {
 			t.Fatalf("stderr = %q, quer %q", stderr, want)
 		}

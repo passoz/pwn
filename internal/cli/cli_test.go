@@ -304,8 +304,8 @@ func TestSubcommandDispatch(t *testing.T) {
 		if code != 1 {
 			t.Fatalf("código = %d, quer 1", code)
 		}
-		if !strings.Contains(stderr, "(vazio)") {
-			t.Fatalf("stderr = %q, quer (vazio)", stderr)
+		if !strings.Contains(stderr, "Subcomando desconhecido para 'pwn work': \n") {
+			t.Fatalf("stderr = %q, quer o subcomando vazio como na referência", stderr)
 		}
 		if !strings.Contains(stdout, "Uso:") {
 			t.Fatalf("stdout = %q, quer o uso", stdout)
