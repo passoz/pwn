@@ -5,7 +5,9 @@
   "title": "Gerar os vetores de referência",
   "risk": {
     "level": "L2",
-    "reasons": ["Geração determinística de vetores de teste, sem chave de produção"]
+    "reasons": [
+      "Geração determinística de vetores de teste, sem chave de produção"
+    ]
   },
   "validation_strategy": "tdd-strict",
   "behavioral_contract": {
@@ -19,20 +21,35 @@
     ]
   },
   "change_contract": {
-    "target_files": ["scripts/parity/golden.ts", "testdata/parity/golden/**"],
-    "affected_components": ["parity"]
+    "target_files": [
+      "scripts/parity/golden.ts",
+      "testdata/parity/golden/**"
+    ],
+    "affected_components": [
+      "parity"
+    ]
   },
   "architecture_contract": {
-    "invariants": ["Não alterar src/", "Os vetores são determinísticos", "Nenhum segredo entra nos vetores"],
-    "forbidden_dependencies": ["src/**"]
+    "invariants": [
+      "Não alterar src/",
+      "Os vetores são determinísticos",
+      "Nenhum segredo entra nos vetores"
+    ],
+    "forbidden_dependencies": [
+      "src/**"
+    ]
   },
   "acceptance_contract": {
     "commands": [
       "bun test tests/parity/golden.test.ts",
       "bun scripts/parity/golden.ts --check",
-      "bun test"
+      "bun test",
+      "bun test tests/parity/acceptance-golden.test.ts",
+      "bun scripts/parity/golden.ts --check"
     ],
-    "required_evidence": ["evidence.json"],
+    "required_evidence": [
+      "evidence.json"
+    ],
     "frozen_tests": []
   },
   "scope_contract": {
@@ -41,10 +58,22 @@
       "tests/parity/golden.test.ts",
       "testdata/parity/golden/**",
       ".prompts/**",
-      ".sources/**"
+      ".sources/**",
+      "tests/parity/acceptance-golden.test.ts",
+      "testdata/parity/golden/**"
     ],
-    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
-    "out_of_scope": ["Implementação do binário Go", "Alteração normativa"]
+    "write_deny": [
+      ".git/**",
+      "src/**",
+      "schemas/**",
+      "package.json",
+      "bun.lock",
+      ".env*"
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go",
+      "Alteração normativa"
+    ]
   },
   "budget_contract": {
     "max_tokens": 60000,

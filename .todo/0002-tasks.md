@@ -14,7 +14,7 @@
 - [ ] `bun test tests/parity` — a suíte de paridade passa com exit 0.
 - [ ] `bun run typecheck` — o typecheck estrito passa com exit 0.
 
-### [x] [1.1] Registrar DEC-030 e atualizar a restrição normativa
+### [ ] [1.1] Registrar DEC-030 e atualizar a restrição normativa
 
 **Requirement:** FR-005
 **Depends on:** none
@@ -37,7 +37,7 @@
 **Visual:** N/A
 **Documentation:** N/A
 
-### [x] [1.2] Capturar a linha de base e criar o executor diferencial
+### [ ] [1.2] Capturar a linha de base e criar o executor diferencial
 
 **Requirement:** FR-001
 **Depends on:** 1.1
@@ -67,9 +67,9 @@
 **Depends on:** 1.2
 **Behavior:** Gera vetores de JSON canônico, SHA-256, HMAC, Ed25519, recibo e markdown e os compara com a cópia gravada.
 **Components:** parity
-**Files:** `scripts/parity/golden.ts`, `tests/parity/golden.test.ts`, `testdata/parity/golden/`
+**Files:** `scripts/parity/golden.ts`, `tests/parity/golden.test.ts`, `testdata/parity/golden/`, `tests/parity/acceptance-golden.test.ts`
 **Implementation files:** `scripts/parity/golden.ts`
-**Test files:** `tests/parity/golden.test.ts`
+**Test files:** `tests/parity/golden.test.ts`, `tests/parity/acceptance-golden.test.ts`
 
 **RED:**
 - `bun test tests/parity/golden.test.ts` — o teste exige os vetores e falha antes do gerador
@@ -79,7 +79,8 @@
 2. Gravar os vetores e comparar a segunda execução
 
 **ACs:**
-- [ ] `bun scripts/parity/golden.ts --check` — os vetores de referência são estáveis
+- [ ] `bun test tests/parity/acceptance-golden.test.ts` — os vetores de referência são estáveis
+- [ ] `bun scripts/parity/golden.ts --check` — o gerador confere os vetores gravados
 
 **Visual:** N/A
 **Documentation:** N/A

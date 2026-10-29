@@ -128,13 +128,15 @@
       "files": [
         "scripts/parity/golden.ts",
         "tests/parity/golden.test.ts",
-        "testdata/parity/golden/"
+        "testdata/parity/golden/",
+        "tests/parity/acceptance-golden.test.ts"
       ],
       "implementation_files": [
         "scripts/parity/golden.ts"
       ],
       "test_files": [
-        "tests/parity/golden.test.ts"
+        "tests/parity/golden.test.ts",
+        "tests/parity/acceptance-golden.test.ts"
       ],
       "red": {
         "command": "bun test tests/parity/golden.test.ts",
@@ -146,8 +148,12 @@
       ],
       "acceptance_criteria": [
         {
-          "command": "bun scripts/parity/golden.ts --check",
+          "command": "bun test tests/parity/acceptance-golden.test.ts",
           "description": "os vetores de referência são estáveis"
+        },
+        {
+          "command": "bun scripts/parity/golden.ts --check",
+          "description": "o gerador confere os vetores gravados"
         }
       ],
       "visual": "N/A",
