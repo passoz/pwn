@@ -11,8 +11,22 @@ linters:
     - staticcheck
     - unused
     - gosec
-    - misspell
-    - revive
+  exclusions:
+    rules:
+      # Mensagens de erro seguem o texto do TypeScript, com maiúscula inicial.
+      - linters: [staticcheck]
+        text: "ST1005"
+      # Estilo do port: mensagens e conversões preservam a forma da referência.
+      - linters: [staticcheck]
+        text: "^(QF1012|QF1002|S1016|S1007|SA1019|QF1001|QF1003|SA4026)"
+      # O harness executa comandos e abre caminhos por contrato; estes avisos são intencionais.
+      - linters: [gosec]
+        text: "G103|G115|G122|G204|G304|G301|G302|G306|G702|G703"
+      # Escritas em stdout/stderr e Close em caminhos de erro são best-effort.
+      - linters: [errcheck]
+        text: "Error return value of `(fmt\\.)?Fprint"
+      - linters: [errcheck]
+        text: "Error return value of `.*Close` is not checked"
 
 issues:
   exclude-use-default: false

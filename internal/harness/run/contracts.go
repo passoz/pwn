@@ -36,13 +36,6 @@ func loadPlanRef(workID, rootDir string) *planRef {
 	return &plan
 }
 
-// loadTaskContract carrega o contrato V4 congelado de uma task. O plan.json
-// mapeia task id → contract id; o contrato vive em `<contract_id>.json`.
-func loadTaskContract(workID, taskID, rootDir string) (contract.TaskContractV4, error) {
-	taskContract, _, err := loadTaskContractWithDocument(workID, taskID, rootDir)
-	return taskContract, err
-}
-
 // loadTaskContractWithDocument devolve o contrato tipado e o documento JSON
 // original. O vínculo de aprovação L4 usa o documento, porque o hash do
 // contrato precisa ser o mesmo do JSON.parse do original — um contrato tipado
@@ -95,13 +88,6 @@ func loadTaskContractWithDocument(workID, taskID, rootDir string) (contract.Task
 		)
 	}
 	return taskContract, document, nil
-}
-
-// loadWorkContracts carrega todos os contratos referenciados pelo plano, na
-// ordem do plano.
-func loadWorkContracts(workID, rootDir string) ([]contract.TaskContractV4, error) {
-	contracts, _, err := loadWorkContractsWithDocuments(workID, rootDir)
-	return contracts, err
 }
 
 // loadWorkContractsWithDocuments carrega os contratos do plano e os documentos

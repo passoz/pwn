@@ -141,7 +141,7 @@ func ImportV3Work(options V3ImportOptions) (V3ImportResult, error) {
 		if score == 0 {
 			warnings = append(warnings, fmt.Sprintf("Task %s: nenhuma capability casou por palavra-chave; usando %s — revise o spec_reference.", task.ID, capabilityID))
 		}
-		level := contract.RiskLevel(riskChoice)
+		var level contract.RiskLevel
 		if riskChoice == "auto" {
 			level = DeriveTaskRisk(*task)
 		} else {

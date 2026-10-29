@@ -44,14 +44,6 @@ const validPRDJSON = `{
   "accepted_requirements": ["FR-001"]
 }`
 
-const validEvidenceJSON = `{
-  "meta": {"created_at": "2026-09-10T00:00:00.000Z"},
-  "task_id": "T-001",
-  "status": "green",
-  "red": {"test_file": "tests/a.test.ts", "exit_code": 1, "timestamp": "2026-09-10T00:00:00.000Z"},
-  "green": {"impl_file": "src/a.ts", "exit_code": 0, "timestamp": "2026-09-10T00:00:00.000Z"}
-}`
-
 func writeFile(t *testing.T, dir, name, content string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

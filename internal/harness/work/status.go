@@ -399,6 +399,9 @@ func firstMatch(text string, expression *regexp.Regexp) string {
 
 // artifactStatus descreve os artefatos do pipeline para a raiz do repositório.
 func artifactStatus(rootDir, tasksPath string, validation plan.TaskAnalysis) (ArtifactsStatus, error) {
+	if absolute, err := filepath.Abs(tasksPath); err == nil {
+		tasksPath = absolute
+	}
 	systemSpecPath := filepath.Join(rootDir, ".specs", "system.md")
 	systemSpec := ArtifactState{Path: ".specs/system.md", State: "absent", Detail: "run /make-spec"}
 	if data, err := os.ReadFile(systemSpecPath); err == nil {
@@ -437,12 +440,7 @@ func artifactStatus(rootDir, tasksPath string, validation plan.TaskAnalysis) (Ar
 		prompt = ArtifactState{Path: normalizeWorkPath(relative), State: "present", Detail: status}
 	}
 
-	relativeTasks, err := filepath.Rel(rootDir, tasksPath)
-	if err != nil {
-		return ArtifactsStatus{}, fmt.Errorf("work: resolver %s: %w", tasksPath, err)
-	}
-	relativeTasks = normalizeWorkPath(relativeTasks)
-	tasks := ArtifactState{Path: relativeTasks, State: "absent", Detail: "run /make-todo"}
+	tasks := ArtifactState{Path: tasksPath, State: "absent", Detail: "run /make-todo"}
 	if _, err := os.Stat(tasksPath); err == nil {
 		version := "unknown"
 		if validation.ContractVersion != nil {
@@ -451,7 +449,7 @@ func artifactStatus(rootDir, tasksPath string, validation plan.TaskAnalysis) (Ar
 		switch {
 		case len(validation.Errors) > 0:
 			tasks = ArtifactState{
-				Path:   relativeTasks,
+				Path:   tasksPath,
 				State:  "invalid",
 				Detail: fmt.Sprintf("%d blocking error(s); contract %s", len(validation.Errors), version),
 			}
@@ -463,9 +461,9 @@ func artifactStatus(rootDir, tasksPath string, validation plan.TaskAnalysis) (Ar
 			if len(validation.Exceptions) > 0 {
 				details = append(details, fmt.Sprintf("%d preserved legacy exception(s)", len(validation.Exceptions)))
 			}
-			tasks = ArtifactState{Path: relativeTasks, State: "compatible", Detail: strings.Join(details, "; ") + "; contract " + version}
+			tasks = ArtifactState{Path: tasksPath, State: "compatible", Detail: strings.Join(details, "; ") + "; contract " + version}
 		default:
-			tasks = ArtifactState{Path: relativeTasks, State: "valid", Detail: "structural validation PASS; contract " + version}
+			tasks = ArtifactState{Path: tasksPath, State: "valid", Detail: "structural validation PASS; contract " + version}
 		}
 	}
 	return ArtifactsStatus{SystemSpec: systemSpec, Prompt: prompt, Tasks: tasks}, nil

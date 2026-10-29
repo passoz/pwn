@@ -42,7 +42,7 @@ func SyncWorkManifest(workID, rootDir string) (string, error) {
 		return "", fmt.Errorf("work: ler manifest %s: %w", manifestFile, err)
 	}
 
-	panoramaState := "planned"
+	var panoramaState string
 	status, err := CollectPlanStatus(workID, rootDir)
 	if err != nil {
 		// Plano ilegível é estado `invalid`, como o `catch` da referência.

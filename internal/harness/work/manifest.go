@@ -365,11 +365,11 @@ func ReserveWork(root string, options ReserveWorkOptions) (WorkManifest, error) 
 		}
 		content, err := marshalDocument(manifest)
 		if err != nil {
-			descriptor.Close()
+			_ = descriptor.Close()
 			return WorkManifest{}, err
 		}
 		if _, err := descriptor.WriteString(content); err != nil {
-			descriptor.Close()
+			_ = descriptor.Close()
 			return WorkManifest{}, fmt.Errorf("work: gravar manifest: %w", err)
 		}
 		if err := descriptor.Close(); err != nil {

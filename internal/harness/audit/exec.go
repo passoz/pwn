@@ -110,12 +110,6 @@ type execResult struct {
 	output   string
 }
 
-// rawResult é a saída de um comando que precisa dos bytes de stdout.
-type rawResult struct {
-	exitCode int
-	stdout   []byte
-}
-
 var verifierKeyPrefix = "PWN_VERIFIER_KEY="
 
 // childEnv devolve o ambiente herdado sem a chave do verificador. O comando
@@ -160,30 +154,6 @@ func run(command []string) (execResult, error) {
 		}
 	}
 	return execResult{exitCode: exitCode, output: sanitize(stdout.String() + stderr.String())}, nil
-}
-
-// runRaw executa o comando e devolve stdout sem decodificação nem sanitização.
-func runRaw(command []string) (rawResult, error) {
-	if len(command) == 0 {
-		return rawResult{}, fmt.Errorf("comando vazio")
-	}
-	cmd := newCommand(command)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &bytes.Buffer{}
-	err := cmd.Run()
-	exitCode := 0
-	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if !ok {
-			return rawResult{}, err
-		}
-		exitCode = exitErr.ExitCode()
-		if exitCode < 0 {
-			exitCode = 1
-		}
-	}
-	return rawResult{exitCode: exitCode, stdout: stdout.Bytes()}, nil
 }
 
 var safeShellToken = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
