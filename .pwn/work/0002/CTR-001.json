@@ -1,0 +1,64 @@
+{
+  "contract_version": "4.0",
+  "task_id": "1.1",
+  "work_id": "0002",
+  "title": "Registrar DEC-030 e atualizar a restrição normativa",
+  "risk": {
+    "level": "L2",
+    "reasons": ["Mudança normativa documentada e aprovada pela decisão D9"]
+  },
+  "validation_strategy": "tdd-strict",
+  "behavioral_contract": {
+    "scenarios": [
+      {
+        "id": "SCENARIO-1.1-01",
+        "given": "Dado o arquivo spec.json com a restrição DEC-005",
+        "when": "Quando a tarefa registra DEC-030",
+        "then": "Então spec.json e .specs/system.json declaram DEC-030 com a referência a DEC-005 substituída"
+      }
+    ]
+  },
+  "change_contract": {
+    "target_files": ["spec.json", ".specs/system.json", "docs/archive/DECISIONS.md"],
+    "affected_components": ["governance"]
+  },
+  "architecture_contract": {
+    "invariants": ["Não alterar schemas", "Não tocar em src/ nem em package.json"],
+    "forbidden_dependencies": ["src/**"]
+  },
+  "acceptance_contract": {
+    "commands": [
+      "bun test tests/parity/normative.test.ts",
+      "bun test",
+      "bun run check"
+    ],
+    "required_evidence": ["evidence.json"],
+    "frozen_tests": []
+  },
+  "scope_contract": {
+    "write_allow": [
+      "spec.json",
+      ".specs/system.json",
+      "docs/archive/DECISIONS.md",
+      "tests/parity/normative.test.ts",
+      ".prompts/**",
+      ".sources/**"
+    ],
+    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
+    "out_of_scope": ["Implementação do binário Go"]
+  },
+  "budget_contract": {
+    "max_tokens": 40000,
+    "max_cost_usd": 0.5,
+    "max_duration_minutes": 15,
+    "max_agent_attempts": 5,
+    "max_llm_calls": 20,
+    "max_tool_calls": 40,
+    "max_shell_executions": 15
+  },
+  "escalation_contract": {
+    "on_write_violation": "block_and_escalate",
+    "on_budget_exceeded": "escalate_to_strong_agent",
+    "on_attempt_failed": "retry_with_strong"
+  }
+}

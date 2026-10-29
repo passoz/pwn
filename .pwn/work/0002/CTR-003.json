@@ -1,0 +1,63 @@
+{
+  "contract_version": "4.0",
+  "task_id": "1.3",
+  "work_id": "0002",
+  "title": "Gerar os vetores de referência",
+  "risk": {
+    "level": "L2",
+    "reasons": ["Geração determinística de vetores de teste, sem chave de produção"]
+  },
+  "validation_strategy": "tdd-strict",
+  "behavioral_contract": {
+    "scenarios": [
+      {
+        "id": "SCENARIO-1.3-01",
+        "given": "Dado o pwn atual e o commit c81a18b",
+        "when": "Quando o gerador produz os vetores duas vezes",
+        "then": "Então os bytes de JSON, hash, assinatura, recibo e markdown coincidem"
+      }
+    ]
+  },
+  "change_contract": {
+    "target_files": ["scripts/parity/golden.ts", "testdata/parity/golden/**"],
+    "affected_components": ["parity"]
+  },
+  "architecture_contract": {
+    "invariants": ["Não alterar src/", "Os vetores são determinísticos", "Nenhum segredo entra nos vetores"],
+    "forbidden_dependencies": ["src/**"]
+  },
+  "acceptance_contract": {
+    "commands": [
+      "bun test tests/parity/golden.test.ts",
+      "bun scripts/parity/golden.ts --check",
+      "bun test"
+    ],
+    "required_evidence": ["evidence.json"],
+    "frozen_tests": []
+  },
+  "scope_contract": {
+    "write_allow": [
+      "scripts/parity/golden.ts",
+      "tests/parity/golden.test.ts",
+      "testdata/parity/golden/**",
+      ".prompts/**",
+      ".sources/**"
+    ],
+    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
+    "out_of_scope": ["Implementação do binário Go", "Alteração normativa"]
+  },
+  "budget_contract": {
+    "max_tokens": 60000,
+    "max_cost_usd": 0.8,
+    "max_duration_minutes": 25,
+    "max_agent_attempts": 5,
+    "max_llm_calls": 30,
+    "max_tool_calls": 60,
+    "max_shell_executions": 20
+  },
+  "escalation_contract": {
+    "on_write_violation": "block_and_escalate",
+    "on_budget_exceeded": "escalate_to_strong_agent",
+    "on_attempt_failed": "retry_with_strong"
+  }
+}

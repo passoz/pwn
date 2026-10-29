@@ -1,0 +1,85 @@
+{
+  "$schema": "../../../schemas/prd.schema.json",
+  "id": "PRD-0002",
+  "meta": {
+    "version": "1.0",
+    "created_at": "2026-10-29T02:10:00.000Z",
+    "author": "operador"
+  },
+  "title": "PRD — Reescrita do pwn em Go — Fase 0: referência de comportamento",
+  "status": "approved",
+  "scenario": "greenfield",
+  "problem": {
+    "statement": "O pwn atual depende de Bun e TypeScript. A reescrita em Go precisa de uma referência de comportamento reproduzível antes de qualquer código de produção."
+  },
+  "solution": {
+    "statement": "Registrar DEC-030, capturar a linha de base, criar o executor diferencial e gerar os vetores de referência sob contrato V4."
+  },
+  "decisions": [
+    {
+      "id": "DEC-030",
+      "statement": "Adotar Go como implementação do pwn e manter TypeScript apenas no período de transição.",
+      "status": "accepted",
+      "made_by": "operador",
+      "made_at": "2026-10-28T00:00:00.000Z",
+      "supersedes": "DEC-005",
+      "rationale": "A decisão D9 do plano aprovado substitui DEC-005."
+    }
+  ],
+  "requirements": [
+    {
+      "id": "FR-001",
+      "type": "functional",
+      "statement": "Capturar a linha de base de testes do commit c81a18b com contagem e código de saída.",
+      "priority": "must",
+      "acceptance_criteria": ["bun test tests/parity/baseline.test.ts"]
+    },
+    {
+      "id": "FR-002",
+      "type": "functional",
+      "statement": "Criar o executor diferencial para comparar os dois binários no mesmo cenário.",
+      "priority": "must",
+      "acceptance_criteria": ["bun scripts/parity/diff.ts --self-test"]
+    },
+    {
+      "id": "FR-003",
+      "type": "functional",
+      "statement": "Gerar vetores de referência para JSON, criptografia, recibo e markdown do plano.",
+      "priority": "must",
+      "acceptance_criteria": ["bun scripts/parity/golden.ts --check"]
+    },
+    {
+      "id": "FR-004",
+      "type": "functional",
+      "statement": "Gerar o conjunto de conformidade do validador com as 17 palavras-chave dos schemas.",
+      "priority": "must",
+      "acceptance_criteria": ["bun test tests/parity/schema.test.ts"]
+    },
+    {
+      "id": "FR-005",
+      "type": "functional",
+      "statement": "Registrar DEC-030 em spec.json e .specs/system.json, com a restrição DEC-005 substituída.",
+      "priority": "must",
+      "acceptance_criteria": ["bun test tests/parity/normative.test.ts"]
+    }
+  ],
+  "accepted_requirements": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-005"],
+  "stakeholders": [
+    {
+      "name": "Operador humano",
+      "role": "ACT-001"
+    }
+  ],
+  "scope": {
+    "in_scope": [
+      "Decisão normativa DEC-030.",
+      "Linha de base de testes e comandos.",
+      "Executor diferencial, vetores de referência e conjunto do validador."
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go.",
+      "Alteração de schemas.",
+      "Reescrita do editor visual."
+    ]
+  }
+}

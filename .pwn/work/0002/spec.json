@@ -1,0 +1,50 @@
+{
+  "work_id": "0002",
+  "title": "Reescrita do pwn em Go — Fase 0: referência de comportamento",
+  "capabilities": [
+    {
+      "id": "CAP-001",
+      "name": "Referência de comportamento",
+      "description": "A Fase 0 congela a linha de base, os vetores e o executor diferencial do pwn atual.",
+      "rules": [
+        "BR-001",
+        "BR-002"
+      ]
+    },
+    {
+      "id": "CAP-002",
+      "name": "Governança da reescrita",
+      "description": "A decisão normativa DEC-030 substitui DEC-005 e mantém a cadeia de decisão explícita.",
+      "rules": [
+        "BR-006"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "BR-001",
+      "statement": "A execução deve permanecer dentro da write_allow do contrato V4.",
+      "coverage": [
+        "CAP-001",
+        "CAP-002"
+      ],
+      "evidence": "diff guard"
+    },
+    {
+      "id": "BR-002",
+      "statement": "A suíte de testes existente deve permanecer verde.",
+      "coverage": [
+        "CAP-001"
+      ],
+      "evidence": "bun test"
+    },
+    {
+      "id": "BR-006",
+      "statement": "Mudança normativa exige decisão explícita do operador.",
+      "coverage": [
+        "CAP-002"
+      ],
+      "evidence": "decisão D9 aprovada em 2026-10-28"
+    }
+  ]
+}

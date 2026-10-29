@@ -1,0 +1,61 @@
+{
+  "work_id": "0002",
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Capturar a linha de base de testes",
+      "user_story": "Como operador, quero a linha de base do commit c81a18b para comparar o pwn Go com o pwn TypeScript.",
+      "acceptance_criteria": [
+        "bun test tests/parity/baseline.test.ts — o teste confere 470 testes e código de saída 0"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Criar o executor diferencial",
+      "user_story": "Como operador, quero comparar os dois binários no mesmo cenário para detectar divergência de comportamento.",
+      "acceptance_criteria": [
+        "bun scripts/parity/diff.ts --self-test — o executor compara código de saída, saída normalizada e árvore de arquivos"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Gerar os vetores de referência",
+      "user_story": "Como operador, quero vetores estáveis de JSON, criptografia, recibo e markdown para provar a paridade byte a byte.",
+      "acceptance_criteria": [
+        "bun scripts/parity/golden.ts --check — os vetores gerados coincidem com os gravados"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Gerar o conjunto de conformidade do validador",
+      "user_story": "Como operador, quero um conjunto gerado pelo Ajv para provar a paridade do validador Go.",
+      "acceptance_criteria": [
+        "bun test tests/parity/schema.test.ts — o conjunto cobre as 17 palavras-chave"
+      ]
+    },
+    {
+      "id": "FR-005",
+      "title": "Registrar a decisão DEC-030",
+      "user_story": "Como operador, quero a decisão DEC-030 registrada para que a reescrita em Go tenha base normativa.",
+      "acceptance_criteria": [
+        "bun test tests/parity/normative.test.ts — o teste confere DEC-030 em spec.json e .specs/system.json"
+      ]
+    },
+    {
+      "id": "QR-001",
+      "title": "Captura determinística",
+      "user_story": "Como operador, quero que a captura não altere o repositório e produza o mesmo resultado em duas execuções.",
+      "acceptance_criteria": [
+        "bun test tests/parity/baseline.test.ts — a captura roda duas vezes e compara o resultado"
+      ]
+    },
+    {
+      "id": "QR-002",
+      "title": "Execução sem rede",
+      "user_story": "Como operador, quero que o executor diferencial rode sem rede no sandbox.",
+      "acceptance_criteria": [
+        "bun scripts/parity/diff.ts --offline-check — o executor recusa uma chamada de rede"
+      ]
+    }
+  ]
+}

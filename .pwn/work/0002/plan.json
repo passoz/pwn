@@ -1,0 +1,209 @@
+{
+  "$schema": "../../../schemas/plan.schema.json",
+  "work_id": "0002",
+  "title": "Reescrita do pwn em Go — Fase 0: referência de comportamento",
+  "components": [
+    {
+      "name": "parity",
+      "purpose": "Executor diferencial, linha de base e vetores de referência"
+    },
+    {
+      "name": "governance",
+      "purpose": "Decisão normativa DEC-030 e rastreabilidade"
+    }
+  ],
+  "global_gates": [
+    "`bun test` — a suíte completa passa com exit 0.",
+    "`bun run check` — typecheck estrito passa com exit 0."
+  ],
+  "tasks": [
+    {
+      "id": "1.1",
+      "title": "Registrar DEC-030 e atualizar a restrição normativa",
+      "requirement_id": "FR-005",
+      "depends_on": [],
+      "behavior": "Substitui DEC-005 por DEC-030 em spec.json e .specs/system.json e registra a decisão em docs/archive/DECISIONS.md.",
+      "components": ["governance"],
+      "files": [
+        "spec.json",
+        ".specs/system.json",
+        "docs/archive/DECISIONS.md",
+        "tests/parity/normative.test.ts"
+      ],
+      "implementation_files": [
+        "spec.json",
+        ".specs/system.json",
+        "docs/archive/DECISIONS.md"
+      ],
+      "test_files": ["tests/parity/normative.test.ts"],
+      "red": {
+        "command": "bun test tests/parity/normative.test.ts",
+        "description": "o teste exige DEC-030 e falha antes da atualização normativa"
+      },
+      "implementation_steps": [
+        "Atualizar as restrições em spec.json e .specs/system.json",
+        "Registrar DEC-030 em docs/archive/DECISIONS.md"
+      ],
+      "acceptance_criteria": [
+        {
+          "command": "bun test tests/parity/normative.test.ts",
+          "description": "DEC-030 substitui DEC-005 nos dois documentos normativos"
+        }
+      ],
+      "visual": "N/A",
+      "documentation": "N/A",
+      "spec_reference": "CAP-002",
+      "contract_id": "CTR-001",
+      "complexity": "standard",
+      "status": "pending"
+    },
+    {
+      "id": "1.2",
+      "title": "Capturar a linha de base e criar o executor diferencial",
+      "requirement_id": "FR-001",
+      "depends_on": ["1.1"],
+      "behavior": "Grava o resultado de bun run check e compara dois binários por código de saída, saída normalizada e árvore de arquivos, sem rede.",
+      "components": ["parity"],
+      "files": [
+        "scripts/parity/capture-baseline.ts",
+        "scripts/parity/diff.ts",
+        "tests/parity/baseline.test.ts",
+        "testdata/parity/manifest.json"
+      ],
+      "implementation_files": [
+        "scripts/parity/capture-baseline.ts",
+        "scripts/parity/diff.ts"
+      ],
+      "test_files": ["tests/parity/baseline.test.ts"],
+      "red": {
+        "command": "bun test tests/parity/baseline.test.ts",
+        "description": "o teste exige o relatório da linha de base e falha antes do capturador"
+      },
+      "implementation_steps": [
+        "Escrever o capturador e o executor diferencial",
+        "Gravar o manifesto e comparar duas execuções"
+      ],
+      "acceptance_criteria": [
+        {
+          "command": "bun test tests/parity/baseline.test.ts",
+          "description": "a linha de base registra 470 testes e código de saída 0"
+        },
+        {
+          "command": "bun scripts/parity/diff.ts --self-test",
+          "description": "o executor compara saída e árvore de arquivos"
+        }
+      ],
+      "visual": "N/A",
+      "documentation": "N/A",
+      "spec_reference": "CAP-001",
+      "contract_id": "CTR-002",
+      "complexity": "standard",
+      "status": "pending"
+    },
+    {
+      "id": "1.3",
+      "title": "Gerar os vetores de referência",
+      "requirement_id": "FR-003",
+      "depends_on": ["1.2"],
+      "behavior": "Gera vetores de JSON canônico, SHA-256, HMAC, Ed25519, recibo e markdown e os compara com a cópia gravada.",
+      "components": ["parity"],
+      "files": [
+        "scripts/parity/golden.ts",
+        "tests/parity/golden.test.ts",
+        "testdata/parity/golden/"
+      ],
+      "implementation_files": ["scripts/parity/golden.ts"],
+      "test_files": ["tests/parity/golden.test.ts"],
+      "red": {
+        "command": "bun test tests/parity/golden.test.ts",
+        "description": "o teste exige os vetores e falha antes do gerador"
+      },
+      "implementation_steps": [
+        "Implementar o gerador dos vetores",
+        "Gravar os vetores e comparar a segunda execução"
+      ],
+      "acceptance_criteria": [
+        {
+          "command": "bun scripts/parity/golden.ts --check",
+          "description": "os vetores de referência são estáveis"
+        }
+      ],
+      "visual": "N/A",
+      "documentation": "N/A",
+      "spec_reference": "CAP-001",
+      "contract_id": "CTR-003",
+      "complexity": "standard",
+      "status": "pending"
+    },
+    {
+      "id": "1.4",
+      "title": "Gerar o conjunto de conformidade do validador",
+      "requirement_id": "FR-004",
+      "depends_on": ["1.1"],
+      "behavior": "Gera casos válidos e inválidos com o Ajv para as 17 palavras-chave e grava o conjunto que o validador Go deve reproduzir.",
+      "components": ["parity"],
+      "files": [
+        "scripts/parity/schema-corpus.ts",
+        "tests/parity/schema.test.ts",
+        "testdata/parity/schema/"
+      ],
+      "implementation_files": ["scripts/parity/schema-corpus.ts"],
+      "test_files": ["tests/parity/schema.test.ts"],
+      "red": {
+        "command": "bun test tests/parity/schema.test.ts",
+        "description": "o teste exige o conjunto e falha antes do gerador"
+      },
+      "implementation_steps": [
+        "Implementar o gerador do conjunto",
+        "Conferir a cobertura das 17 palavras-chave"
+      ],
+      "acceptance_criteria": [
+        {
+          "command": "bun test tests/parity/schema.test.ts",
+          "description": "o conjunto cobre as 17 palavras-chave dos schemas"
+        }
+      ],
+      "visual": "N/A",
+      "documentation": "N/A",
+      "spec_reference": "CAP-001",
+      "contract_id": "CTR-004",
+      "complexity": "standard",
+      "status": "pending"
+    },
+    {
+      "id": "1.5",
+      "title": "Provar o pwn TypeScript dentro do sandbox do verificador",
+      "requirement_id": "FR-002",
+      "depends_on": ["1.2"],
+      "behavior": "Executa o pwn TypeScript e os testes diferenciais dentro do bwrap com a política do verificador e registra o resultado.",
+      "components": ["parity"],
+      "files": [
+        "scripts/parity/sandbox-proof.ts",
+        "tests/parity/sandbox.test.ts",
+        "testdata/parity/sandbox.json"
+      ],
+      "implementation_files": ["scripts/parity/sandbox-proof.ts"],
+      "test_files": ["tests/parity/sandbox.test.ts"],
+      "red": {
+        "command": "bun test tests/parity/sandbox.test.ts",
+        "description": "o teste exige a prova no sandbox e falha antes do script"
+      },
+      "implementation_steps": [
+        "Implementar o script de prova",
+        "Rodar o pwn e os testes dentro do bwrap"
+      ],
+      "acceptance_criteria": [
+        {
+          "command": "bun test tests/parity/sandbox.test.ts",
+          "description": "o pwn TypeScript roda dentro do sandbox sem rede"
+        }
+      ],
+      "visual": "N/A",
+      "documentation": "N/A",
+      "spec_reference": "CAP-001",
+      "contract_id": "CTR-005",
+      "complexity": "standard",
+      "status": "pending"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "contract_version": "4.0",
+  "task_id": "1.4",
+  "work_id": "0002",
+  "title": "Gerar o conjunto de conformidade do validador",
+  "risk": {
+    "level": "L2",
+    "reasons": ["Geração de casos de teste com o Ajv, sem alteração de schemas"]
+  },
+  "validation_strategy": "tdd-strict",
+  "behavioral_contract": {
+    "scenarios": [
+      {
+        "id": "SCENARIO-1.4-01",
+        "given": "Dado os sete schemas do pwn",
+        "when": "Quando o gerador cria casos válidos e inválidos",
+        "then": "Então o conjunto cobre as 17 palavras-chave e registra o veredito do Ajv"
+      }
+    ]
+  },
+  "change_contract": {
+    "target_files": ["scripts/parity/schema-corpus.ts", "testdata/parity/schema/**"],
+    "affected_components": ["parity"]
+  },
+  "architecture_contract": {
+    "invariants": ["Não alterar schemas/", "Não alterar src/", "O conjunto é determinístico"],
+    "forbidden_dependencies": ["src/**"]
+  },
+  "acceptance_contract": {
+    "commands": [
+      "bun test tests/parity/schema.test.ts",
+      "bun test"
+    ],
+    "required_evidence": ["evidence.json"],
+    "frozen_tests": []
+  },
+  "scope_contract": {
+    "write_allow": [
+      "scripts/parity/schema-corpus.ts",
+      "tests/parity/schema.test.ts",
+      "testdata/parity/schema/**",
+      ".prompts/**",
+      ".sources/**"
+    ],
+    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
+    "out_of_scope": ["Implementação do binário Go", "Alteração de schemas"]
+  },
+  "budget_contract": {
+    "max_tokens": 60000,
+    "max_cost_usd": 0.8,
+    "max_duration_minutes": 25,
+    "max_agent_attempts": 5,
+    "max_llm_calls": 30,
+    "max_tool_calls": 60,
+    "max_shell_executions": 20
+  },
+  "escalation_contract": {
+    "on_write_violation": "block_and_escalate",
+    "on_budget_exceeded": "escalate_to_strong_agent",
+    "on_attempt_failed": "retry_with_strong"
+  }
+}

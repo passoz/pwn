@@ -1,0 +1,62 @@
+{
+  "contract_version": "4.0",
+  "task_id": "1.5",
+  "work_id": "0002",
+  "title": "Provar o pwn TypeScript dentro do sandbox do verificador",
+  "risk": {
+    "level": "L2",
+    "reasons": ["Execução de prova no bwrap, sem chave privada e sem rede"]
+  },
+  "validation_strategy": "tdd-strict",
+  "behavioral_contract": {
+    "scenarios": [
+      {
+        "id": "SCENARIO-1.5-01",
+        "given": "Dado o sandbox do verificador com bwrap",
+        "when": "Quando o script executa o pwn TypeScript e os testes",
+        "then": "Então os comandos passam sem rede e sem HOME do operador"
+      }
+    ]
+  },
+  "change_contract": {
+    "target_files": ["scripts/parity/sandbox-proof.ts", "testdata/parity/sandbox.json"],
+    "affected_components": ["parity"]
+  },
+  "architecture_contract": {
+    "invariants": ["A chave privada não entra no sandbox", "A rede fica desligada", "O HOME do operador não é montado"],
+    "forbidden_dependencies": ["src/**"]
+  },
+  "acceptance_contract": {
+    "commands": [
+      "bun test tests/parity/sandbox.test.ts",
+      "bun test"
+    ],
+    "required_evidence": ["evidence.json"],
+    "frozen_tests": []
+  },
+  "scope_contract": {
+    "write_allow": [
+      "scripts/parity/sandbox-proof.ts",
+      "tests/parity/sandbox.test.ts",
+      "testdata/parity/sandbox.json",
+      ".prompts/**",
+      ".sources/**"
+    ],
+    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
+    "out_of_scope": ["Implementação do binário Go", "Alteração normativa"]
+  },
+  "budget_contract": {
+    "max_tokens": 60000,
+    "max_cost_usd": 0.8,
+    "max_duration_minutes": 25,
+    "max_agent_attempts": 5,
+    "max_llm_calls": 30,
+    "max_tool_calls": 60,
+    "max_shell_executions": 20
+  },
+  "escalation_contract": {
+    "on_write_violation": "block_and_escalate",
+    "on_budget_exceeded": "escalate_to_strong_agent",
+    "on_attempt_failed": "retry_with_strong"
+  }
+}

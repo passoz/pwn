@@ -1,0 +1,20 @@
+{
+  "work_id": "0002",
+  "title": "Reescrita do pwn em Go — Fase 0: referência de comportamento",
+  "grilling_depth": "deep",
+  "problem": "O pwn atual depende de Bun e TypeScript. A reescrita em Go precisa de uma referência de comportamento reproduzível antes de qualquer código de produção.",
+  "actors": [
+    "ACT-001"
+  ],
+  "objectives": [
+    "Registrar a decisão DEC-030 e substituir a restrição DEC-005.",
+    "Capturar a linha de base de testes e de comandos do commit c81a18b.",
+    "Criar o executor diferencial e os vetores de referência.",
+    "Provar o pwn TypeScript dentro do sandbox do verificador."
+  ],
+  "constraints": [
+    "Não alterar schemas.",
+    "Não implementar o binário Go nesta fase.",
+    "Manter a suíte existente verde."
+  ]
+}
