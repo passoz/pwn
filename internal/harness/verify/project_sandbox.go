@@ -126,6 +126,41 @@ func ProjectSandbox(projectDir, root string) (*ProjectSandboxConfig, error) {
 		}
 	}
 
+	overlays := make([]ProjectMount, 0)
+	if raw, has := entry["overlays"]; has && raw != nil {
+		items, ok := raw.([]any)
+		if !ok {
+			return nil, unavailable(fmt.Sprintf("%s.overlays inválido", where), "esperado array de {source, dest}")
+		}
+		destinations := make(map[string]bool, len(items))
+		for index, item := range items {
+			fields, isObject := item.(map[string]any)
+			source, sourceOK := cleanAbsolute(fields["source"])
+			dest, destOK := cleanAbsolute(fields["dest"])
+			if !isObject || !sourceOK || !destOK {
+				return nil, unavailable(
+					fmt.Sprintf("%s.overlays[%d] inválido", where, index),
+					"esperado {source, dest} com caminhos absolutos",
+				)
+			}
+			// O repositório avaliado não controla o cache: a origem fica fora dele.
+			if inside(target, source) {
+				return nil, unavailable(
+					fmt.Sprintf("%s.overlays[%d].source inválido", where, index),
+					"a origem do overlay não pode ficar dentro do repositório avaliado",
+				)
+			}
+			if reservedMountDest[dest] || destinations[dest] {
+				return nil, unavailable(
+					fmt.Sprintf("%s.overlays[%d].dest inválido", where, index),
+					fmt.Sprintf("%s é reservado ou repetido", dest),
+				)
+			}
+			destinations[dest] = true
+			overlays = append(overlays, ProjectMount{Source: source, Dest: dest})
+		}
+	}
+
 	home := ""
 	if raw, has := entry["home"]; has {
 		cleaned, ok := cleanAbsolute(raw)
@@ -171,6 +206,7 @@ func ProjectSandbox(projectDir, root string) (*ProjectSandboxConfig, error) {
 		PathPrepend: prepend,
 		MountsRO:    mountsRO,
 		Mounts:      mounts,
+		Overlays:    overlays,
 		Home:        home,
 		Env:         env,
 	}, nil

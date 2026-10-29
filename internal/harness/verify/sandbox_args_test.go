@@ -117,3 +117,28 @@ func TestSortedUnique(t *testing.T) {
 		}
 	}
 }
+
+// Nas verificações o cache é overlay com escrita em tmpfs; só o aquecimento o
+// grava de fato. Trocar os dois modos deixaria o código avaliado envenenar o cache.
+func TestSandboxArgsOverlayModes(t *testing.T) {
+	policy := BuildSandboxPolicy("/usr/bin/bun", nil, &ProjectSandboxConfig{
+		Overlays: []ProjectMount{{Source: "/var/warm", Dest: "/tmp/gocache"}},
+	})
+	command := []string{"/usr/bin/go", "test"}
+
+	verification := strings.Join(sandboxArgsFor(policy, "/work", nil, false, command), " ")
+	if !strings.Contains(verification, "--overlay-src /var/warm --tmp-overlay /tmp/gocache") {
+		t.Errorf("verificação sem overlay: %s", verification)
+	}
+	if strings.Contains(verification, "--bind /var/warm") {
+		t.Errorf("verificação não pode montar o cache com escrita: %s", verification)
+	}
+	if strings.Index(verification, "--tmpfs /tmp") > strings.Index(verification, "--tmp-overlay") {
+		t.Errorf("o overlay precisa vir depois de --tmpfs /tmp: %s", verification)
+	}
+
+	warm := strings.Join(sandboxArgsFor(policy, "/work", nil, true, command), " ")
+	if !strings.Contains(warm, "--bind /var/warm /tmp/gocache") || strings.Contains(warm, "--overlay-src") {
+		t.Errorf("aquecimento deve montar o cache com escrita: %s", warm)
+	}
+}

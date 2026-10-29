@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/passoz/pwn/internal/harness/verify"
+	"github.com/passoz/pwn/internal/platform/jsonx"
 )
 
 func TestInitializeVerifierHomeLayout(t *testing.T) {
@@ -379,4 +380,54 @@ func TestDefaultRuntimeResolvesSymlinks(t *testing.T) {
 	if got := verify.DefaultRuntime(); got != resolved {
 		t.Fatalf("DefaultRuntime = %q, quer o caminho real %q", got, resolved)
 	}
+}
+
+func TestProjectSandboxOverlays(t *testing.T) {
+	t.Run("overlay válido entra na política e no digest", func(t *testing.T) {
+		projectDir := t.TempDir()
+		warm := t.TempDir()
+		root := verifierWithProject(t, projectDir, `{"overlays":[{"source":`+quote(warm)+`,"dest":"/tmp/gocache"}]}`)
+		sandbox, err := verify.ProjectSandbox(projectDir, root)
+		if err != nil {
+			t.Fatalf("política do projeto: %v", err)
+		}
+		if sandbox == nil || len(sandbox.Overlays) != 1 || sandbox.Overlays[0].Source != warm || sandbox.Overlays[0].Dest != "/tmp/gocache" {
+			t.Fatalf("overlays = %+v", sandbox)
+		}
+		plain, err := jsonx.Canonical(verify.BuildSandboxPolicy("/usr/bin/bun", nil, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		withOverlay, err := jsonx.Canonical(verify.BuildSandboxPolicy("/usr/bin/bun", nil, sandbox))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(plain), "overlays") {
+			t.Errorf("sem overlay a política deve manter o formato do TypeScript: %s", plain)
+		}
+		if !strings.Contains(string(withOverlay), `"overlays":[{"dest":"/tmp/gocache"`) {
+			t.Errorf("o overlay precisa entrar no digest do sandbox: %s", withOverlay)
+		}
+	})
+
+	t.Run("entrada malformada falha fechada", func(t *testing.T) {
+		projectDir := t.TempDir()
+		cases := map[string]string{
+			"origem dentro do repositório": `{"overlays":[{"source":` + quote(filepath.Join(projectDir, "cache")) + `,"dest":"/tmp/gocache"}]}`,
+			"origem relativa":              `{"overlays":[{"source":"relativo","dest":"/tmp/gocache"}]}`,
+			"destino reservado":            `{"overlays":[{"source":"/opt/warm","dest":"/tmp"}]}`,
+			"destino repetido":             `{"overlays":[{"source":"/opt/a","dest":"/tmp/c"},{"source":"/opt/b","dest":"/tmp/c"}]}`,
+			"não é lista":                  `{"overlays":{"source":"/opt/a"}}`,
+			"item não é objeto":            `{"overlays":["/opt/a"]}`,
+		}
+		for name, entry := range cases {
+			t.Run(name, func(t *testing.T) {
+				root := verifierWithProject(t, projectDir, entry)
+				sandbox, err := verify.ProjectSandbox(projectDir, root)
+				if !verify.IsUnavailable(err) {
+					t.Fatalf("sandbox = %+v, erro = %v; quer VerificationUnavailable", sandbox, err)
+				}
+			})
+		}
+	})
 }

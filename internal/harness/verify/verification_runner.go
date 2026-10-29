@@ -57,6 +57,7 @@ type SandboxPolicy struct {
 	PIDNamespace  bool              `json:"pid_namespace"`
 	MountsRO      []string          `json:"mounts_ro"`
 	Mounts        []ProjectMount    `json:"mounts"`
+	Overlays      []ProjectMount    `json:"overlays,omitempty"`
 	Home          string            `json:"home"`
 	EnvAllowlist  []string          `json:"env_allowlist"`
 	PathPrepend   []string          `json:"path_prepend"`
@@ -169,6 +170,7 @@ func BuildSandboxPolicy(runtime string, commands [][]string, project *ProjectSan
 	mountsRO = append(mountsRO, execRoots...)
 
 	mountsList := make([]ProjectMount, 0)
+	var overlays []ProjectMount
 	pathPrepend := make([]string, 0)
 	env := make(map[string]string)
 	home := "/nonexistent"
@@ -176,6 +178,7 @@ func BuildSandboxPolicy(runtime string, commands [][]string, project *ProjectSan
 		mountsRO = append(mountsRO, project.MountsRO...)
 		mountsRO = append(mountsRO, project.PathPrepend...)
 		mountsList = append(mountsList, project.Mounts...)
+		overlays = append(overlays, project.Overlays...)
 		pathPrepend = append(pathPrepend, project.PathPrepend...)
 		if project.Home != "" {
 			home = project.Home
@@ -191,6 +194,7 @@ func BuildSandboxPolicy(runtime string, commands [][]string, project *ProjectSan
 		PIDNamespace:  true,
 		MountsRO:      sortedUnique(mountsRO),
 		Mounts:        mountsList,
+		Overlays:      overlays,
 		Home:          home,
 		EnvAllowlist:  []string{"PATH", "TMPDIR", "LANG", "LC_ALL", "TERM"},
 		PathPrepend:   pathPrepend,
@@ -202,6 +206,11 @@ func BuildSandboxPolicy(runtime string, commands [][]string, project *ProjectSan
 // dependências) entram DEPOIS de `--bind workDir`: uma montagem anterior seria
 // encoberta pelo bind da árvore e `node_modules` desapareceria do sandbox.
 func sandboxArgs(policy SandboxPolicy, workDir string, extraRoBinds [][2]string, command []string) []string {
+	return sandboxArgsFor(policy, workDir, extraRoBinds, false, command)
+}
+
+// sandboxArgsFor é sandboxArgs com o modo de aquecimento dos overlays.
+func sandboxArgsFor(policy SandboxPolicy, workDir string, extraRoBinds [][2]string, warm bool, command []string) []string {
 	args := make([]string, 0, 32+2*len(policy.MountsRO)+4*len(policy.Mounts)+2*len(extraRoBinds)+len(command))
 	for _, mount := range policy.MountsRO {
 		args = append(args, "--ro-bind", mount, mount)
@@ -214,6 +223,15 @@ func sandboxArgs(policy SandboxPolicy, workDir string, extraRoBinds [][2]string,
 		args = append(args, "--ro-bind", mount.Source, mount.Dest)
 	}
 	args = append(args, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
+	for _, overlay := range policy.Overlays {
+		if warm {
+			// Aquecimento: único momento em que o cache é gravável, sem código do
+			// projeto no sandbox.
+			args = append(args, "--bind", overlay.Source, overlay.Dest)
+		} else {
+			args = append(args, "--overlay-src", overlay.Source, "--tmp-overlay", overlay.Dest)
+		}
+	}
 	args = append(args, "--bind", workDir, workDir)
 	// Depois do bind da árvore: uma montagem anterior seria encoberta por ele.
 	for _, bind := range extraRoBinds {
@@ -256,13 +274,14 @@ func spawnInSandbox(
 	extraRoBinds [][2]string,
 	command []string,
 	timeoutMs int,
+	warm bool,
 ) (sandboxSpawnResult, error) {
 	if timeoutMs > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 		defer cancel()
 	}
-	args := sandboxArgs(policy, workDir, extraRoBinds, command)
+	args := sandboxArgsFor(policy, workDir, extraRoBinds, warm, command)
 	cmd := exec.CommandContext(ctx, readiness.Bwrap, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -547,7 +566,7 @@ func executeCheck(ctx context.Context, options executeCheckOptions) (CheckObserv
 		return binds
 	}
 
-	candidate, err := spawnInSandbox(ctx, options.readiness, options.policy, options.workDir, bindsFor(options.workDir), check.Command, options.timeoutMs)
+	candidate, err := spawnInSandbox(ctx, options.readiness, options.policy, options.workDir, bindsFor(options.workDir), check.Command, options.timeoutMs, false)
 	if err != nil {
 		return CheckObservation{}, err
 	}
@@ -587,7 +606,7 @@ func executeCheck(ctx context.Context, options executeCheckOptions) (CheckObserv
 	if err := applyBaselineImplementation(ctx, options.runner, options.baselineDir, options.approval); err != nil {
 		return CheckObservation{}, err
 	}
-	baseline, err := spawnInSandbox(ctx, options.readiness, options.policy, options.baselineDir, bindsFor(options.baselineDir), check.Command, options.timeoutMs)
+	baseline, err := spawnInSandbox(ctx, options.readiness, options.policy, options.baselineDir, bindsFor(options.baselineDir), check.Command, options.timeoutMs, false)
 	if err != nil {
 		return CheckObservation{}, err
 	}

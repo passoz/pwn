@@ -100,6 +100,11 @@ type ProjectSandboxConfig struct {
 	MountsRO []string `json:"mounts_ro"`
 	// Mounts são montagens somente leitura com destino próprio.
 	Mounts []ProjectMount `json:"mounts"`
+	// Overlays são caches pré-aquecidos: Source (lower, somente leitura) montado
+	// em Dest com camada de escrita em tmpfs, descartada ao fim da execução. O
+	// código avaliado lê o cache e nunca o altera. Extensão do Go: o verificador
+	// TypeScript ignora a chave.
+	Overlays []ProjectMount `json:"overlays,omitempty"`
 	// Home é o HOME do sandbox. Vazio usa "/nonexistent".
 	Home string `json:"home,omitempty"`
 	// Env são variáveis fixas do sandbox. HOME, PATH e TMPDIR são reservadas.

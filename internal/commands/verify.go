@@ -38,6 +38,8 @@ var verifyUsage = strings.Join([]string{
 	"                                           Executa em paralelo (subprocessos) todas as aprovações vigentes do Work",
 	"pwn verify status --work NNNN --task T     Informa se a árvore atual tem aceitação independente válida",
 	"pwn verify show --work NNNN [--task T]     Mostra a aprovação vigente e o último recibo",
+	"pwn verify warm [--timeout-seconds S] [-- <comando>]",
+	"                                           Aquece os overlays do projeto (cache somente leitura nas verificações); sem comando, Go usa `go build std`",
 }, "\n")
 
 // verifySync executa os subcomandos síncronos e traduz o erro no código da
@@ -75,6 +77,8 @@ func (r *Runner) verifyAction(subcommand string, args []string) (int, error) {
 		return r.verifyStatus(args)
 	case "show":
 		return r.verifyShow(args)
+	case "warm":
+		return r.verifyWarm(args)
 	default:
 		fmt.Fprintf(r.errOut(), "Subcomando desconhecido para 'pwn verify': %s\n", showOrEmpty(subcommand))
 		fmt.Fprintf(r.errOut(), "\nUso:\n%s\n", verifyUsage)
@@ -635,4 +639,32 @@ func (r *Runner) verifyRunAllAction(args []string) (int, error) {
 		fmt.Fprintf(r.errOut(), "\n--- %s ---\n%s\n", result.ID, strings.TrimSpace(detail))
 	}
 	return aggregateVerifyExit(results), nil
+}
+
+// verifyWarm preenche os overlays declarados em config.json para o projeto.
+func (r *Runner) verifyWarm(args []string) (int, error) {
+	fmt.Fprint(r.out(), "=== [pwn verify warm] Aquecendo os overlays do sandbox ===\n")
+	result, err := verify.WarmOverlays(verify.WarmOptions{
+		Ctx:            contextBackground(),
+		RootDir:        r.rootDir(),
+		Command:        commandAfterSeparator(args),
+		TimeoutSeconds: timeoutSecondsValue(args),
+	})
+	if err != nil {
+		return 0, err
+	}
+	fmt.Fprintf(r.out(), "  Comando: %s\n", strings.Join(result.Command, " "))
+	for _, overlay := range result.Overlays {
+		fmt.Fprintf(r.out(), "  Overlay: %s → %s\n", overlay.Source, overlay.Dest)
+	}
+	if result.TimedOut || result.Status != 0 {
+		reason := fmt.Sprintf("o comando terminou com status %d", result.Status)
+		if result.TimedOut {
+			reason = "o comando excedeu o tempo limite"
+		}
+		fmt.Fprintf(r.errOut(), "\n[VERIFY ERROR] %s:\n%s\n", reason, strings.TrimSpace(result.Output))
+		return 1, nil
+	}
+	fmt.Fprintf(r.out(), "✓ Overlays aquecidos em %.1fs. As verificações montam a origem somente leitura.\n", result.Duration.Seconds())
+	return 0, nil
 }
