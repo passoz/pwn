@@ -1,6 +1,8 @@
 # Panorama do plano: reescrita do pwn em Go
 
-**Status:** revisão 1. Proposta para aprovação. Nenhum código de produção existe nesta proposta.
+**Status:** executado. O port Go está completo em `cmd/` e `internal/`.
+
+**Execução:** `make check` passa; `CGO_ENABLED=1 go test -race ./...` passa; os comandos determinísticos comparam byte a byte com o pwn TypeScript. O Work `0002` da Fase 0 está `COMPLETE`.
 
 **Data:** 2026-10-28
 
