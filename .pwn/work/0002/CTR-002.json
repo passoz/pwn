@@ -57,7 +57,12 @@
     "required_evidence": [
       "evidence.json"
     ],
-    "frozen_tests": []
+    "frozen_tests": [
+      {
+        "path": "tests/parity/acceptance-baseline.test.ts",
+        "sha256": "db00ccff0d881d9000ba7743ae2cd6cd38b324724676c7b9bb961eebc3929698"
+      }
+    ]
   },
   "scope_contract": {
     "write_allow": [
@@ -84,7 +89,7 @@
   },
   "budget_contract": {
     "max_tokens": 80000,
-    "max_cost_usd": 1.0,
+    "max_cost_usd": 1,
     "max_duration_minutes": 30,
     "max_agent_attempts": 5,
     "max_llm_calls": 40,
