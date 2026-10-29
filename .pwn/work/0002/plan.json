@@ -177,13 +177,15 @@
       "files": [
         "scripts/parity/schema-corpus.ts",
         "tests/parity/schema.test.ts",
-        "testdata/parity/schema/"
+        "testdata/parity/schema/",
+        "tests/parity/acceptance-schema.test.ts"
       ],
       "implementation_files": [
         "scripts/parity/schema-corpus.ts"
       ],
       "test_files": [
-        "tests/parity/schema.test.ts"
+        "tests/parity/schema.test.ts",
+        "tests/parity/acceptance-schema.test.ts"
       ],
       "red": {
         "command": "bun test tests/parity/schema.test.ts",
@@ -195,8 +197,12 @@
       ],
       "acceptance_criteria": [
         {
-          "command": "bun test tests/parity/schema.test.ts",
-          "description": "o conjunto cobre as 17 palavras-chave dos schemas"
+          "command": "bun test tests/parity/acceptance-schema.test.ts",
+          "description": "o conjunto cobre as 17 palavras-chave"
+        },
+        {
+          "command": "bun scripts/parity/schema-corpus.ts --check",
+          "description": "o conjunto calculado coincide com o gravado"
         }
       ],
       "visual": "N/A",

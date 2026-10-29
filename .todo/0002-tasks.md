@@ -91,9 +91,9 @@
 **Depends on:** 1.1
 **Behavior:** Gera casos válidos e inválidos com o Ajv para as 17 palavras-chave e grava o conjunto que o validador Go deve reproduzir.
 **Components:** parity
-**Files:** `scripts/parity/schema-corpus.ts`, `tests/parity/schema.test.ts`, `testdata/parity/schema/`
+**Files:** `scripts/parity/schema-corpus.ts`, `tests/parity/schema.test.ts`, `testdata/parity/schema/`, `tests/parity/acceptance-schema.test.ts`
 **Implementation files:** `scripts/parity/schema-corpus.ts`
-**Test files:** `tests/parity/schema.test.ts`
+**Test files:** `tests/parity/schema.test.ts`, `tests/parity/acceptance-schema.test.ts`
 
 **RED:**
 - `bun test tests/parity/schema.test.ts` — o teste exige o conjunto e falha antes do gerador
@@ -103,7 +103,8 @@
 2. Conferir a cobertura das 17 palavras-chave
 
 **ACs:**
-- [ ] `bun test tests/parity/schema.test.ts` — o conjunto cobre as 17 palavras-chave dos schemas
+- [ ] `bun test tests/parity/acceptance-schema.test.ts` — o conjunto cobre as 17 palavras-chave
+- [ ] `bun scripts/parity/schema-corpus.ts --check` — o conjunto calculado coincide com o gravado
 
 **Visual:** N/A
 **Documentation:** N/A

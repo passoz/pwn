@@ -5,7 +5,9 @@
   "title": "Gerar o conjunto de conformidade do validador",
   "risk": {
     "level": "L2",
-    "reasons": ["Geração de casos de teste com o Ajv, sem alteração de schemas"]
+    "reasons": [
+      "Geração de casos de teste com o Ajv, sem alteração de schemas"
+    ]
   },
   "validation_strategy": "tdd-strict",
   "behavioral_contract": {
@@ -19,19 +21,34 @@
     ]
   },
   "change_contract": {
-    "target_files": ["scripts/parity/schema-corpus.ts", "testdata/parity/schema/**"],
-    "affected_components": ["parity"]
+    "target_files": [
+      "scripts/parity/schema-corpus.ts",
+      "testdata/parity/schema/**"
+    ],
+    "affected_components": [
+      "parity"
+    ]
   },
   "architecture_contract": {
-    "invariants": ["Não alterar schemas/", "Não alterar src/", "O conjunto é determinístico"],
-    "forbidden_dependencies": ["src/**"]
+    "invariants": [
+      "Não alterar schemas/",
+      "Não alterar src/",
+      "O conjunto é determinístico"
+    ],
+    "forbidden_dependencies": [
+      "src/**"
+    ]
   },
   "acceptance_contract": {
     "commands": [
       "bun test tests/parity/schema.test.ts",
-      "bun test"
+      "bun test",
+      "bun test tests/parity/acceptance-schema.test.ts",
+      "bun scripts/parity/schema-corpus.ts --check"
     ],
-    "required_evidence": ["evidence.json"],
+    "required_evidence": [
+      "evidence.json"
+    ],
     "frozen_tests": []
   },
   "scope_contract": {
@@ -40,10 +57,22 @@
       "tests/parity/schema.test.ts",
       "testdata/parity/schema/**",
       ".prompts/**",
-      ".sources/**"
+      ".sources/**",
+      "tests/parity/acceptance-schema.test.ts",
+      "testdata/parity/schema/**"
     ],
-    "write_deny": [".git/**", "src/**", "schemas/**", "package.json", "bun.lock", ".env*"],
-    "out_of_scope": ["Implementação do binário Go", "Alteração de schemas"]
+    "write_deny": [
+      ".git/**",
+      "src/**",
+      "schemas/**",
+      "package.json",
+      "bun.lock",
+      ".env*"
+    ],
+    "out_of_scope": [
+      "Implementação do binário Go",
+      "Alteração de schemas"
+    ]
   },
   "budget_contract": {
     "max_tokens": 60000,
