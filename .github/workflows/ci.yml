@@ -27,9 +27,9 @@ jobs:
         with:
           version: v2.14.0
       - name: go test
-        run: CGO_ENABLED=1 go test -race ./... -coverprofile=coverage.out
+        run: CGO_ENABLED=1 go test -race ./... -coverpkg=./... -coverprofile=coverage.out
       - name: coverage gate
-        run: go tool cover -func=coverage.out | awk '/^total:/{if ($3+0 < 70.0) exit 1}'
+        run: go tool cover -func=coverage.out | awk '/^total:/{if ($3+0 < 85.0) exit 1}'
       - name: build
         run: CGO_ENABLED=0 go build -trimpath -o bin/pwn ./cmd/pwn
       - name: self-check

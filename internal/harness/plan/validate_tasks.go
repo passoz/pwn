@@ -906,6 +906,11 @@ func AnalyzeTasks(text string, options AnalyzeOptions) TaskAnalysis {
 			if documentationStart != -1 {
 				visualEnd = documentationStart
 			}
+			// Documentation antes de Visual: o intervalo é vazio, como em
+			// slice() da referência TypeScript, em vez de estourar o limite.
+			if visualEnd < visualStart+1 {
+				visualEnd = visualStart + 1
+			}
 			visualBlock := block[visualStart+1 : visualEnd]
 			for _, name := range []string{"Route", "Selector", "Playwright", "Expected"} {
 				if _, found := fieldValue(visualBlock, name); !found {
