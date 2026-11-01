@@ -365,6 +365,29 @@ func TestSnapshotErrorsAndSpecialFiles(t *testing.T) {
 		}
 	})
 
+	t.Run("arquivo ilegível falha com o primeiro na ordem do snapshot", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root lê qualquer caminho")
+		}
+		rootDir := t.TempDir()
+		for _, name := range []string{"a.txt", "b.txt", "c.txt", "d.txt", "e.txt"} {
+			writeFile(t, rootDir, name, name)
+		}
+		for _, name := range []string{"b.txt", "d.txt"} {
+			path := filepath.Join(rootDir, name)
+			if err := os.Chmod(path, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+		}
+		for range 20 {
+			_, err := verify.CaptureSnapshot(rootDir)
+			if err == nil || !strings.Contains(err.Error(), "b.txt") || strings.Contains(err.Error(), "d.txt") {
+				t.Fatalf("erro = %v, esperado falha em b.txt", err)
+			}
+		}
+	})
+
 	t.Run("raiz inexistente", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nada")
 		if _, err := verify.CaptureSnapshot(missing); err == nil {

@@ -251,7 +251,7 @@ func parseStatusTasks(text string) []StatusTask {
 // pelo verificador e árvore atual idêntica à avaliada. Os estágios anteriores
 // descrevem o loop local (RED/GREEN, `work audit`) — diagnóstico, não
 // autorização.
-func evidenceFor(taskID, todoDirectory string, workID *string) EvidenceState {
+func evidenceFor(taskID, todoDirectory string, workID *string, tree *verify.TreeCache) EvidenceState {
 	rootDir := filepath.Dir(todoDirectory)
 	evidenceRoot := filepath.Join(todoDirectory, "evidence")
 	if workID != nil {
@@ -263,6 +263,7 @@ func evidenceFor(taskID, todoDirectory string, workID *string) EvidenceState {
 			RootDir: rootDir,
 			WorkID:  *workID,
 			TaskID:  taskID,
+			Tree:    tree,
 		})
 	} else {
 		evaluation = verify.AcceptanceEvaluation{
@@ -482,7 +483,7 @@ var (
 
 // globalGateStatus avalia os gates globais. O checkbox não prova nada: um gate
 // só conta quando existe recibo de aceitação independente para ele.
-func globalGateStatus(text, rootDir string, workID *string) GlobalGates {
+func globalGateStatus(text, rootDir string, workID *string, tree *verify.TreeCache) GlobalGates {
 	start := strings.Index(text, "## Global gates")
 	if start == -1 {
 		return GlobalGates{State: "MISSING", Detail: "missing"}
@@ -530,6 +531,7 @@ func globalGateStatus(text, rootDir string, workID *string) GlobalGates {
 				RootDir: rootDir,
 				WorkID:  *workID,
 				TaskID:  name,
+				Tree:    tree,
 			})
 			accepted = evaluation.Accepted
 			reason = evaluation.Reason
@@ -706,6 +708,13 @@ func emptyTaskAnalysis() plan.TaskAnalysis {
 
 // CollectProjectStatus monta o relatório de um plano markdown.
 func CollectProjectStatus(tasksPath string) (ProjectStatus, error) {
+	return collectProjectStatus(tasksPath, nil)
+}
+
+// collectProjectStatus é CollectProjectStatus com um TreeCache opcional,
+// compartilhado entre vários planos da mesma raiz. Sem cache, cria um próprio:
+// todas as tasks e gates do plano comparam a mesma árvore.
+func collectProjectStatus(tasksPath string, tree *verify.TreeCache) (ProjectStatus, error) {
 	_, statErr := os.Stat(tasksPath)
 	exists := statErr == nil
 	text := ""
@@ -722,6 +731,9 @@ func CollectProjectStatus(tasksPath string) (ProjectStatus, error) {
 	}
 	todoDirectory := filepath.Dir(tasksPath)
 	rootDir := filepath.Dir(todoDirectory)
+	if tree == nil {
+		tree = verify.NewTreeCache(rootDir)
+	}
 	var workID *string
 	if validation.WorkID != nil && *validation.WorkID != "" {
 		value := *validation.WorkID
@@ -739,9 +751,9 @@ func CollectProjectStatus(tasksPath string) (ProjectStatus, error) {
 	}
 	tasks := parseStatusTasks(text)
 	for index := range tasks {
-		tasks[index].Evidence = evidenceFor(tasks[index].ID, todoDirectory, workID)
+		tasks[index].Evidence = evidenceFor(tasks[index].ID, todoDirectory, workID, tree)
 	}
-	gates := globalGateStatus(text, rootDir, workID)
+	gates := globalGateStatus(text, rootDir, workID, tree)
 	artifacts, err := artifactStatus(rootDir, tasksPath, validation)
 	if err != nil {
 		return ProjectStatus{}, err
@@ -778,6 +790,7 @@ func CollectWorkIndex(root string) (WorkIndexReport, error) {
 		return WorkIndexReport{}, err
 	}
 	entries := make([]WorkIndexEntry, 0, len(works))
+	tree := verify.NewTreeCache(root)
 	for _, summary := range works {
 		entry := WorkIndexEntry{
 			WorkID:     summary.WorkID,
@@ -791,7 +804,7 @@ func CollectWorkIndex(root string) (WorkIndexReport, error) {
 			entries = append(entries, entry)
 			continue
 		}
-		report, err := CollectProjectStatus(filepath.Join(root, summary.Plan))
+		report, err := collectProjectStatus(filepath.Join(root, summary.Plan), tree)
 		if err != nil {
 			return WorkIndexReport{}, err
 		}

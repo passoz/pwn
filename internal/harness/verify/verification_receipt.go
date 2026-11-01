@@ -233,6 +233,9 @@ type EvaluateAcceptanceOptions struct {
 	WorkID          string
 	TaskID          string
 	VerifierRootDir string
+	// Tree é opcional: quando cobre RootDir, o veredicto reaproveita a captura
+	// da árvore em vez de recalculá-la a cada task.
+	Tree *TreeCache
 }
 
 // EvaluateAcceptance decide se a task está aceita AGORA.
@@ -278,14 +281,24 @@ func EvaluateAcceptance(options EvaluateAcceptanceOptions) AcceptanceEvaluation 
 			Reason:   fmt.Sprintf("última verificação independente: %s", receipt.Outcome),
 		}
 	}
-	snapshot, err := CaptureSnapshot(options.RootDir)
+	var snapshot CandidateSnapshot
+	if options.Tree.covers(options.RootDir) {
+		snapshot, err = options.Tree.captureSnapshot()
+	} else {
+		snapshot, err = CaptureSnapshot(options.RootDir)
+	}
 	if err != nil {
 		return AcceptanceEvaluation{Accepted: false, Approval: approval, Receipt: receipt, Reason: err.Error()}
 	}
 	if snapshot.Digest != receipt.CandidateSnapshotDigest {
 		return AcceptanceEvaluation{Accepted: false, Approval: approval, Receipt: receipt, Reason: "a árvore mudou depois da verificação independente"}
 	}
-	dependency, err := CaptureDependencyDigest(options.RootDir)
+	var dependency DependencyDigest
+	if options.Tree.covers(options.RootDir) {
+		dependency, err = options.Tree.captureDependencyDigest()
+	} else {
+		dependency, err = CaptureDependencyDigest(options.RootDir)
+	}
 	if err != nil {
 		return AcceptanceEvaluation{Accepted: false, Approval: approval, Receipt: receipt, Reason: err.Error()}
 	}

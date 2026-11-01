@@ -1,10 +1,15 @@
 package verify
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"sync"
 	"unicode/utf16"
 
 	"github.com/passoz/pwn/internal/platform/jsonx"
@@ -77,7 +82,14 @@ func excludedRoot(target string) bool {
 	return false
 }
 
-func walkSnapshot(rootDir, relative string, output *[]SnapshotEntry, count *int) error {
+// hashJob é um arquivo regular à espera do hash: o walk só lista, o hash roda
+// depois em paralelo.
+type hashJob struct {
+	index    int
+	absolute string
+}
+
+func walkSnapshot(rootDir, relative string, output *[]SnapshotEntry, jobs *[]hashJob, count *int) error {
 	if *count > 200_000 {
 		return fmt.Errorf("snapshot excedeu o limite de entradas (200000)")
 	}
@@ -115,7 +127,7 @@ func walkSnapshot(rootDir, relative string, output *[]SnapshotEntry, count *int)
 			if relative != "." {
 				child = filepath.Join(relative, child)
 			}
-			if err := walkSnapshot(rootDir, child, output, count); err != nil {
+			if err := walkSnapshot(rootDir, child, output, jobs, count); err != nil {
 				return err
 			}
 		}
@@ -126,16 +138,65 @@ func walkSnapshot(rootDir, relative string, output *[]SnapshotEntry, count *int)
 		return nil
 	}
 	*count++
-	data, err := os.ReadFile(absolute)
-	if err != nil {
-		return fmt.Errorf("verifier: ler %s: %w", absolute, err)
-	}
+	*jobs = append(*jobs, hashJob{index: len(*output), absolute: absolute})
 	*output = append(*output, SnapshotEntry{
-		Path:   relative,
-		Kind:   "file",
-		Mode:   int(stats.Mode().Perm()),
-		SHA256: new(digestBytes(data)),
+		Path: relative,
+		Kind: "file",
+		Mode: int(stats.Mode().Perm()),
 	})
+	return nil
+}
+
+// hashFiles preenche SHA256 das entradas listadas em jobs. Cada arquivo é lido
+// em streaming com um buffer por worker, então a memória não cresce com o
+// tamanho dos arquivos. Em caso de falha, devolve o erro do primeiro arquivo na
+// ordem do snapshot, para a mensagem não depender do escalonamento.
+func hashFiles(entries []SnapshotEntry, jobs []hashJob) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+	workers := min(runtime.GOMAXPROCS(0), 8, len(jobs))
+	errs := make([]error, len(jobs))
+	queue := make(chan int, len(jobs))
+	for position := range jobs {
+		queue <- position
+	}
+	close(queue)
+
+	var group sync.WaitGroup
+	for range workers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			buffer := make([]byte, 64<<10)
+			hasher := sha256.New()
+			var sum [sha256.Size]byte
+			for position := range queue {
+				job := jobs[position]
+				file, err := os.Open(job.absolute)
+				if err != nil {
+					errs[position] = fmt.Errorf("verifier: ler %s: %w", job.absolute, err)
+					continue
+				}
+				hasher.Reset()
+				// O wrapper esconde WriterTo/ReaderFrom de *os.File para
+				// CopyBuffer usar o buffer do worker em vez de alocar outro.
+				_, err = io.CopyBuffer(hasher, struct{ io.Reader }{file}, buffer)
+				_ = file.Close()
+				if err != nil {
+					errs[position] = fmt.Errorf("verifier: ler %s: %w", job.absolute, err)
+					continue
+				}
+				entries[job.index].SHA256 = new(hex.EncodeToString(hasher.Sum(sum[:0])))
+			}
+		}()
+	}
+	group.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -155,8 +216,12 @@ func snapshotDigest(files []SnapshotEntry) (string, error) {
 // CaptureSnapshot captura a árvore executável: caminho, tipo, modo e conteúdo.
 func CaptureSnapshot(rootDir string) (CandidateSnapshot, error) {
 	files := make([]SnapshotEntry, 0, 64)
+	jobs := make([]hashJob, 0, 64)
 	count := 0
-	if err := walkSnapshot(rootDir, ".", &files, &count); err != nil {
+	if err := walkSnapshot(rootDir, ".", &files, &jobs, &count); err != nil {
+		return CandidateSnapshot{}, err
+	}
+	if err := hashFiles(files, jobs); err != nil {
 		return CandidateSnapshot{}, err
 	}
 	digest, err := snapshotDigest(files)
@@ -164,6 +229,43 @@ func CaptureSnapshot(rootDir string) (CandidateSnapshot, error) {
 		return CandidateSnapshot{}, err
 	}
 	return CandidateSnapshot{Version: 1, Files: files, Digest: digest}, nil
+}
+
+// TreeCache memoiza a captura da árvore e das dependências de UMA raiz durante
+// uma operação de leitura (por exemplo, o relatório de status), em que vários
+// veredictos de aceitação comparam a mesma árvore. Vale só para o processo e
+// para a vida do valor: nunca é persistido, então não enfraquece a garantia de
+// integridade entre execuções.
+type TreeCache struct {
+	rootDir string
+
+	snapshotOnce sync.Once
+	snapshot     CandidateSnapshot
+	snapshotErr  error
+
+	dependencyOnce sync.Once
+	dependency     DependencyDigest
+	dependencyErr  error
+}
+
+// NewTreeCache cria o cache de rootDir.
+func NewTreeCache(rootDir string) *TreeCache {
+	return &TreeCache{rootDir: filepath.Clean(rootDir)}
+}
+
+// covers diz se o cache serve para rootDir.
+func (c *TreeCache) covers(rootDir string) bool {
+	return c != nil && c.rootDir == filepath.Clean(rootDir)
+}
+
+func (c *TreeCache) captureSnapshot() (CandidateSnapshot, error) {
+	c.snapshotOnce.Do(func() { c.snapshot, c.snapshotErr = CaptureSnapshot(c.rootDir) })
+	return c.snapshot, c.snapshotErr
+}
+
+func (c *TreeCache) captureDependencyDigest() (DependencyDigest, error) {
+	c.dependencyOnce.Do(func() { c.dependency, c.dependencyErr = CaptureDependencyDigest(c.rootDir) })
+	return c.dependency, c.dependencyErr
 }
 
 // CaptureDependencyDigest resume os manifestos que vinculam a árvore de
