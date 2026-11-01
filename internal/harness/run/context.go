@@ -2,16 +2,16 @@ package run
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/passoz/pwn/internal/harness/contract"
 	"github.com/passoz/pwn/internal/harness/policy"
+	"github.com/passoz/pwn/internal/harness/telemetry"
 	"github.com/passoz/pwn/internal/platform/fsx"
+	"github.com/passoz/pwn/internal/platform/jsonx"
 	"github.com/passoz/pwn/internal/platform/sandbox"
 )
 
@@ -60,6 +60,13 @@ type RunContext struct {
 	Policy   *policy.Engine
 	Events   []Event
 	Status   RunStatus
+	// EventsFile recebe cada evento assim que ele ocorre. Vazio desliga o
+	// streaming e mantém apenas a cópia em memória.
+	EventsFile string
+	// Heartbeat publica a fase atual em `.pwn/runs/<runID>/state.json`.
+	Heartbeat *telemetry.Tracker
+	// EventErr guarda a primeira falha ao gravar um evento em disco.
+	EventErr error
 	// Tools é o único gateway autorizado do agente.
 	Tools *ToolAPI
 }
@@ -71,13 +78,28 @@ func nowISO() string {
 	return time.Now().UTC().Format(isoLayout)
 }
 
+// emitEvent registra o evento em memória, anexa a linha ao arquivo da run e
+// atualiza o heartbeat. Falhas de observabilidade nunca abortam a run.
 func emitEvent(runCtx *RunContext, eventType EventType, message string, detail any) {
-	runCtx.Events = append(runCtx.Events, Event{
+	event := Event{
 		Timestamp: nowISO(),
 		Type:      eventType,
 		Message:   message,
 		Detail:    detail,
-	})
+	}
+	runCtx.Events = append(runCtx.Events, event)
+
+	if runCtx.EventsFile != "" {
+		line, err := jsonx.Insertion(event)
+		if err == nil {
+			err = fsx.AppendLine(runCtx.EventsFile, string(line), fsx.LockOptions{})
+		}
+		if err != nil && runCtx.EventErr == nil {
+			runCtx.EventErr = err
+		}
+	}
+
+	_ = runCtx.Heartbeat.Update(string(eventType), message)
 }
 
 // InitRunContext inicializa contrato → política → sandbox → budget → tools.
@@ -94,13 +116,20 @@ func InitRunContext(
 		ctx = context.Background()
 	}
 	runCtx := &RunContext{
-		Contract: taskContract,
-		RootDir:  rootDir,
-		RunID:    runID,
-		Budget:   contract.NewBudgetController(taskContract),
-		Policy:   policy.NewEngine(taskContract, overrides),
-		Events:   make([]Event, 0),
-		Status:   StatusPending,
+		Contract:   taskContract,
+		RootDir:    rootDir,
+		RunID:      runID,
+		Budget:     contract.NewBudgetController(taskContract),
+		Policy:     policy.NewEngine(taskContract, overrides),
+		Events:     make([]Event, 0),
+		EventsFile: filepath.Join(rootDir, ".pwn", runID+".jsonl"),
+		Status:     StatusPending,
+	}
+	if tracker, err := telemetry.Start(rootDir, runID, telemetry.Meta{
+		WorkID: taskContract.WorkID,
+		TaskID: taskContract.TaskID,
+	}); err == nil {
+		runCtx.Heartbeat = tracker
 	}
 	emitEvent(runCtx, EventStart, fmt.Sprintf(
 		"Run %s inicializado para task %s (risk: %s)",
@@ -116,9 +145,11 @@ func InitRunContext(
 		} else {
 			emitEvent(runCtx, EventError, err.Error(), nil)
 		}
+		_ = runCtx.Heartbeat.Finish(string(StatusSandboxError), err.Error())
 		return nil, err
 	}
 	runCtx.Sandbox = &session
+	_ = runCtx.Heartbeat.SetSandbox(session.WorktreePath)
 	emitEvent(runCtx, EventStep, fmt.Sprintf(
 		"Sandbox criado: %s (branch: %s)", session.WorktreePath, session.BranchName,
 	), nil)
@@ -184,31 +215,6 @@ func FinalizeRun(runCtx *RunContext, success bool) *RunContext {
 			emitEvent(runCtx, EventStep, "Sandbox removido: "+worktreePath, nil)
 		}
 	}
+	_ = runCtx.Heartbeat.Finish(string(runCtx.Status), fmt.Sprintf("Run %s finalizado", runCtx.RunID))
 	return runCtx
-}
-
-// SaveRunEvents grava os eventos da run em `<metricsDir>/<runID>.jsonl`.
-func SaveRunEvents(runCtx *RunContext, metricsDir string) error {
-	dir := metricsDir
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("run: criar %s: %w", dir, err)
-	}
-
-	lines := make([]string, 0, len(runCtx.Events))
-	for _, event := range runCtx.Events {
-		data, err := json.Marshal(event)
-		if err != nil {
-			return fmt.Errorf("run: serializar evento: %w", err)
-		}
-		lines = append(lines, string(data))
-	}
-	content := ""
-	for index, line := range lines {
-		if index > 0 {
-			content += "\n"
-		}
-		content += line
-	}
-	file := filepath.Join(dir, runCtx.RunID+".jsonl")
-	return fsx.WriteFileAtomic(file, content)
 }

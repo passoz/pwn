@@ -12,6 +12,8 @@
 .pwn/*.lock/
 queue/review/
 .pwn/decisions/
+.pwn/logs/
+.pwn/runs/
 
 # Segredos e caches de veredicto: nunca versionar (a chave HMAC assina os gates)
 .pwn/.verifier_key

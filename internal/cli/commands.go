@@ -19,6 +19,7 @@ var commandSpecs = []commandSpec{
 	{name: "verify", takesSubcommand: true},
 	{name: "validate"},
 	{name: "self-check"},
+	{name: "serve"},
 }
 
 func lookupCommand(name string) (commandSpec, bool) {

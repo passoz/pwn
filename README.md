@@ -419,6 +419,32 @@ O arquivo é validado por `schemas/policy.schema.json`. Se ausente, o PWN utiliz
 
 ---
 
+## 📈 Observabilidade e Painel
+
+O PWN grava evidência de execução em três lugares, todos locais e ignorados pelo Git:
+
+| Artefato | Conteúdo | Caminho |
+|---|---|---|
+| Eventos por run | Uma linha JSON por evento, anexada durante a execução | `.pwn/RUN-*.jsonl` |
+| Heartbeat | Fase, PID, sandbox e contagem de eventos; `stale` após 5 min sem atualização | `.pwn/runs/<runID>/state.json` |
+| Log estruturado | JSON com nível e atributos; segredos redigidos | `.pwn/logs/pwn.log` |
+
+O log é escrito quando o projeto já tem `.pwn`. Para espelhar em stderr (útil em CI), use `PWN_LOG_STDERR=1`. O nível vem de `PWN_LOG_LEVEL` (`debug`, `info`, `warn`, `error`).
+
+### Painel web
+
+```bash
+pwn serve                 # http://127.0.0.1:7932
+pwn serve --port 8080
+pwn serve --host 0.0.0.0 --token "$PWN_SERVE_TOKEN"
+```
+
+O painel é **somente leitura** e não decide conclusão: ele consome as mesmas funções do `pwn work status`. Rotas: `/api/works`, `/api/works/{id}`, `/api/runs`, `/api/runs/{id}`, `/api/receipts` e `/api/events` (SSE para atualização ao vivo).
+
+Por padrão o bind é `127.0.0.1` sem token. Um host não local exige `--token` ou `PWN_SERVE_TOKEN`; o token é aceito em `Authorization: Bearer <token>` ou `?token=<token>`.
+
+---
+
 ## 🎨 Editor Visual de Pipelines (`pwn-gui`)
 
 O PWN inclui um editor gráfico de pipelines web standalone em HTML/CSS/JavaScript puro que opera **100% offline via `file://`**, sem necessidade de backend ou dependências npm:

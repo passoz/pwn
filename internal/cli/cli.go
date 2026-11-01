@@ -6,10 +6,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/passoz/pwn/internal/commands"
 	"github.com/passoz/pwn/internal/config"
+	"github.com/passoz/pwn/internal/platform/logx"
 )
 
 // Run executa o CLI e devolve o código de saída.
@@ -45,14 +49,14 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return 1
 	}
 
-	runner := &runner{stdout: stdout, stderr: stderr}
+	cliRunner := &runner{stdout: stdout, stderr: stderr}
 	if len(rest) == 0 {
-		return runner.unknownCommand("")
+		return cliRunner.unknownCommand("")
 	}
 
 	// Comando e subcomando são validados antes de ler o ambiente: um comando
 	// desconhecido sempre mostra a ajuda, mesmo com PWN_OPERATOR inválido.
-	spec, subcommand, ok := runner.resolve(rest[0], rest[1:])
+	spec, subcommand, ok := cliRunner.resolve(rest[0], rest[1:])
 	if !ok {
 		return 1
 	}
@@ -62,6 +66,9 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+
+	logger := newLogger(cfg)
+	defer func() { _ = logger.Close() }()
 	// Sem subcomando, os argumentos do handler começam em rest[1:]; com
 	// subcomando, depois dele. O handler valida o subcomando e imprime o uso
 	// próprio, como o switch de src/cli.ts.
@@ -72,7 +79,39 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 			commandArgs = rest[2:]
 		}
 	}
-	return runner.run(cfg, spec, subcommand, commandArgs)
+	started := time.Now()
+	logger.Info("command.start",
+		"command", spec.name,
+		"subcommand", subcommand,
+		"args", commandArgs,
+		"operator", string(cfg.Operator),
+		"pid", os.Getpid(),
+		"version", Version,
+	)
+	code := cliRunner.run(cfg, spec, subcommand, commandArgs, logger, cfg.ServeToken)
+	logger.Info("command.end",
+		"command", spec.name,
+		"subcommand", subcommand,
+		"exit", code,
+		"duration_ms", time.Since(started).Milliseconds(),
+	)
+	return code
+}
+
+// newLogger monta o logger estruturado. O arquivo só é aberto quando o projeto
+// já tem `.pwn`; stderr é opt-in para preservar o contrato do CLI.
+func newLogger(cfg config.Config) *logx.Logger {
+	file := ""
+	if wd, err := os.Getwd(); err == nil {
+		if info, statErr := os.Stat(filepath.Join(wd, ".pwn")); statErr == nil && info.IsDir() {
+			file = filepath.Join(wd, ".pwn", "logs", "pwn.log")
+		}
+	}
+	logger, err := logx.Open(logx.Options{Level: cfg.LogLevel, File: file, Stderr: cfg.LogStderr})
+	if err != nil {
+		return logx.Discard()
+	}
+	return logger
 }
 
 type runner struct {
@@ -101,8 +140,14 @@ func (r *runner) resolve(command string, args []string) (commandSpec, string, bo
 
 // run chama o handler do comando. Os comandos ainda não migrados devolvem a
 // mensagem de não portado.
-func (r *runner) run(_ config.Config, spec commandSpec, subcommand string, args []string) int {
-	handler := &commands.Runner{Stdout: r.stdout, Stderr: r.stderr}
+func (r *runner) run(_ config.Config, spec commandSpec, subcommand string, args []string, logger *logx.Logger, serveToken string) int {
+	handler := &commands.Runner{
+		Stdout:     r.stdout,
+		Stderr:     r.stderr,
+		Log:        logger.Logger,
+		ServeToken: serveToken,
+		Version:    Version,
+	}
 	switch spec.name {
 	case "init":
 		return handler.Init(args)
@@ -124,6 +169,8 @@ func (r *runner) run(_ config.Config, spec commandSpec, subcommand string, args 
 		return handler.Queue(subcommand, args)
 	case "metrics":
 		return handler.Metrics(subcommand, args)
+	case "serve":
+		return handler.Serve(args)
 	}
 
 	name := spec.name

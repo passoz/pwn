@@ -21,6 +21,8 @@ COMANDOS DISPONÍVEIS:
                       (list, materialize)
   metrics <subcomando>Exibe métricas de execução e recomendações de otimização
                       (list, optimize)
+  serve               Sobe o painel de observabilidade somente leitura
+                      (--host 127.0.0.1 --port 7932 --token <segredo>)
   queue <subcomando>  Gerencia a fila de revisão humana assíncrona (AFK)
                       (list, approve, reject)
   verify <subcomando> Aceitação independente: aprova critérios, executa checks isolados
@@ -44,7 +46,8 @@ EXEMPLOS:
   pwn work run --dry-run --work 0001 -- bun test
   pwn work reconcile --dry-run              (lista o que mudou fora do pwn)
   pwn work reconcile --title "Ajuste X" --tests tests/x.test.ts
-  pwn work status --coverage 0001
+  pwn work status --json
+  pwn serve --port 7932
   pwn work run --work 0001 -- bun test
   pwn work run-all --works 0001,0002 --jobs 2 -- bun test
   pwn work batch prepare --work 0001 --jobs 3

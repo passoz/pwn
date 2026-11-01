@@ -9,6 +9,7 @@ package commands
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -22,6 +23,12 @@ type Runner struct {
 	// Stdin é a entrada das perguntas interativas. nil usa os.Stdin.
 	Stdin   io.Reader
 	RootDir string
+	// Log recebe eventos estruturados quando configurado.
+	Log *slog.Logger
+	// ServeToken é o token padrão do painel, vindo do ambiente.
+	ServeToken string
+	// Version identifica o binário no painel.
+	Version string
 }
 
 func (r *Runner) out() io.Writer {

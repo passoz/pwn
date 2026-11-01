@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PWN — Observabilidade</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --border: #d9dde3;
+    --fg: #1b1e24;
+    --muted: #5c6470;
+    --accent: #2f6feb;
+    --ok: #1f8a4c;
+    --warn: #a76a00;
+    --bad: #b3261e;
+    --chip: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --surface: #1c2027;
+      --border: #2c323c;
+      --fg: #e7eaf0;
+      --muted: #98a1af;
+      --accent: #6ea1ff;
+      --ok: #4ac37a;
+      --warn: #e0a33a;
+      --bad: #f27066;
+      --chip: #232933;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+    padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  .live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.on { background: var(--ok); }
+  main { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  nav.tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  nav.tabs button {
+    font: inherit; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+  }
+  nav.tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); }
+  section.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+  section.panel > h2 { font-size: 13px; margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover { background: var(--chip); }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--chip); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .chip.ok { color: var(--ok); }
+  .chip.warn { color: var(--warn); }
+  .chip.bad { color: var(--bad); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; padding: 12px 14px; }
+  .kv dt { color: var(--muted); font-size: 12px; }
+  .kv dd { margin: 0; font-size: 13px; }
+  .empty { padding: 18px 14px; color: var(--muted); }
+  .events { max-height: 420px; overflow: auto; margin: 0; padding: 12px 14px; }
+  .event { padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+  .event:last-child { border-bottom: none; }
+  .event .t { color: var(--muted); margin-right: 8px; }
+  .event pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; color: var(--muted); font-size: 11px; }
+  .error { color: var(--bad); }
+  .toolbar { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .toolbar input { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PWN — Observabilidade</h1>
+  <span class="meta" id="root"></span>
+  <span class="meta" id="version"></span>
+  <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">conectando</span></span>
+</header>
+<main>
+  <div class="cards" id="cards"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="works" aria-selected="true">Works</button>
+    <button role="tab" data-tab="runs" aria-selected="false">Runs</button>
+    <button role="tab" data-tab="receipts" aria-selected="false">Recibos</button>
+  </nav>
+
+  <div id="tab-works">
+    <section class="panel">
+      <h2>Works</h2>
+      <table>
+        <thead><tr><th>Work</th><th>Estado</th><th>Panorama</th><th>Progresso</th><th>Tasks</th><th>Gates</th></tr></thead>
+        <tbody id="works-body"></tbody>
+      </table>
+    </section>
+    <div id="work-detail"></div>
+  </div>
+
+  <div id="tab-runs" class="hidden">
+    <section class="panel">
+      <h2>Runs</h2>
+      <table>
+        <thead><tr><th>Run</th><th>Task</th><th>Status</th><th>Fase</th><th>Início</th><th>Custo</th><th>Tokens</th><th>Eventos</th></tr></thead>
+        <tbody id="runs-body"></tbody>
+      </table>
+    </section>
+    <div id="run-detail"></div>
+  </div>
+
+  <div id="tab-receipts" class="hidden">
+    <section class="panel">
+      <h2>Recibos de aceitação</h2>
+      <table>
+        <thead><tr><th>Work</th><th>Task</th><th>Desfecho</th><th>Assinado</th><th>Criado</th><th>Verificador</th></tr></thead>
+        <tbody id="receipts-body"></tbody>
+      </table>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { works: [], runs: [], receipts: [], selectedWork: null, selectedRun: null };
+
+  function el(tag, props, ...children) {
+    const node = document.createElement(tag);
+    if (props) {
+      for (const [key, value] of Object.entries(props)) {
+        if (key === 'class') node.className = value;
+        else if (key === 'text') node.textContent = value;
+        else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+        else node.setAttribute(key, value);
+      }
+    }
+    for (const child of children.flat()) {
+      if (child == null || child === false) continue;
+      node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+    }
+    return node;
+  }
+
+  function fmtDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
+  }
+
+  function fmtDuration(start) {
+    if (!start) return '—';
+    const started = new Date(start).getTime();
+    if (Number.isNaN(started)) return '—';
+    const seconds = Math.max(0, Math.round((Date.now() - started) / 1000));
+    if (seconds < 60) return seconds + 's';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + 'm ' + (seconds % 60) + 's';
+    return Math.floor(minutes / 60) + 'h ' + (minutes % 60) + 'm';
+  }
+
+  function chip(text, tone) {
+    return el('span', { class: 'chip' + (tone ? ' ' + tone : '') }, text);
+  }
+
+  function toneForState(value) {
+    if (!value) return '';
+    if (/COMPLETE|CONCLU|SUCCESS|ACCEPTED|done/i.test(value)) return 'ok';
+    if (/BLOCK|INVALID|STALE|INCONSIST|FAIL/i.test(value)) return 'bad';
+    if (/PROGRESS|RUNNING|pending|pending/i.test(value)) return 'warn';
+    return '';
+  }
+
+  async function getJSON(path) {
+    const response = await fetch(path, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error(path + ': HTTP ' + response.status);
+    return response.json();
+  }
+
+  async function refresh() {
+    try {
+      const [works, runs, receipts] = await Promise.all([
+        getJSON('/api/works'),
+        getJSON('/api/runs'),
+        getJSON('/api/receipts'),
+      ]);
+      state.works = works.works || [];
+      state.runs = runs.runs || [];
+      state.receipts = receipts.receipts || [];
+      renderCards();
+      renderWorks();
+      renderRuns();
+      renderReceipts();
+      if (state.selectedWork) await showWork(state.selectedWork, true);
+      if (state.selectedRun) await showRun(state.selectedRun, true);
+    } catch (error) {
+      $('live-text').textContent = 'erro: ' + error.message;
+      $('live-dot').classList.remove('on');
+    }
+  }
+
+  function renderCards() {
+    const works = state.works;
+    let total = 0, done = 0, stale = 0;
+    for (const work of works) {
+      const counts = work.panorama && work.panorama.counts;
+      if (counts) { total += counts.total; done += counts.completed; stale += counts.stale; }
+    }
+    const running = state.runs.filter((run) => run.status === 'running' && !run.stale).length;
+    const cost = state.runs.reduce((sum, run) => sum + (run.metrics ? run.metrics.costUSD : 0), 0);
+    const cards = [
+      ['Works', String(works.length)],
+      ['Tasks concluídas', done + '/' + total],
+      ['Evidência obsoleta', String(stale)],
+      ['Runs ativas', String(running)],
+      ['Custo acumulado', '$' + cost.toFixed(4)],
+    ];
+    $('cards').replaceChildren(...cards.map(([label, value]) =>
+      el('div', { class: 'card' }, el('div', { class: 'label', text: label }), el('div', { class: 'value', text: value }))
+    ));
+  }
+
+  function renderWorks() {
+    const body = $('works-body');
+    if (!state.works.length) {
+      body.replaceChildren(el('tr', null, el('td', { colspan: '6', class: 'empty', text: 'Nenhum Work encontrado em .pwn/work.' })));
+      return;
+    }
+    body.replaceChildren(...state.works.map((work) => {
+      const counts = work.panorama ? work.panorama.counts : null;
+      return el('tr', {
+        class: 'clickable',
+        onclick: () => showWork(work.work_id),
+      },
+        el('td', { class: 'mono', text: work.work_id }),
+        el('td', null, chip(work.state || '—', toneForState(work.state))),
+        el('td', null, work.panorama ? chip(work.panorama.state, toneForState(work.panorama.state)) : el('span', { class: 'muted', text: '—' })),
+        el('td', { class: 'mono', text: work.panorama ? work.panorama.progress + '%' : '—' }),
+        el('td', { class: 'mono', text: counts ? counts.completed + '/' + counts.total + (counts.stale ? ' (' + counts.stale + ' stale)' : '') : '—' }),
+        el('td', { class: 'mono', text: work.globalGates ? work.globalGates.state : '—' })),
+      );
+    }));
+  }
+
+  async function showWork(id, silent) {
+    state.selectedWork = id;
+    const container = $('work-detail');
+    if (!silent) container.replaceChildren(el('div', { class: 'empty', text: 'Carregando work ' + id + '…' }));
+    try {
+      const report = await getJSON('/api/works/' + encodeURIComponent(id));
+      container.replaceChildren(renderWorkDetail(id, report));
+    } catch (error) {
+      container.replaceChildren(el('section', { class: 'panel' }, el('div', { class: 'empty error', text: error.message })));
+    }
+  }
+
+  function renderWorkDetail(id, report) {
+    const tasks = (report.tasks || []).map((task) =>
+      el('tr', null,
+        el('td', { class: 'mono', text: task.id }),
+        el('td', { class: 'mono', text: task.marker }),
+        el('td', { text: task.title }),
+        el('td', null, chip(task.evidence ? task.evidence.stage : '—', toneForState(task.evidence && task.evidence.stage))),
+        el('td', null, task.evidence && task.evidence.stale ? chip('stale', 'bad') : el('span', { class: 'muted', text: '—' })),
+        el('td', { class: 'mono', text: task.requirement || '—' }))
+    );
+    const problems = [].concat(
+      (report.validationErrors || []).map((text) => chip(text, 'bad')),
+      (report.validationWarnings || []).map((text) => chip(text, 'warn')),
+    );
+    return el('div', null,
+      el('section', { class: 'panel' },
+        el('h2', null, 'Work ' + id + ' — detalhe'),
+        el('dl', { class: 'kv' },
+          el('dt', { text: 'Panorama' }), el('dd', null, report.panorama ? chip(report.panorama.state, toneForState(report.panorama.state)) : '—'),
+          el('dt', { text: 'Parado em' }), el('dd', { text: report.panorama ? report.panorama.stoppedAt : '—' }),
+          el('dt', { text: 'Progresso' }), el('dd', { class: 'mono', text: report.panorama ? report.panorama.progress + '%' : '—' }),
+          el('dt', { text: 'Gates globais' }), el('dd', { class: 'mono', text: report.globalGates ? report.globalGates.state + ' — ' + report.globalGates.detail : '—' }),
+          el('dt', { text: 'Contrato' }), el('dd', { class: 'mono', text: report.contractVersion == null ? '—' : 'v' + report.contractVersion })),
+        problems.length ? el('div', { class: 'kv' }, el('dt', { text: 'Achados' }), el('dd', null, ...problems)) : null),
+      el('section', { class: 'panel' },
+        el('h2', null, 'Tasks'),
+        el('table', null,
+          el('thead', null, el('tr', null, ...['ID', 'Marcador', 'Título', 'Evidência', 'Obsoleta', 'Requisito'].map((label) => el('th', { text: label })))),
+          el('tbody', null, ...tasks))));
+  }
+
+  function renderRuns() {
+    const body = $('runs-body');
+    if (!state.runs.length) {
+      body.replaceChildren(el('tr', null, el('td', { colspan: '8', class: 'empty', text: 'Nenhuma run registrada.' })));
+      return;
+    }
+    body.replaceChildren(...state.runs.map((run) => {
+      const status = run.stale ? 'stale' : run.status;
+      return el('tr', { class: 'clickable', onclick: () => showRun(run.run_id) },
+        el('td', { class: 'mono', text: run.run_id }),
+        el('td', { class: 'mono', text: (run.work_id || '—') + '/' + (run.task_id || '—') }),
+        el('td', null, chip(status, run.stale ? 'bad' : toneForState(run.phase || status))),
+        el('td', { text: run.phase || '—' }),
+        el('td', { class: 'mono', text: fmtDate(run.started_at) }),
+        el('td', { class: 'mono', text: run.metrics ? '$' + run.metrics.costUSD.toFixed(4) : '—' }),
+        el('td', { class: 'mono', text: run.metrics ? (run.metrics.tokensInput + run.metrics.tokensOutput) : '—' }),
+        el('td', { class: 'mono', text: String(run.event_count) }));
+    }));
+  }
+
+  async function showRun(id, silent) {
+    state.selectedRun = id;
+    const container = $('run-detail');
+    if (!silent) container.replaceChildren(el('div', { class: 'empty', text: 'Carregando run ' + id + '…' }));
+    try {
+      const detail = await getJSON('/api/runs/' + encodeURIComponent(id));
+      container.replaceChildren(renderRunDetail(id, detail));
+    } catch (error) {
+      container.replaceChildren(el('section', { class: 'panel' }, el('div', { class: 'empty error', text: error.message })));
+    }
+  }
+
+  function renderRunDetail(id, detail) {
+    const run = detail.state;
+    const metric = detail.metrics;
+    const events = (detail.events || []).map((event) =>
+      el('div', { class: 'event' },
+        el('span', { class: 't mono', text: event.timestamp || '' }),
+        el('strong', { text: event.type || '' }),
+        el('span', { text: ' ' + (event.message || '') }),
+        event.detail ? el('pre', { text: JSON.stringify(event.detail) }) : null)
+    );
+    const receipts = (detail.receipts || []).map((receipt) =>
+      el('div', { class: 'event' },
+        el('span', { class: 'mono', text: receipt.work_id + '/' + receipt.task_id }),
+        el('span', { text: ' ' + receipt.outcome }),
+        el('span', { class: 'muted', text: ' · ' + fmtDate(receipt.created_at) }))
+    );
+    return el('div', null,
+      el('section', { class: 'panel' },
+        el('h2', null, 'Run ' + id),
+        el('dl', { class: 'kv' },
+          el('dt', { text: 'Status' }), el('dd', null, chip(run.stale ? 'stale' : run.status, run.stale ? 'bad' : toneForState(run.status))),
+          el('dt', { text: 'Fase' }), el('dd', { text: run.phase || '—' }),
+          el('dt', { text: 'Mensagem' }), el('dd', { text: run.message || '—' }),
+          el('dt', { text: 'Work/Task' }), el('dd', { class: 'mono', text: (run.work_id || '—') + '/' + (run.task_id || '—') }),
+          el('dt', { text: 'Início' }), el('dd', { class: 'mono', text: fmtDate(run.started_at) + ' (' + fmtDuration(run.started_at) + ')' }),
+          el('dt', { text: 'Atualizado' }), el('dd', { class: 'mono', text: fmtDate(run.updated_at) }),
+          el('dt', { text: 'PID' }), el('dd', { class: 'mono', text: String(run.pid || '—') }),
+          el('dt', { text: 'Sandbox' }), el('dd', { class: 'mono', text: run.sandbox || '—' }),
+          metric ? el('dt', { text: 'Custo/Tokens' }) : null,
+          metric ? el('dd', { class: 'mono', text: '$' + metric.costUSD.toFixed(4) + ' · ' + (metric.tokensInput + metric.tokensOutput) + ' tokens · ' + metric.durationMs + 'ms · ' + metric.attempts + ' tentativa(s)' }) : null)),
+      el('section', { class: 'panel' },
+        el('h2', null, 'Recibos vinculados'),
+        receipts.length ? el('div', { class: 'events' }, ...receipts) : el('div', { class: 'empty', text: 'Nenhum recibo para esta run.' })),
+      el('section', { class: 'panel' },
+        el('h2', null, 'Eventos (' + events.length + ')'),
+        events.length ? el('div', { class: 'events' }, ...events) : el('div', { class: 'empty', text: 'Nenhum evento gravado.' })));
+  }
+
+  function renderReceipts() {
+    const body = $('receipts-body');
+    if (!state.receipts.length) {
+      body.replaceChildren(el('tr', null, el('td', { colspan: '6', class: 'empty', text: 'Nenhum recibo em .todo/verification.' })));
+      return;
+    }
+    body.replaceChildren(...state.receipts.map((receipt) =>
+      el('tr', null,
+        el('td', { class: 'mono', text: receipt.work_id || '—' }),
+        el('td', { class: 'mono', text: receipt.task_id || '—' }),
+        el('td', null, chip(receipt.outcome || '—', toneForState(receipt.outcome))),
+        el('td', null, receipt.signed ? chip('sim', 'ok') : chip('não', 'bad')),
+        el('td', { class: 'mono', text: fmtDate(receipt.created_at) }),
+        el('td', { class: 'mono', text: receipt.verifier || '—' }))
+    ));
+  }
+
+  function bindTabs() {
+    const buttons = [...document.querySelectorAll('nav.tabs button')];
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        for (const other of buttons) {
+          other.setAttribute('aria-selected', String(other === button));
+          $('tab-' + other.dataset.tab).classList.toggle('hidden', other !== button);
+        }
+      });
+    }
+  }
+
+  function bindStream() {
+    if (typeof EventSource === 'undefined') return;
+    const source = new EventSource('/api/events');
+    source.addEventListener('open', () => {
+      $('live-dot').classList.add('on');
+      $('live-text').textContent = 'ao vivo';
+    });
+    source.addEventListener('ready', () => {
+      $('live-dot').classList.add('on');
+      $('live-text').textContent = 'ao vivo';
+    });
+    source.addEventListener('change', () => { refresh(); });
+    source.addEventListener('error', () => {
+      $('live-dot').classList.remove('on');
+      $('live-text').textContent = 'reconectando';
+    });
+  }
+
+  async function boot() {
+    try {
+      const health = await getJSON('/api/health');
+      $('root').textContent = health.root;
+      $('version').textContent = 'v' + (health.version || '?');
+    } catch (error) {
+      $('root').textContent = 'painel indisponível';
+    }
+    bindTabs();
+    await refresh();
+    bindStream();
+    setInterval(() => { if (document.visibilityState === 'visible' && !window.EventSource) refresh(); }, 15000);
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

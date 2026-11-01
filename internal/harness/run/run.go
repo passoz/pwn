@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/passoz/pwn/internal/harness/metrics"
 	"github.com/passoz/pwn/internal/harness/policy"
 	"github.com/passoz/pwn/internal/harness/queue"
+	"github.com/passoz/pwn/internal/harness/telemetry"
 	"github.com/passoz/pwn/internal/platform/jsonx"
 	"github.com/passoz/pwn/internal/platform/proc"
 	"github.com/passoz/pwn/internal/platform/shellwords"
@@ -309,7 +309,6 @@ func runIsolated(
 	injected, err := PrepareSandbox(sandboxPath, rootDir)
 	if err != nil {
 		FinalizeRun(runCtx, false)
-		saveEventsQuietly(runCtx, rootDir, logWriter)
 		failedMetrics(runID, options, startedAt, rootDir, agentRole)
 		return Result{Status: 1, Stderr: "[SANDBOX ABORT] " + err.Error(), RunID: runID, DiffViolations: []string{}}
 	}
@@ -317,7 +316,6 @@ func runIsolated(
 	overlay := OverlayWorkingTree(rootDir, sandboxPath, injected)
 	if !overlay.OK {
 		FinalizeRun(runCtx, false)
-		saveEventsQuietly(runCtx, rootDir, logWriter)
 		failedMetrics(runID, options, startedAt, rootDir, agentRole)
 		return Result{
 			Status:         1,
@@ -392,7 +390,6 @@ func runIsolated(
 	}
 
 	FinalizeRun(runCtx, success)
-	saveEventsQuietly(runCtx, rootDir, logWriter)
 	recordMetrics(metrics.Entry{
 		Timestamp:  nowISO(),
 		RunID:      runID,
@@ -424,9 +421,11 @@ func runWithoutIsolation(
 	rootDir string,
 ) Result {
 	command := options.Command
+	tracker, _ := telemetry.Start(rootDir, runID, telemetry.Meta{WorkID: options.WorkID, TaskID: options.TaskID})
 	operation := policy.AgentOperation{Type: policy.OpShellExec, Command: command[0], Args: command[1:]}
 	decision := policyEngine.Evaluate(operation)
 	if !decision.Allowed {
+		_ = tracker.Finish(string(StatusPolicyViolation), decision.Reason)
 		failedMetrics(runID, options, startedAt, rootDir, agentRole)
 		return Result{Status: 1, Stderr: decision.Reason, RunID: runID, DiffViolations: []string{}}
 	}
@@ -441,6 +440,11 @@ func runWithoutIsolation(
 		status = 1
 	}
 
+	finalStatus := StatusAborted
+	if status == 0 {
+		finalStatus = StatusSuccess
+	}
+	_ = tracker.Finish(string(finalStatus), "run sem isolamento concluída")
 	recordMetrics(metrics.Entry{
 		Timestamp:  nowISO(),
 		RunID:      runID,
@@ -603,12 +607,6 @@ func metricsStatus(success bool) metrics.Status {
 		return metrics.StatusSuccess
 	}
 	return metrics.StatusFailed
-}
-
-func saveEventsQuietly(runCtx *RunContext, rootDir string, logWriter io.Writer) {
-	if err := SaveRunEvents(runCtx, filepath.Join(rootDir, ".pwn")); err != nil && logWriter != nil {
-		fmt.Fprintf(logWriter, "[EVENTS ERROR] %v\n", err)
-	}
 }
 
 func addLearningQuietly(entry learnings.NewEntry, rootDir string) {

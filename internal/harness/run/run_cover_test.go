@@ -448,15 +448,20 @@ func TestRecordMetricsAndEventsFailuresAreLoggedNotFatal(t *testing.T) {
 		t.Fatalf("falha de métricas não registrada: %q", log.String())
 	}
 
-	log.Reset()
-	saveEventsQuietly(&RunContext{RunID: "RUN-x"}, root, &log)
-	if !strings.Contains(log.String(), "[EVENTS ERROR]") {
-		t.Fatalf("falha de eventos não registrada: %q", log.String())
+	// A falha ao anexar o evento fica registrada no contexto e não derruba a run.
+	ctx := &RunContext{RunID: "RUN-x", EventsFile: filepath.Join(root, ".pwn", "RUN-x.jsonl")}
+	emitEvent(ctx, EventStep, "evento", nil)
+	if ctx.EventErr == nil {
+		t.Fatal("falha de evento não registrada no contexto")
 	}
 
-	// Sem writer de log a falha é silenciosa e não derruba a run.
+	// Sem arquivo de eventos, o evento fica apenas em memória.
+	memoryOnly := &RunContext{RunID: "RUN-y"}
+	emitEvent(memoryOnly, EventStep, "evento", nil)
+	if memoryOnly.EventErr != nil {
+		t.Fatalf("erro inesperado sem arquivo: %v", memoryOnly.EventErr)
+	}
 	recordMetrics(metrics.Entry{RunID: "RUN-y", Status: metrics.StatusFailed}, root, nil)
-	saveEventsQuietly(&RunContext{RunID: "RUN-y"}, root, nil)
 }
 
 func TestNewRunIDIsUniqueAndPrefixed(t *testing.T) {

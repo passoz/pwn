@@ -58,3 +58,41 @@ func TestLoadWithOperatorOverridesInvalidEnvironment(t *testing.T) {
 		t.Fatalf("Operator = %q, quer %q", cfg.Operator, OperatorHuman)
 	}
 }
+
+func TestLoadReadsObservabilitySettings(t *testing.T) {
+	t.Setenv(LogLevelEnv, " debug ")
+	t.Setenv(LogStderrEnv, "true")
+	t.Setenv(ServeAuthEnv, "segredo")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogLevel != "debug" || !cfg.LogStderr || cfg.ServeToken != "segredo" {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestLoadWithOperatorKeepsObservabilitySettings(t *testing.T) {
+	t.Setenv(OperatorEnv, "auto")
+	t.Setenv(LogLevelEnv, "warn")
+	cfg, err := LoadWithOperator(OperatorHuman)
+	if err != nil {
+		t.Fatalf("LoadWithOperator: %v", err)
+	}
+	if cfg.Operator != OperatorHuman || cfg.LogLevel != "warn" {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	for _, raw := range []string{"1", "true", "TRUE", "yes", "on", " on "} {
+		if !parseBool(raw) {
+			t.Fatalf("parseBool(%q) = false", raw)
+		}
+	}
+	for _, raw := range []string{"", "0", "false", "no", "off", "lixo"} {
+		if parseBool(raw) {
+			t.Fatalf("parseBool(%q) = true", raw)
+		}
+	}
+}
