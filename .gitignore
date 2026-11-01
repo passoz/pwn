@@ -31,6 +31,9 @@ queue/review/
 .env*
 !.env.example
 
+# Dependências Node (resíduo do cliente Bun anterior; o pwn é Go)
+node_modules/
+
 # Build Go
 /bin/pwn
 coverage.out
