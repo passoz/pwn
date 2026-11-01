@@ -38,6 +38,8 @@ type Options struct {
 	Token string
 	// Version aparece em /api/health.
 	Version string
+	// PollInterval é o período do SSE. Zero usa 2 segundos.
+	PollInterval time.Duration
 }
 
 // Handler devolve o roteador do painel.
@@ -46,7 +48,11 @@ func Handler(options Options) http.Handler {
 	if root == "" {
 		root = "."
 	}
-	app := &app{root: root, token: options.Token, version: options.Version}
+	pollInterval := options.PollInterval
+	if pollInterval <= 0 {
+		pollInterval = 2 * time.Second
+	}
+	app := &app{root: root, token: options.Token, version: options.Version, pollInterval: pollInterval}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", app.health)
@@ -61,9 +67,10 @@ func Handler(options Options) http.Handler {
 }
 
 type app struct {
-	root    string
-	token   string
-	version string
+	root         string
+	token        string
+	version      string
+	pollInterval time.Duration
 }
 
 var (
@@ -355,7 +362,7 @@ func (a *app) events(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("event: ready\ndata: {}\n\n"))
 	flusher.Flush()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(a.pollInterval)
 	defer ticker.Stop()
 	for {
 		select {

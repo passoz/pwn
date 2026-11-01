@@ -1,6 +1,8 @@
 package panel
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/passoz/pwn/internal/harness/metrics"
 	"github.com/passoz/pwn/internal/harness/telemetry"
@@ -207,5 +210,83 @@ func TestReceiptsEmptyAndMalformed(t *testing.T) {
 	}
 	if len(body.Receipts) != 0 {
 		t.Fatalf("recibo inválido deveria ser ignorado: %+v", body.Receipts)
+	}
+}
+
+func TestEventsStreamPublishesChanges(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".pwn"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(Handler(Options{Root: root, PollInterval: 10 * time.Millisecond}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/api/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("abrir SSE: %v", err)
+	}
+	defer response.Body.Close()
+	if contentType := response.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/event-stream") {
+		t.Fatalf("content-type = %q", contentType)
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = os.WriteFile(filepath.Join(root, ".pwn", "metrics.jsonl"), []byte("x"), 0o644)
+	}()
+
+	scanner := bufio.NewScanner(response.Body)
+	seenReady := false
+	seenChange := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "event: ready" {
+			seenReady = true
+		}
+		if line == "event: change" {
+			seenChange = true
+			break
+		}
+	}
+	if !seenReady || !seenChange {
+		t.Fatalf("stream incompleto: ready=%v change=%v", seenReady, seenChange)
+	}
+}
+
+// noFlusherWriter não implementa http.Flusher, como um writer genérico.
+type noFlusherWriter struct {
+	header http.Header
+	status int
+	body   strings.Builder
+}
+
+func (w *noFlusherWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *noFlusherWriter) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(p)
+}
+
+func (w *noFlusherWriter) WriteHeader(status int) { w.status = status }
+
+func TestEventsRequiresFlusher(t *testing.T) {
+	handler := Handler(Options{Root: t.TempDir()})
+	writer := &noFlusherWriter{}
+	handler.ServeHTTP(writer, httptest.NewRequest(http.MethodGet, "/api/events", nil))
+	if writer.status != http.StatusInternalServerError {
+		t.Fatalf("código = %d, esperava 500 sem Flusher", writer.status)
 	}
 }

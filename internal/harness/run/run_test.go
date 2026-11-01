@@ -13,6 +13,7 @@ import (
 	"github.com/passoz/pwn/internal/harness/contract"
 	"github.com/passoz/pwn/internal/harness/metrics"
 	"github.com/passoz/pwn/internal/harness/queue"
+	"github.com/passoz/pwn/internal/harness/telemetry"
 )
 
 func writeWork(
@@ -124,6 +125,13 @@ func TestRunDiffGuardViolationAndSandboxCleanup(t *testing.T) {
 	}
 	if !strings.Contains(string(events), `"diff_check"`) || !strings.Contains(string(events), `"end"`) {
 		t.Fatalf("eventos incompletos: %s", events)
+	}
+	state, err := telemetry.Read(root, result.RunID)
+	if err != nil {
+		t.Fatalf("heartbeat da run ausente: %v", err)
+	}
+	if state.Status != telemetry.StatusFinished || state.Phase != string(StatusAborted) {
+		t.Fatalf("heartbeat = %+v", state)
 	}
 }
 

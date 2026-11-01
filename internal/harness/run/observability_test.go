@@ -1,12 +1,14 @@
 package run
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/passoz/pwn/internal/harness/contract"
 	"github.com/passoz/pwn/internal/harness/telemetry"
 )
 
@@ -68,5 +70,31 @@ func TestEmitEventWithoutObservabilityKeepsWorking(t *testing.T) {
 	}
 	if runCtx.EventErr != nil {
 		t.Fatalf("erro inesperado: %v", runCtx.EventErr)
+	}
+}
+
+func TestRunWithoutIsolationWritesHeartbeat(t *testing.T) {
+	root := newRepo(t)
+	writeFile(t, root, "ok.sh", "printf ok\n")
+	commitAll(t, root, "seed")
+	writeWork(t, root, "sh ok.sh", contract.RiskL1, nil, nil)
+
+	isolated := false
+	options := baseOptions(root, "sh", "ok.sh")
+	options.Isolated = &isolated
+	result := Run(context.Background(), options)
+	if result.Status != 0 {
+		t.Fatalf("status = %d: %s", result.Status, result.Stderr)
+	}
+
+	state, err := telemetry.Read(root, result.RunID)
+	if err != nil {
+		t.Fatalf("heartbeat ausente: %v", err)
+	}
+	if state.Status != telemetry.StatusFinished || state.Phase != string(StatusSuccess) {
+		t.Fatalf("heartbeat = %+v", state)
+	}
+	if state.PID == 0 || state.StartedAt == "" {
+		t.Fatalf("heartbeat sem pid/início: %+v", state)
 	}
 }
