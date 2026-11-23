@@ -260,7 +260,7 @@
         el('td', null, work.panorama ? chip(work.panorama.state, toneForState(work.panorama.state)) : el('span', { class: 'muted', text: '—' })),
         el('td', { class: 'mono', text: work.panorama ? work.panorama.progress + '%' : '—' }),
         el('td', { class: 'mono', text: counts ? counts.completed + '/' + counts.total + (counts.stale ? ' (' + counts.stale + ' stale)' : '') : '—' }),
-        el('td', { class: 'mono', text: work.globalGates ? work.globalGates.state : '—' })),
+        el('td', { class: 'mono', text: work.globalGates ? work.globalGates.state : '—' }),
       );
     }));
   }
