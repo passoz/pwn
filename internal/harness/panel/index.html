@@ -4,9 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PWN — Observabilidade</title>
+<script>
+  try {
+    document.documentElement.dataset.theme = localStorage.getItem('pwn.panel.theme') === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    document.documentElement.dataset.theme = 'light';
+  }
+</script>
 <style>
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --bg: #f6f7f9;
     --surface: #ffffff;
     --border: #d9dde3;
@@ -18,19 +25,18 @@
     --bad: #b3261e;
     --chip: #eef1f6;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #14171c;
-      --surface: #1c2027;
-      --border: #2c323c;
-      --fg: #e7eaf0;
-      --muted: #98a1af;
-      --accent: #6ea1ff;
-      --ok: #4ac37a;
-      --warn: #e0a33a;
-      --bad: #f27066;
-      --chip: #232933;
-    }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14171c;
+    --surface: #1c2027;
+    --border: #2c323c;
+    --fg: #e7eaf0;
+    --muted: #98a1af;
+    --accent: #6ea1ff;
+    --ok: #4ac37a;
+    --warn: #e0a33a;
+    --bad: #f27066;
+    --chip: #232933;
   }
   * { box-sizing: border-box; }
   body {
@@ -48,6 +54,11 @@
   .live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
   .dot.on { background: var(--ok); }
+  .theme-toggle {
+    font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+  }
+  .theme-toggle:hover { background: var(--chip); }
   main { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
@@ -95,6 +106,7 @@
   <span class="meta" id="root"></span>
   <span class="meta" id="version"></span>
   <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">conectando</span></span>
+  <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">Tema escuro</button>
 </header>
 <main>
   <div class="cards" id="cards"></div>
@@ -395,6 +407,22 @@
     ));
   }
 
+  function applyTheme(theme) {
+    const dark = theme === 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const button = $('theme-toggle');
+    button.textContent = dark ? 'Tema claro' : 'Tema escuro';
+    button.setAttribute('aria-pressed', String(dark));
+    try { localStorage.setItem('pwn.panel.theme', dark ? 'dark' : 'light'); } catch (error) {}
+  }
+
+  function bindTheme() {
+    $('theme-toggle').addEventListener('click', () => {
+      applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    });
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  }
+
   function bindTabs() {
     const buttons = [...document.querySelectorAll('nav.tabs button')];
     for (const button of buttons) {
@@ -433,6 +461,7 @@
     } catch (error) {
       $('root').textContent = 'painel indisponível';
     }
+    bindTheme();
     bindTabs();
     await refresh();
     bindStream();
