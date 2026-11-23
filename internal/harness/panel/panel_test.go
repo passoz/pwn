@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -185,6 +186,28 @@ func TestTokenIsRequiredWhenConfigured(t *testing.T) {
 	}
 	if code := request(t, handler, http.MethodGet, "/api/health", map[string]string{"Authorization": "Bearer errado"}).Code; code != http.StatusUnauthorized {
 		t.Fatalf("token errado = %d", code)
+	}
+}
+
+func TestIndexEmbedsTokenForFetchAndSSE(t *testing.T) {
+	token := `s"e<g`
+	handler := Handler(Options{Root: t.TempDir(), Token: token})
+	page := request(t, handler, http.MethodGet, "/?token="+url.QueryEscape(token), nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("index = %d", page.Code)
+	}
+	body := page.Body.String()
+	if !strings.Contains(body, `const TOKEN = "s\"e\u003cg";`) {
+		t.Fatalf("token não embutido de forma segura:\n%s", body)
+	}
+	if strings.Contains(body, "__PWN_TOKEN__") {
+		t.Fatal("placeholder do token não substituído")
+	}
+
+	open := Handler(Options{Root: t.TempDir()})
+	body = request(t, open, http.MethodGet, "/", nil).Body.String()
+	if !strings.Contains(body, `const TOKEN = "";`) {
+		t.Fatal("sem token configurado, a página deve embutir string vazia")
 	}
 }
 

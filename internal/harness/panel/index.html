@@ -140,7 +140,13 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  const TOKEN = '__PWN_TOKEN__';
   const state = { works: [], runs: [], receipts: [], selectedWork: null, selectedRun: null };
+
+  function apiURL(path) {
+    if (!TOKEN) return path;
+    return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN);
+  }
 
   function el(tag, props, ...children) {
     const node = document.createElement(tag);
@@ -189,7 +195,7 @@
   }
 
   async function getJSON(path) {
-    const response = await fetch(path, { headers: { accept: 'application/json' } });
+    const response = await fetch(apiURL(path), { headers: { accept: 'application/json' } });
     if (!response.ok) throw new Error(path + ': HTTP ' + response.status);
     return response.json();
   }
@@ -403,7 +409,7 @@
 
   function bindStream() {
     if (typeof EventSource === 'undefined') return;
-    const source = new EventSource('/api/events');
+    const source = new EventSource(apiURL('/api/events'));
     source.addEventListener('open', () => {
       $('live-dot').classList.add('on');
       $('live-text').textContent = 'ao vivo';

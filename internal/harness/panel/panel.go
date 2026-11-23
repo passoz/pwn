@@ -6,6 +6,7 @@
 package panel
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
@@ -415,6 +416,14 @@ func (a *app) index(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// O token vai embutido para que fetch e EventSource o reenviem: o SSE não
+	// permite cabeçalhos, e a página só é servida a quem já se autenticou.
+	encoded, err := json.Marshal(a.token)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	page = bytes.Replace(page, []byte("'__PWN_TOKEN__'"), encoded, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(page)
